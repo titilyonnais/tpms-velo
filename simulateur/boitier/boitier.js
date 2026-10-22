@@ -7,6 +7,7 @@
 //   - compte les tours de roue (vitesse, distance) ;
 //   - évalue l'état des pneus et déclenche bip + LED ;
 //   - redessine l'écran, seulement si l'image a changé ;
+//   - dialogue avec l'application du téléphone (voir liaison.js) ;
 //   - se met en veille quand le vélo ne roule plus.
 //
 // Le temps lui est toujours donné en paramètre (maintenantMs) : dans
@@ -18,15 +19,24 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 // 20 mises à jour partielles, pour effacer les traces ("ghosting").
 TPMS.PARTIELS_AVANT_COMPLET = 20;
 
+// La pression affichée ne change que si l'écart dépasse 0,03 bar.
+// Sans cela, le bruit du capteur (±0,01 bar) ferait redessiner l'écran
+// à chaque trame, pour rien.
+TPMS.HYSTERESIS_AFFICHAGE_BAR = 0.03;
+
 TPMS.creerRoue = function () {
   return {
     mesure: null,                 // dernière trame décodée
+    pressionAffichee: null,       // valeur montrée à l'écran (avec hystérésis)
     dernierRecuMs: -1,
     nbTrames: 0,
     historique: TPMS.creerHistorique(),
     penteBarH: 0,
     etat: TPMS.ETAT.ATTENTE,
-    acquittee: false              // alerte acquittée par appui long
+    acquittee: false,             // alerte acquittée par appui long
+    verification: TPMS.creerVerification(),   // protection « vraisemblance »
+    rythme: TPMS.creerRythme(),               // protection « rythme »
+    intrusionJusquaMs: -1         // fin du « signal suspect »
   };
 };
 
@@ -35,11 +45,13 @@ TPMS.creerBoitier = function () {
   return {
     reglages: {
       appairage: { AV: "EA:CA:3F:1B:07", AR: "EA:CA:3F:1B:08" },
+      protections: TPMS.protectionsParDefaut(),
       seuils: TPMS.seuilsParDefaut(),
       circonferenceMm: circonference,
       ecoutePeriodeMs: 5000,      // la radio s'allume toutes les 5 s...
       ecouteFenetreMs: 2000,      // ... et écoute pendant 2 s (40 % du temps)
-      delaiVeilleMs: 5 * 60000    // veille après 5 min sans rouler
+      delaiVeilleMs: 5 * 60000,   // veille après 5 min sans rouler
+      periodeEcranMs: 2000        // en roulant, au plus un rafraîchissement toutes les 2 s
     },
     roues: { AV: TPMS.creerRoue(), AR: TPMS.creerRoue() },
     compteur: TPMS.creerCompteur(circonference),
@@ -54,11 +66,17 @@ TPMS.creerBoitier = function () {
     ecran: TPMS.creerEcran(),         // image en préparation
     ecranAffiche: TPMS.creerEcran(),  // image réellement sur l'écran
     partielsDepuisComplet: 0,
+    dernierDessinMs: -1000000,
+    ecranUrgent: true,                // redessiner sans attendre (bouton, alerte...)
+    liaison: TPMS.creerLiaison(),     // dialogue avec l'application
     stats: {
       tramesAcceptees: 0,
       tramesInconnues: 0,
       tramesInvalides: 0,
       tramesManquees: 0,
+      rejetsVraisemblance: 0,     // trames en attente de confirmation ou hors limites
+      rejetsRythme: 0,            // trames reçues pendant un « signal suspect »
+      intrusions: 0,
       rafraichissementsPartiels: 0,
       rafraichissementsComplets: 0
     },
@@ -78,10 +96,13 @@ TPMS.boitierEcoute = function (b, maintenantMs) {
   return (maintenantMs % b.reglages.ecoutePeriodeMs) < b.reglages.ecouteFenetreMs;
 };
 
-// Une annonce BLE passe dans l'air.
+// Une annonce BLE passe dans l'air. Elle traverse les protections dans
+// l'ordre ; la première qui la refuse l'arrête.
 // Retourne ce qu'il en est advenu : "acceptee", "radio-coupee",
-// "invalide" ou "inconnue".
+// "invalide", "inconnue", "intrusion", "hors-limites" ou "suspecte".
 TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
+  var protections = b.reglages.protections;
+
   // Dans la réalité, une trame émise radio coupée n'est jamais vue.
   // Le simulateur la compte quand même, pour la montrer.
   if (!TPMS.boitierEcoute(b, maintenantMs)) {
@@ -95,14 +116,52 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
     return "invalide";
   }
 
-  var position = TPMS.positionCapteur(b.reglages.appairage, mesure.adresse);
+  // 1. De quelle roue s'agit-il ?
+  var position = protections.listeBlanche
+    ? TPMS.positionCapteur(b.reglages.appairage, mesure.adresse)
+    : TPMS.positionParNumero(mesure.numero);
   if (position === null) {
     b.stats.tramesInconnues++;
     return "inconnue";
   }
-
   var roue = b.roues[position];
+
+  // 2. Rythme : deux émetteurs avec la même identité ?
+  if (protections.rythme) {
+    if (TPMS.controlerRythme(roue.rythme, maintenantMs)) {
+      if (roue.intrusionJusquaMs <= maintenantMs) {
+        b.stats.intrusions++;
+        TPMS.boitierJournal(b, maintenantMs,
+          position + " : trames trop rapprochées, deux émetteurs → SIGNAL SUSPECT");
+      }
+      roue.intrusionJusquaMs = maintenantMs + TPMS.QUARANTAINE_MS;
+    }
+    // Pendant le signal suspect, on garde la dernière valeur de confiance.
+    if (roue.intrusionJusquaMs > maintenantMs) {
+      b.stats.rejetsRythme++;
+      return "intrusion";
+    }
+  }
+
+  // 3. Vraisemblance : la nouvelle valeur est-elle physiquement possible ?
+  if (protections.vraisemblance) {
+    var verdict = TPMS.verifierVraisemblance(roue.verification, roue.mesure,
+      roue.dernierRecuMs, mesure, maintenantMs);
+    if (verdict === "hors-limites" || verdict === "suspecte") {
+      b.stats.rejetsVraisemblance++;
+      return verdict;
+    }
+    if (verdict === "confirmee") {
+      TPMS.boitierJournal(b, maintenantMs,
+        position + " : changement brutal confirmé par " + TPMS.CONFIRMATIONS + " trames");
+    }
+  }
+
   roue.mesure = mesure;
+  if (roue.pressionAffichee === null ||
+      Math.abs(mesure.pressionBar - roue.pressionAffichee) >= TPMS.HYSTERESIS_AFFICHAGE_BAR) {
+    roue.pressionAffichee = mesure.pressionBar;
+  }
   roue.dernierRecuMs = maintenantMs;
   roue.nbTrames++;
   TPMS.historiqueAjouter(roue.historique, maintenantMs, mesure.pressionBar);
@@ -115,6 +174,7 @@ TPMS.boitierReveiller = function (b, maintenantMs, raison) {
   if (!b.veille) return;
   b.veille = false;
   b.ecouteDepuisMs = maintenantMs;
+  b.ecranUrgent = true;
   TPMS.boitierJournal(b, maintenantMs, "Réveil (" + raison + ")");
 };
 
@@ -134,6 +194,7 @@ TPMS.boitierTopRoue = function (b, maintenantMs) {
 // En veille, un appui ne fait que réveiller le boîtier.
 TPMS.boitierBouton = function (b, numero, appuiLong, maintenantMs) {
   b.dernierMouvementMs = maintenantMs;
+  b.ecranUrgent = true;
   if (b.veille) {
     TPMS.boitierReveiller(b, maintenantMs, "bouton " + numero);
     return;
@@ -166,6 +227,8 @@ TPMS.boitierVue = function (b, maintenantMs) {
     eclairage: b.eclairage && !b.veille,
     enCharge: b.enCharge,
     batterieBoitierPct: b.batteriePct,
+    appConnectee: b.liaison.connecte,
+    codeAppairage: b.liaison.code,
     roues: { AV: TPMS.vueRoue(b.roues.AV), AR: TPMS.vueRoue(b.roues.AR) },
     vitesseKmh: b.veille ? 0 : TPMS.compteurVitesseKmh(c, maintenantMs),
     distanceKm: TPMS.compteurDistanceKm(c),
@@ -181,7 +244,7 @@ TPMS.vueRoue = function (roue) {
   }
   return {
     etat: roue.etat,
-    pressionBar: roue.mesure.pressionBar,
+    pressionBar: roue.pressionAffichee,
     temperatureC: roue.mesure.temperatureC,
     batteriePct: roue.mesure.batteriePct
   };
@@ -194,7 +257,13 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
   // 1. Veille si le vélo ne roule plus depuis longtemps.
   if (!b.veille && maintenantMs - b.dernierMouvementMs > b.reglages.delaiVeilleMs) {
     b.veille = true;
+    b.ecranUrgent = true;
     TPMS.boitierJournal(b, maintenantMs, "Mise en veille (vélo immobile)");
+  }
+  // Le code d'appairage disparaît au bout d'une minute.
+  if (b.liaison.code !== null && maintenantMs > b.liaison.codeJusquaMs) {
+    b.liaison.code = null;
+    b.ecranUrgent = true;
   }
 
   // 2. État de chaque pneu (pas en veille : la radio est coupée).
@@ -209,6 +278,7 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
       if (etat !== roue.etat) {
         roue.etat = etat;
         roue.acquittee = false;
+        b.ecranUrgent = true;
         TPMS.boitierJournal(b, maintenantMs, pos + " : " + TPMS.texteEtat(etat));
         if (TPMS.estAlerte(etat)) b.bipDemande = true;
       }
@@ -226,13 +296,19 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
     bip: b.bipDemande,
     ledsEclairage: b.eclairage && !b.veille,
     radio: TPMS.boitierEcoute(b, maintenantMs),
+    appConnectee: b.liaison.connecte,
     rafraichissement: "aucun"
   };
   b.bipDemande = false;
   if (b.veille) sorties.ledAlerte = "eteinte";
 
-  // 4. Écran : on dessine la nouvelle image, et on ne l'envoie à
-  //    l'écran que si elle est différente de celle déjà affichée.
+  // 4. Écran : au plus un dessin toutes les periodeEcranMs, sauf urgence.
+  //    On n'envoie l'image à l'écran que si elle a changé.
+  if (!b.ecranUrgent && maintenantMs - b.dernierDessinMs < b.reglages.periodeEcranMs) {
+    return sorties;
+  }
+  b.ecranUrgent = false;
+  b.dernierDessinMs = maintenantMs;
   TPMS.dessinerEcran(b.ecran, TPMS.boitierVue(b, maintenantMs));
   if (TPMS.ecransDifferents(b.ecran, b.ecranAffiche)) {
     TPMS.ecranCopier(b.ecranAffiche, b.ecran);

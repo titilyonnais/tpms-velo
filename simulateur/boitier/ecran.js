@@ -32,6 +32,7 @@ TPMS.dessinerEcran = function (e, vue) {
   } else if (vue.eclairage) {
     TPMS.ecranTexte(e, 34, 3, "ECLAIRAGE", 1, N);
   }
+  if (vue.appConnectee) TPMS.ecranTexte(e, 94, 3, "APP", 1, N);
   TPMS.dessinerBatterie(e, vue.batterieBoitierPct, vue.enCharge);
   TPMS.ecranLigneH(e, 0, 14, 200, N);
 
@@ -47,6 +48,20 @@ TPMS.dessinerEcran = function (e, vue) {
   } else {
     TPMS.dessinerPageTrajet(e, vue);
   }
+
+  // ---- Code d'appairage, par-dessus tout le reste ----
+  if (vue.codeAppairage) TPMS.dessinerCodeAppairage(e, vue.codeAppairage);
+};
+
+// Fenêtre au centre de l'écran avec le code à taper sur le téléphone.
+TPMS.dessinerCodeAppairage = function (e, code) {
+  var N = TPMS.NOIR;
+  TPMS.ecranRectPlein(e, 14, 52, 172, 96, TPMS.BLANC);
+  TPMS.ecranCadre(e, 14, 52, 172, 96, N);
+  TPMS.ecranCadre(e, 16, 54, 168, 92, N);
+  TPMS.ecranTexteCentre(e, 100, 64, "APPAIRAGE", 2, N);
+  TPMS.ecranTexteCentre(e, 100, 90, code, 3, N);
+  TPMS.ecranTexteCentre(e, 100, 126, "A SAISIR SUR LE TELEPHONE", 1, N);
 };
 
 // Pourcentage + petite pile dessinée, en haut à droite.

@@ -58,23 +58,33 @@ TPMS.historiquePenteBarH = function (h) {
   var n = h.tMs.length;
   if (n < 5) return 0;
   if (h.tMs[n - 1] - h.tMs[0] < TPMS.HISTO_DUREE_MIN_MS) return 0;
+  return TPMS.penteMoindresCarresParHeure(h.tMs, h.pression);
+};
+
+// Calcul de la pente proprement dit (réutilisé par l'application, qui
+// cherche des fuites beaucoup plus lentes sur plusieurs jours).
+// tMs : instants en millisecondes ; valeurs : mesures correspondantes.
+// Retourne la pente en unité de mesure par heure.
+TPMS.penteMoindresCarresParHeure = function (tMs, valeurs) {
+  var n = tMs.length;
+  if (n < 2) return 0;
 
   // On travaille en heures, comptées depuis le premier point.
   // Cela évite de manipuler de très grands nombres
   // (important en C avec des float).
-  var t0 = h.tMs[0];
+  var t0 = tMs[0];
   var sommeT = 0, sommeP = 0;
   for (var i = 0; i < n; i++) {
-    sommeT += (h.tMs[i] - t0) / 3600000;
-    sommeP += h.pression[i];
+    sommeT += (tMs[i] - t0) / 3600000;
+    sommeP += valeurs[i];
   }
   var tMoyen = sommeT / n;
   var pMoyen = sommeP / n;
 
   var numerateur = 0, denominateur = 0;
   for (var j = 0; j < n; j++) {
-    var dt = (h.tMs[j] - t0) / 3600000 - tMoyen;
-    numerateur += dt * (h.pression[j] - pMoyen);
+    var dt = (tMs[j] - t0) / 3600000 - tMoyen;
+    numerateur += dt * (valeurs[j] - pMoyen);
     denominateur += dt * dt;
   }
   if (denominateur === 0) return 0;

@@ -11,10 +11,12 @@
 // c'est tests.html qui s'en charge avec des balises <script>).
 if (typeof require !== "undefined") {
   var fichiers = [
-    "../logique/trame.js", "../logique/vitesse.js", "../logique/fuite.js",
-    "../logique/alertes.js", "../logique/securite.js",
+    "../../logique/trame.js", "../../logique/vitesse.js", "../../logique/fuite.js",
+    "../../logique/alertes.js", "../../logique/securite.js",
+    "../../logique/protocole.js", "../../logique/energie.js",
     "../boitier/police5x7.js", "../boitier/epaper.js",
-    "../boitier/ecran.js", "../boitier/boitier.js"
+    "../boitier/ecran.js", "../boitier/liaison.js", "../boitier/boitier.js",
+    "../sources/pirate.js"
   ];
   fichiers.forEach(function (f) { require(require("path").join(__dirname, f)); });
 }
@@ -182,6 +184,196 @@ function proche(a, b, tolerance) {
 })();
 
 // ---------------------------------------------------------------------
+// Sécurité
+// ---------------------------------------------------------------------
+(function () {
+  var ADRESSE_AV = [0xEA, 0xCA, 0x3F, 0x1B, 0x07];
+  function trameAV(pression) {
+    return TPMS.encoderTrame({
+      numero: 1, adresse: ADRESSE_AV,
+      pressionBar: pression, temperatureC: 20, batteriePct: 90, alarme: 0
+    });
+  }
+  function mesure(pression) { return { pressionBar: pression, temperatureC: 20 }; }
+  var ref = mesure(2.2);
+
+  // Liste blanche
+  verifier("sans liste blanche : le capteur n°1 devient l'avant", TPMS.positionParNumero(1) === "AV");
+  verifier("sans liste blanche : numéro inconnu", TPMS.positionParNumero(7) === null);
+
+  // Vraisemblance
+  var v = TPMS.creerVerification();
+  verifier("vraisemblance : petite baisse acceptée",
+    TPMS.verifierVraisemblance(v, ref, 0, mesure(2.1), 3000) === "ok");
+  verifier("vraisemblance : chute brutale suspecte",
+    TPMS.verifierVraisemblance(v, ref, 0, mesure(0.3), 1000) === "suspecte");
+  verifier("vraisemblance : 2e trame identique encore suspecte",
+    TPMS.verifierVraisemblance(v, ref, 0, mesure(0.32), 1500) === "suspecte");
+  verifier("vraisemblance : confirmée par la 3e trame",
+    TPMS.verifierVraisemblance(v, ref, 0, mesure(0.31), 2000) === "confirmee");
+
+  var v2 = TPMS.creerVerification();
+  TPMS.verifierVraisemblance(v2, ref, 0, mesure(0.3), 1000);
+  TPMS.verifierVraisemblance(v2, ref, 0, mesure(1.0), 1500);   // autre valeur : on recommence
+  verifier("vraisemblance : valeurs contradictoires jamais confirmées",
+    TPMS.verifierVraisemblance(v2, ref, 0, mesure(0.3), 2000) === "suspecte");
+
+  verifier("vraisemblance : hors limites",
+    TPMS.verifierVraisemblance(TPMS.creerVerification(), ref, 0, mesure(9), 3000) === "hors-limites");
+  verifier("vraisemblance : grand écart après 1 h d'absence accepté",
+    TPMS.verifierVraisemblance(TPMS.creerVerification(), ref, 0, mesure(3.0), 3600000) === "ok");
+
+  // Rythme
+  var normal = TPMS.creerRythme();
+  var alerte = false;
+  for (var t = 0; t <= 60000; t += 3000) alerte = TPMS.controlerRythme(normal, t) || alerte;
+  verifier("rythme : un capteur toutes les 3 s → pas d'alerte", alerte === false);
+
+  var double = TPMS.creerRythme();
+  var detections = [];
+  [0, 1000, 2000, 3000].forEach(function (t) { detections.push(TPMS.controlerRythme(double, t)); });
+  verifier("rythme : 3 trames trop rapprochées → intrusion",
+    detections.join() === "false,false,false,true", detections.join());
+
+  // Scénario complet : le vrai capteur annonce 2,2 bar toutes les 3 s,
+  // un pirate annonce 0,3 bar avec la même identité toutes les secondes.
+  function scenario(protections) {
+    var b = TPMS.creerBoitier();
+    b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;   // radio toujours allumée
+    b.reglages.protections = protections;
+    var faussesAcceptees = 0;
+    for (var t = 0; t <= 30000; t += 500) {
+      if (t % 3000 === 0) TPMS.boitierRecevoirTrame(b, trameAV(2.2), t);
+      if (t % 1000 === 500 && TPMS.boitierRecevoirTrame(b, trameAV(0.3), t) === "acceptee") faussesAcceptees++;
+      if (t % 1000 === 0) TPMS.boitierMiseAJour(b, t);
+    }
+    return { boitier: b, faussesAcceptees: faussesAcceptees };
+  }
+  var sans = scenario({ listeBlanche: true, vraisemblance: false, rythme: false });
+  verifier("pirate sans protection : fausses trames acceptées", sans.faussesAcceptees > 0, sans.faussesAcceptees);
+
+  var vraisemblanceSeule = scenario({ listeBlanche: true, vraisemblance: true, rythme: false });
+  // LIMITE CONNUE : le pirate émet 3 fois entre deux vraies trames, ce qui
+  // suffit à « confirmer » sa fausse valeur. D'où la protection « rythme ».
+  verifier("pirate + vraisemblance seule : le pirate rapide finit par passer",
+    vraisemblanceSeule.faussesAcceptees > 0, vraisemblanceSeule.faussesAcceptees);
+
+  var avec = scenario(TPMS.protectionsParDefaut());
+  verifier("pirate + toutes protections : SIGNAL SUSPECT",
+    avec.boitier.roues.AV.etat === "INTRUSION", avec.boitier.roues.AV.etat);
+  verifier("pirate + toutes protections : fausse pression jamais acceptée",
+    avec.faussesAcceptees === 0, avec.faussesAcceptees);
+  verifier("pirate + toutes protections : dernière valeur de confiance gardée",
+    proche(avec.boitier.roues.AV.mesure.pressionBar, 2.2, 1e-9), avec.boitier.roues.AV.mesure.pressionBar);
+
+  // Un vrai regonflage (1,2 → 2,2 bar d'un coup) finit par être accepté.
+  var b = TPMS.creerBoitier();
+  b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
+  TPMS.boitierRecevoirTrame(b, trameAV(1.2), 0);
+  var resultats = [3000, 6000, 9000].map(function (t) { return TPMS.boitierRecevoirTrame(b, trameAV(2.2), t); });
+  // La 1re trame est suspecte (+1 bar en 3 s) ; ensuite le temps écoulé
+  // depuis la dernière valeur acceptée grandit et l'écart devient plausible.
+  verifier("regonflage réel : suspect puis accepté",
+    resultats[0] === "suspecte" && resultats[2] === "acceptee", resultats.join());
+
+  // Pirate en rejeu : il renvoie des trames enregistrées, octet pour octet.
+  var pirate = TPMS.creerPirate();
+  pirate.attaque = "rejeu";
+  pirate.enregistre = true;
+  TPMS.pirateEcouter(pirate, "AV", trameAV(2.2));
+  TPMS.pirateEcouter(pirate, "AR", trameAV(9.9));    // pas la cible : ignorée
+  verifier("pirate : n'enregistre que la cible", pirate.enregistrement.length === 1);
+  verifier("pirate : rejoue la trame à l'identique",
+    TPMS.trameEnHexa(TPMS.pirateTrame(pirate, null)) === TPMS.trameEnHexa(trameAV(2.2)));
+})();
+
+// ---------------------------------------------------------------------
+// Protocole boîtier ↔ application
+// ---------------------------------------------------------------------
+(function () {
+  var mesures = {
+    AV: { pressionBar: 2.15, temperatureC: -3, batteriePct: 80, etat: "BASSE" },
+    AR: { pressionBar: null, etat: "ATTENTE" },
+    vitesseKmh: 23.4, distanceKm: 12.345, batterieBoitierPct: 76,
+    veille: false, enCharge: true, eclairage: true, sequence: 65535
+  };
+  var o = TPMS.encoderMesures(mesures);
+  var m = TPMS.decoderMesures(o);
+  verifier("MESURES : 20 octets", o.length === 20);
+  verifier("MESURES : pression en mbar", m.AV.pressionBar === 2.15, m.AV.pressionBar);
+  verifier("MESURES : température négative", m.AV.temperatureC === -3, m.AV.temperatureC);
+  verifier("MESURES : pression inconnue", m.AR.pressionBar === null);
+  verifier("MESURES : état", m.AV.etat === "BASSE" && m.AR.etat === "ATTENTE");
+  verifier("MESURES : vitesse et distance", m.vitesseKmh === 23.4 && m.distanceKm === 12.345,
+    m.vitesseKmh + " " + m.distanceKm);
+  verifier("MESURES : drapeaux", !m.veille && m.enCharge && m.eclairage);
+  verifier("MESURES : séquence", m.sequence === 65535);
+
+  var b = TPMS.creerBoitier();
+  var r = TPMS.decoderReglages(TPMS.encoderReglages(b.reglages));
+  verifier("REGLAGES : aller-retour circonférence", r.circonferenceMm === 2105);
+  verifier("REGLAGES : aller-retour seuils", r.seuils.AR.basBar === 2 && r.seuils.AV.hautBar === 3.2);
+  verifier("REGLAGES : aller-retour appairage", r.appairage.AV === "EA:CA:3F:1B:07", r.appairage.AV);
+  verifier("REGLAGES : aller-retour protections", r.protections.rythme === true);
+  r.seuils.AV.basBar = 4;
+  verifier("REGLAGES : seuil bas > seuil haut refusé", TPMS.verifierReglages(r) !== "");
+})();
+
+// ---------------------------------------------------------------------
+// Liaison (appairage par code)
+// ---------------------------------------------------------------------
+(function () {
+  var b = TPMS.creerBoitier();
+  var reglages = TPMS.encoderReglages(b.reglages);
+  verifier("liaison : réglages refusés sans appairage", TPMS.liaisonEcrireReglages(b, reglages, 0) === "refuse");
+  verifier("liaison : premier contact → code requis", TPMS.liaisonConnexion(b, 0) === "code-requis");
+  verifier("liaison : code affiché à l'écran", TPMS.boitierVue(b, 0).codeAppairage === b.liaison.code);
+  verifier("liaison : mauvais code", TPMS.liaisonSaisirCode(b, "000000" === b.liaison.code ? "111111" : "000000", 0) === "faux");
+  verifier("liaison : bon code", TPMS.liaisonSaisirCode(b, b.liaison.code, 0) === "ok");
+  verifier("liaison : mesures disponibles", TPMS.liaisonMesures(b, 0).length === 20);
+
+  var modifies = TPMS.decoderReglages(reglages);
+  modifies.circonferenceMm = 2288;
+  verifier("liaison : réglages acceptés une fois appairé",
+    TPMS.liaisonEcrireReglages(b, TPMS.encoderReglages(modifies), 0) === "ok");
+  verifier("liaison : circonférence appliquée au compteur", b.compteur.circonferenceMm === 2288);
+
+  TPMS.liaisonDeconnexion(b, 0);
+  verifier("liaison : reconnexion directe d'un téléphone appairé", TPMS.liaisonConnexion(b, 1000) === "connecte");
+
+  var b2 = TPMS.creerBoitier();
+  TPMS.liaisonConnexion(b2, 0);
+  var faux = b2.liaison.code === "000000" ? "111111" : "000000";
+  TPMS.liaisonSaisirCode(b2, faux, 0);
+  TPMS.liaisonSaisirCode(b2, faux, 0);
+  verifier("liaison : 3 codes faux → bloqué", TPMS.liaisonSaisirCode(b2, faux, 0) === "bloque");
+  verifier("liaison : toujours bloqué 30 s après", TPMS.liaisonConnexion(b2, 30000) === "bloque");
+})();
+
+// ---------------------------------------------------------------------
+// Énergie
+// ---------------------------------------------------------------------
+(function () {
+  var profil = {
+    heuresRoulage: 1, sortiesParJour: 2, heuresEclairage: 0.25, heuresApp: 0.1, alertesParJour: 0,
+    fenetreMs: 2000, periodeMs: 5000, periodeEcranMs: 2000, delaiVeilleMs: 300000
+  };
+  var bilan = TPMS.bilanJournee(profil);
+  verifier("énergie : autonomie supérieure à 1 semaine (cahier des charges)",
+    bilan.autonomieJours >= 7, bilan.autonomieJours.toFixed(1) + " jours");
+  var radio = bilan.postes[2].mAhJour;
+  // 1 h de roulage + 2 × 5 min = 1,167 h éveillé × 40 % × 5 mA = 2,33 mAh
+  verifier("énergie : poste radio", proche(radio, 1.1667 * 0.4 * 5, 0.01), radio);
+  profil.fenetreMs = 5000;   // radio allumée en permanence
+  verifier("énergie : écoute continue → autonomie plus courte",
+    TPMS.bilanJournee(profil).autonomieJours < bilan.autonomieJours);
+  var pile = TPMS.dureeViePileCapteurJours(3000);
+  verifier("énergie : pile CR1632 de capteur > 1 an", pile > 365, Math.round(pile) + " jours");
+  verifier("énergie : courant en veille = 5 µA",
+    TPMS.consoInstantaneeMa({ veille: true }) === 0.005);
+})();
+
+// ---------------------------------------------------------------------
 // Écran
 // ---------------------------------------------------------------------
 (function () {
@@ -190,7 +382,8 @@ function proche(a, b, tolerance) {
   // Colonne 0 du "A" = 0x7E : ligne 0 éteinte, lignes 1 à 6 allumées
   verifier("écran : pixel (0,0) du A blanc", TPMS.ecranLirePixel(e, 0, 0) === 0);
   verifier("écran : pixel (0,1) du A noir", TPMS.ecranLirePixel(e, 0, 1) === 1);
-  verifier("écran : largeur de \"2.10\" taille 4 = 92 px", TPMS.largeurTexte("2.10", 4) === 92);
+  // 3 chiffres × 6 + point × 3 − 1 = 20 colonnes × 4 = 80 px
+  verifier("écran : largeur de \"2.10\" taille 4 = 80 px", TPMS.largeurTexte("2.10", 4) === 80, TPMS.largeurTexte("2.10", 4));
   TPMS.ecranPixel(e, 500, 500, TPMS.NOIR);   // ne doit pas planter
   verifier("écran : pixel hors écran ignoré", true);
   verifier("durée en texte", TPMS.dureeEnTexte(4965) === "1:22:45", TPMS.dureeEnTexte(4965));

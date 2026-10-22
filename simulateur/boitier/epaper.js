@@ -91,16 +91,28 @@ TPMS.ecranCaractere = function (e, x, y, caractere, taille, couleur) {
 };
 
 // Chaque caractère avance de 6 pixels (5 + 1 d'espace) × taille.
+// Exception : le point décimal n'occupe que 2 colonnes (les colonnes 1
+// et 2 de son glyphe). On le décale d'une colonne vers la gauche et il
+// n'avance que de 3 pixels. Sinon « 2.19 » en grand occupe presque
+// toute la demi-largeur de l'écran.
+TPMS.avanceCaractere = function (caractere) {
+  return caractere === "." ? 3 : 6;
+};
+
 TPMS.ecranTexte = function (e, x, y, texte, taille, couleur) {
   for (var i = 0; i < texte.length; i++) {
-    TPMS.ecranCaractere(e, x + i * 6 * taille, y, texte[i], taille, couleur);
+    var decalage = texte[i] === "." ? -taille : 0;
+    TPMS.ecranCaractere(e, x + decalage, y, texte[i], taille, couleur);
+    x += TPMS.avanceCaractere(texte[i]) * taille;
   }
 };
 
 // Largeur occupée par un texte, sans l'espace après le dernier caractère.
 TPMS.largeurTexte = function (texte, taille) {
   if (texte.length === 0) return 0;
-  return (texte.length * 6 - 1) * taille;
+  var total = 0;
+  for (var i = 0; i < texte.length; i++) total += TPMS.avanceCaractere(texte[i]);
+  return (total - 1) * taille;
 };
 
 TPMS.ecranTexteCentre = function (e, xCentre, y, texte, taille, couleur) {

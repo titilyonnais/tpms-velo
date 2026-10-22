@@ -21,7 +21,7 @@ Différenciation : afficheur dédié lisible au soleil, très basse consommation
 - Écran : pression AV/AR, température, niveau des piles/batterie, **vitesse et distance** (aimant de rayon + interrupteur reed filaire, circonférence de roue réglable).
 - Alertes : **bip + LED**. Éclairage de nuit : 2 LED blanches latérales (pas de vrai front-light, trop cher).
 - Autonomie boîtier : **≥ 1 semaine** (viser plusieurs) : écoute BLE par fenêtres, rafraîchissement écran seulement si changement, veille quand la roue ne tourne plus.
-- Application : **page web Web Bluetooth** (Android/Chrome ; iPhone → Flutter). Réglage des seuils et de la circonférence, **historique des pressions**, **détection de fuite lente**. Téléphone de Thibault : pas encore précisé.
+- Application : **page web Web Bluetooth**. Téléphone de Thibault : **iPhone** → la page s'utilise dans le navigateur **Bluefy** (Safari ne gère pas Web Bluetooth ; Flutter écarté car la compilation iOS exige un Mac). Réglage des seuils et de la circonférence, **historique des pressions**, **détection de fuite lente** sur plusieurs jours, export CSV.
 - Cybersécurité (niveau modéré mais visible) : liste blanche des capteurs appairés, contrôle de vraisemblance (ex. saut de 2 bar en 1 s rejeté), liaison boîtier ↔ app appairée et chiffrée (BLE Secure Connections), page d'analyse de risques (les TPMS émettent en clair et peuvent être imités).
 
 ### Format de trame TPMS (hypothèse à confirmer à la réception des capteurs)
@@ -57,16 +57,17 @@ Demande de Thibault : un logiciel qui centralise tout et permet de faire **en nu
   5. À ajouter : estimation d'autonomie (consommation par état, durée de vie batterie et piles CR1632).
 - Principe d'architecture : séparer la **logique** (décodage de trame, alertes, calcul de vitesse, détection de fuite, sécurité) des **sources de données** (simulées vs vraies). Cette logique doit pouvoir être portée telle quelle dans le firmware Arduino du XIAO et dans l'app Web Bluetooth.
 
-## Organisation proposée du dépôt
+## Organisation du dépôt
 ```
-simulateur/   page web du jumeau numérique
-firmware/     programme du boîtier (Arduino / PlatformIO, XIAO nRF52840) – quand le matériel arrive
-app/          application Web Bluetooth
-docs/         cahier des charges, analyse de risques, bilan énergétique, schémas
+logique/      logique partagée (trames, vitesse, fuite, alertes, sécurité, protocole BLE, énergie)
+simulateur/   jumeau numérique (boîtier virtuel dans simulateur/boitier/, sources simulées, tests)
+app/          application Web Bluetooth (transport réel ou simulé)
+firmware/     programme du boîtier (Arduino, XIAO nRF52840), traduction C++ de la logique
+docs/         cahier des charges, analyse de risques, bilan énergétique, protocole, architecture
 ```
+Le simulateur est l'outil de travail de Thibault (pas un support de soutenance). Style visuel : « fiche technique » (papier crème, encre noire, rouge de repère).
 Initialiser git dès le départ : l'historique des commits sert de preuve d'avancement pour le jury.
 
 ## Points encore ouverts
-- Téléphone : Android ou iPhone ?
 - Nom de l'établissement, professeur référent, date de soutenance.
 - Plage de pression réelle des capteurs TPMS et format exact des trames.

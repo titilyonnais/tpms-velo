@@ -1,0 +1,176 @@
+/* ===================================================================
+   app.css — Application TPMS, style « fiche technique »
+   Papier crème, encre noire, un seul rouge pour les alertes.
+   =================================================================== */
+
+:root {
+  --papier: #f2efe6;
+  --papier-2: #e9e5d8;
+  --encre: #1a1a18;
+  --encre-2: #5e5b53;
+  --filet: #cfc9ba;
+  --rouge: #c8361e;
+  --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  --texte: "IBM Plex Sans Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+body {
+  background: var(--papier);
+  color: var(--encre);
+  font-family: var(--texte);
+  font-size: 15px;
+  line-height: 1.4;
+  padding-bottom: 64px;          /* place pour les onglets */
+  -webkit-text-size-adjust: 100%;
+}
+
+button, input { font: inherit; color: inherit; }
+
+/* ---------- Barre du haut ---------- */
+.barre {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+  border-bottom: 2px solid var(--encre);
+}
+.marque { font-family: var(--mono); font-weight: 600; font-size: 17px; letter-spacing: .04em; }
+.marque span { color: var(--encre-2); font-weight: 400; }
+.etat-liaison { font-family: var(--mono); font-size: 12px; color: var(--encre-2); display: flex; align-items: center; gap: 6px; }
+.pastille { width: 8px; height: 8px; border: 1.5px solid var(--encre-2); border-radius: 50%; }
+.etat-liaison.on { color: var(--encre); }
+.etat-liaison.on .pastille { background: var(--encre); border-color: var(--encre); }
+
+/* ---------- Vues ---------- */
+.vue { padding: 18px 16px 8px; }
+.surtitre {
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--encre-2); margin: 24px 0 4px;
+}
+h1 { font-size: 26px; font-weight: 600; line-height: 1.15; margin: 0 0 12px; }
+h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; margin: 0; }
+h3 { margin: 0; }
+.texte { color: var(--encre-2); margin: 0 0 22px; max-width: 34em; }
+.note { font-size: 13px; color: var(--encre-2); margin: 14px 0 0; }
+.erreur { color: var(--rouge); font-size: 14px; min-height: 1.4em; margin: 10px 0 0; }
+
+.entete-vue {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--encre); margin-bottom: 14px;
+}
+.meta { font-family: var(--mono); font-size: 11px; color: var(--encre-2); }
+
+/* ---------- Boutons ---------- */
+.bouton {
+  display: inline-block;
+  border: 1px solid var(--encre); background: transparent;
+  padding: 10px 14px; border-radius: 0;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .02em;
+  cursor: pointer;
+}
+.bouton:active { background: var(--papier-2); }
+.bouton.plein { background: var(--encre); color: var(--papier); width: 100%; padding: 14px; font-weight: 500; }
+.bouton.plein:active { background: #33332f; }
+.bouton.danger { color: var(--rouge); border-color: var(--rouge); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+
+.champ-code {
+  width: 100%; margin-bottom: 14px;
+  font-family: var(--mono); font-size: 34px; letter-spacing: .4em; text-align: center;
+  padding: 12px 0; background: transparent;
+  border: 0; border-bottom: 2px solid var(--encre); border-radius: 0;
+}
+.champ-code:focus { outline: none; border-bottom-color: var(--rouge); }
+
+/* ---------- Pneus ---------- */
+.roues { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--encre); }
+.roue { padding: 12px 12px 14px; }
+.roue + .roue { border-left: 1px solid var(--encre); }
+.roue h3 {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: .12em; color: var(--encre-2);
+}
+.pression { margin: 6px 0 2px; white-space: nowrap; }
+.pression .valeur { font-family: var(--mono); font-size: 38px; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pression .unite { font-family: var(--mono); font-size: 13px; color: var(--encre-2); }
+.details { font-family: var(--mono); font-size: 12px; color: var(--encre-2); margin: 0; min-height: 1.4em; }
+.etat { font-size: 14px; margin: 10px 0 0; padding-top: 8px; border-top: 1px dashed var(--filet); }
+.roue.alerte { background: var(--rouge); color: var(--papier); }
+.roue.alerte h3, .roue.alerte .unite, .roue.alerte .details { color: #f4d8d1; }
+.roue.alerte .etat { border-top-color: rgba(255,255,255,.4); font-weight: 600; }
+
+.grandeurs { display: grid; grid-template-columns: repeat(3, 1fr); margin: 14px 0 0; border-bottom: 1px solid var(--encre); }
+.grandeurs div { padding: 8px 0 10px; }
+.grandeurs dt { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--encre-2); }
+.grandeurs dd { margin: 2px 0 0; font-family: var(--mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Historique ---------- */
+.segments { display: flex; border: 1px solid var(--encre); }
+.segments button {
+  border: 0; background: transparent; padding: 4px 9px;
+  font-family: var(--mono); font-size: 12px; cursor: pointer;
+}
+.segments button + button { border-left: 1px solid var(--encre); }
+.segments button.actif { background: var(--encre); color: var(--papier); }
+
+.figure { margin: 0; }
+#courbe { width: 100%; height: 220px; display: block; }
+#courbe .grille { stroke: var(--filet); stroke-width: .6; }
+#courbe .axe { font-family: var(--mono); font-size: 9px; fill: var(--encre-2); }
+#courbe .seuil { stroke: var(--rouge); stroke-width: .8; stroke-dasharray: 2 2; }
+#courbe .seuil-texte { fill: var(--rouge); }
+#courbe .courbe-av { fill: none; stroke: var(--encre); stroke-width: 1.6; }
+#courbe .courbe-ar { fill: none; stroke: var(--encre); stroke-width: 1.6; stroke-dasharray: 5 3; }
+#courbe .vide { font-family: var(--mono); font-size: 11px; fill: var(--encre-2); }
+figcaption { font-family: var(--mono); font-size: 11px; color: var(--encre-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.trait-av, .trait-ar, .trait-seuil { display: inline-block; width: 18px; height: 0; margin-left: 6px; }
+.trait-av { border-top: 2px solid var(--encre); margin-left: 0; }
+.trait-ar { border-top: 2px dashed var(--encre); }
+.trait-seuil { border-top: 1px dashed var(--rouge); }
+
+.intertitre {
+  font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .12em; margin: 22px 0 6px; color: var(--encre-2);
+}
+.tableau { width: 100%; border-collapse: collapse; border-top: 1px solid var(--encre); border-bottom: 1px solid var(--encre); font-size: 13px; }
+.tableau th { text-align: left; font-family: var(--mono); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .1em; color: var(--encre-2); padding: 6px 6px 4px 0; border-bottom: 1px solid var(--encre); }
+.tableau td { padding: 7px 6px 7px 0; vertical-align: top; border-top: 1px solid var(--filet); }
+.tableau td.nombre { font-family: var(--mono); white-space: nowrap; }
+.tableau b { color: var(--rouge); font-weight: 600; }
+
+/* ---------- Réglages ---------- */
+.formulaire fieldset { border: 0; border-top: 1px solid var(--encre); margin: 0 0 16px; padding: 8px 0 0; }
+.formulaire legend {
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--encre-2); padding: 0 8px 0 0;
+}
+.formulaire label { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--filet); }
+.formulaire label .unite { font-family: var(--mono); font-size: 11px; color: var(--encre-2); margin-right: auto; margin-left: 4px; }
+.formulaire input[type=number], .formulaire input[type=text] {
+  width: 9.5em; text-align: right;
+  font-family: var(--mono); font-size: 15px;
+  background: transparent; border: 0; border-bottom: 1px solid var(--encre); border-radius: 0; padding: 3px 0;
+}
+.formulaire input[type=text] { width: 11em; }
+.formulaire input:focus { outline: none; border-bottom-color: var(--rouge); }
+.formulaire input:invalid { color: var(--rouge); }
+.formulaire label.case { justify-content: flex-start; }
+.formulaire input[type=checkbox] { accent-color: var(--encre); width: 18px; height: 18px; margin: 0; }
+.message { font-size: 14px; margin: 10px 0 0; min-height: 1.4em; }
+.message.erreur { color: var(--rouge); }
+
+/* ---------- Onglets ---------- */
+.onglets {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--papier); border-top: 2px solid var(--encre);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.onglets button {
+  border: 0; background: transparent; padding: 14px 0 12px;
+  font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--encre-2);
+  cursor: pointer;
+}
+.onglets button + button { border-left: 1px solid var(--filet); }
+.onglets button.actif { color: var(--encre); font-weight: 600; box-shadow: inset 0 3px 0 var(--encre); }

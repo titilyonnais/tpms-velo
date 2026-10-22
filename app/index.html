@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TPMS vélo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="barre">
+  <div class="marque">TPMS<span>·01</span></div>
+  <div class="etat-liaison" id="etatLiaison"><span class="pastille"></span><span id="texteLiaison">Non connecté</span></div>
+</header>
+
+<!-- ============ ÉCRAN DE CONNEXION ============ -->
+<section class="vue" id="vueConnexion">
+  <p class="surtitre">Boîtier de guidon</p>
+  <h1>Aucun boîtier connecté</h1>
+  <p class="texte">Allume le boîtier (appuie sur un bouton s'il est en veille), puis connecte-toi. La première fois, un code à 6 chiffres s'affiche sur son écran.</p>
+  <button class="bouton plein" id="btnConnecter" type="button">Connecter le boîtier</button>
+  <p class="erreur" id="erreurConnexion"></p>
+  <p class="note" id="noteTransport"></p>
+</section>
+
+<!-- ============ CODE D'APPAIRAGE ============ -->
+<section class="vue" id="vueCode" hidden>
+  <p class="surtitre">Appairage</p>
+  <h1>Code affiché sur le boîtier</h1>
+  <p class="texte">Ce code prouve que tu as le boîtier sous les yeux : personne d'autre ne peut s'appairer à ta place.</p>
+  <input class="champ-code" id="champCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+  <button class="bouton plein" id="btnValiderCode" type="button">Valider</button>
+  <p class="erreur" id="erreurCode"></p>
+</section>
+
+<!-- ============ PNEUS ============ -->
+<section class="vue" id="vuePneus" hidden>
+  <div class="entete-vue">
+    <h2>Pneus</h2>
+    <span class="meta" id="metaSequence"></span>
+  </div>
+  <div class="roues">
+    <article class="roue" id="roueAV">
+      <h3>Avant</h3>
+      <p class="pression"><span class="valeur">–,––</span> <span class="unite">bar</span></p>
+      <p class="details"></p>
+      <p class="etat"></p>
+    </article>
+    <article class="roue" id="roueAR">
+      <h3>Arrière</h3>
+      <p class="pression"><span class="valeur">–,––</span> <span class="unite">bar</span></p>
+      <p class="details"></p>
+      <p class="etat"></p>
+    </article>
+  </div>
+  <dl class="grandeurs">
+    <div><dt>Vitesse</dt><dd id="valVitesse">–</dd></div>
+    <div><dt>Trajet</dt><dd id="valDistance">–</dd></div>
+    <div><dt>Boîtier</dt><dd id="valBatterie">–</dd></div>
+  </dl>
+  <div class="actions">
+    <button class="bouton" id="btnRaz" type="button">Remettre le trajet à zéro</button>
+    <button class="bouton" id="btnAcquitter" type="button">Acquitter l'alerte</button>
+  </div>
+</section>
+
+<!-- ============ HISTORIQUE ============ -->
+<section class="vue" id="vueHistorique" hidden>
+  <div class="entete-vue">
+    <h2>Historique</h2>
+    <div class="segments" id="choixPeriode">
+      <button type="button" data-heures="6">6 h</button>
+      <button type="button" data-heures="24" class="actif">24 h</button>
+      <button type="button" data-heures="168">7 j</button>
+      <button type="button" data-heures="0">Tout</button>
+    </div>
+  </div>
+  <figure class="figure">
+    <svg id="courbe" viewBox="0 0 340 200" preserveAspectRatio="none" role="img" aria-label="Pressions dans le temps"></svg>
+    <figcaption><span class="trait-av"></span>Avant <span class="trait-ar"></span>Arrière <span class="trait-seuil"></span>Seuils bas</figcaption>
+  </figure>
+  <h3 class="intertitre">Tendance depuis le dernier regonflage</h3>
+  <table class="tableau" id="tableTendance"></table>
+  <p class="note">L'app repère des fuites trop lentes pour le boîtier, qui ne garde que 20 minutes de mesures : quelques centièmes de bar par jour suffisent.</p>
+  <div class="actions">
+    <button class="bouton" id="btnExporter" type="button">Exporter en CSV</button>
+    <button class="bouton" id="btnEffacer" type="button">Effacer l'historique</button>
+  </div>
+</section>
+
+<!-- ============ RÉGLAGES ============ -->
+<section class="vue" id="vueReglages" hidden>
+  <div class="entete-vue"><h2>Réglages du boîtier</h2></div>
+  <form class="formulaire" id="formReglages">
+    <fieldset>
+      <legend>Roue</legend>
+      <label>Circonférence <span class="unite">mm</span>
+        <input type="number" id="regCirconference" min="1000" max="3000" step="1">
+      </label>
+    </fieldset>
+    <fieldset>
+      <legend>Seuils d'alerte <span class="unite">bar</span></legend>
+      <label>Avant, bas <input type="number" id="regAVbas" step="0.05"></label>
+      <label>Avant, haut <input type="number" id="regAVhaut" step="0.05"></label>
+      <label>Arrière, bas <input type="number" id="regARbas" step="0.05"></label>
+      <label>Arrière, haut <input type="number" id="regARhaut" step="0.05"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Énergie</legend>
+      <label>Veille après <span class="unite">s</span>
+        <input type="number" id="regVeille" min="10" max="3600" step="10">
+      </label>
+    </fieldset>
+    <fieldset>
+      <legend>Sécurité</legend>
+      <label class="case"><input type="checkbox" id="regListeBlanche"> Liste blanche des capteurs</label>
+      <label class="case"><input type="checkbox" id="regVraisemblance"> Contrôle de vraisemblance</label>
+      <label class="case"><input type="checkbox" id="regRythme"> Contrôle du rythme</label>
+    </fieldset>
+    <fieldset>
+      <legend>Capteurs appairés</legend>
+      <label>Avant <input type="text" id="regAdresseAV" pattern="([0-9A-Fa-f]{2}:){4}[0-9A-Fa-f]{2}" spellcheck="false"></label>
+      <label>Arrière <input type="text" id="regAdresseAR" pattern="([0-9A-Fa-f]{2}:){4}[0-9A-Fa-f]{2}" spellcheck="false"></label>
+    </fieldset>
+    <button class="bouton plein" type="submit">Envoyer au boîtier</button>
+    <p class="message" id="messageReglages"></p>
+  </form>
+  <div class="actions">
+    <button class="bouton" id="btnDeconnecter" type="button">Se déconnecter</button>
+    <button class="bouton danger" id="btnOublier" type="button">Oublier ce boîtier</button>
+  </div>
+</section>
+
+<nav class="onglets" id="onglets" hidden>
+  <button type="button" data-vue="vuePneus" class="actif">Pneus</button>
+  <button type="button" data-vue="vueHistorique">Historique</button>
+  <button type="button" data-vue="vueReglages">Réglages</button>
+</nav>
+
+<!-- Logique partagée avec le simulateur et le firmware -->
+<script src="../logique/trame.js"></script>
+<script src="../logique/fuite.js"></script>
+<script src="../logique/alertes.js"></script>
+<script src="../logique/protocole.js"></script>
+<!-- Deux façons de joindre le boîtier : la vraie radio, ou le simulateur -->
+<script src="transport-ble.js"></script>
+<script src="transport-simule.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

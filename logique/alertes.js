@@ -11,6 +11,7 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
 TPMS.ETAT = {
   ATTENTE:   "ATTENTE",    // aucune trame reçue depuis l'allumage
+  INTRUSION: "INTRUSION",  // deux émetteurs utilisent l'adresse du capteur
   PERDU:     "PERDU",      // plus de trame depuis trop longtemps
   CREVAISON: "CREVAISON",  // pression quasi nulle
   BASSE:     "BASSE",      // sous le seuil bas
@@ -31,12 +32,13 @@ TPMS.seuilsParDefaut = function () {
   };
 };
 
-// roue = { mesure, dernierRecuMs, penteBarH } (voir boitier.js)
+// roue = { mesure, dernierRecuMs, penteBarH, intrusionJusquaMs } (voir boitier.js)
 // position = "AV" ou "AR"
 // ecouteDepuisMs = instant où le boîtier s'est remis à écouter (réveil).
 //   On ne reproche pas au capteur de s'être tu pendant que le boîtier
 //   dormait : le délai de perte ne compte qu'à partir du réveil.
 TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs) {
+  if (roue.intrusionJusquaMs > maintenantMs) return TPMS.ETAT.INTRUSION;
   if (roue.mesure === null) return TPMS.ETAT.ATTENTE;
   var silenceMs = maintenantMs - Math.max(roue.dernierRecuMs, ecouteDepuisMs);
   if (silenceMs > seuils.delaiPerteMs) return TPMS.ETAT.PERDU;
@@ -58,6 +60,7 @@ TPMS.estAlerte = function (etat) {
 TPMS.texteEtat = function (etat) {
   switch (etat) {
     case TPMS.ETAT.ATTENTE:   return "EN ATTENTE";
+    case TPMS.ETAT.INTRUSION: return "SIGNAL SUSPECT";
     case TPMS.ETAT.PERDU:     return "CAPTEUR PERDU";
     case TPMS.ETAT.CREVAISON: return "CREVAISON";
     case TPMS.ETAT.BASSE:     return "PRESSION BASSE";
