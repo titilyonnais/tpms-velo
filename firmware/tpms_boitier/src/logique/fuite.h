@@ -49,4 +49,8 @@ float historiquePenteBarH(const Historique* h);
 // tMs : instants en ms ; valeurs : mesures ; n : nombre de points.
 float penteMoindresCarresParHeure(const int32_t* tMs, const float* valeurs, int n);
 
+// Pression ramenée à 20 °C (loi des gaz à volume constant) : évite de
+// prendre un pneu qui refroidit pour une fuite.
+float pressionCompenseeBar(float pressionRelBar, float temperatureC);
+
 #endif

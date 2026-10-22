@@ -33,7 +33,7 @@ TPMS.seuilsParDefaut = function () {
     // environ, et le boîtier n'écoute que 40 % du temps : il peut rater
     // plusieurs annonces de suite. Défaut révélé par la simulation : avec
     // 1 min, chaque arrêt déclenchait une fausse alerte « capteur perdu ».
-    delaiPerteArretMs: 240000   // à l'arrêt : 4 min
+    delaiPerteArretMs: 600000   // à l'arrêt : 10 min (le boîtier s'endort avant)
   };
 };
 

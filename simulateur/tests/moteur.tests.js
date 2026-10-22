@@ -145,6 +145,31 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
   }
   verifier("fin d'attaque : pas de fausse alerte « capteur perdu »", perdu === 0, perdu + " s en alerte");
   verifier("fin d'attaque : la roue arrière revient à OK", a.boitier.roues.AR.etat === "OK", a.boitier.roues.AR.etat);
+})();
+
+// 9. Semaine type : 10 trajets + 2 sorties de week-end + 1 recharge,
+// le boîtier dort entre les sorties, aucune alerte, batterie rechargée.
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 8, parcoursId: "col-luere", pressionAVBar: 6.5, pressionARBar: 6.7, plageCapteurBar: 8, planning: "semaine", semaines: 1, heureDepartH: 6 }));
+  verifier("semaine : 14 événements programmés (12 sorties, branchement et débranchement du chargeur)", a.planning.length === 14, a.planning.length);
+  var debut = Date.now(), sorties = 0, enSortiePrecedent = false, alertes = 0, veilles = 0, socMin = 1, rechargee = false;
+  for (var h = 0; h < 7 * 24 * 60; h++) {           // minute par minute
+    TPMS.mondeAvancer(a, 60000);
+    if (a.enSortie && !enSortiePrecedent) sorties++;
+    enSortiePrecedent = a.enSortie;
+    ["AV", "AR"].forEach(function (p) { if (TPMS.estAlerte(a.boitier.roues[p].etat)) alertes++; });
+    if (a.boitier.veille) veilles++;
+    socMin = Math.min(socMin, a.lipo.etatCharge);
+    if (a.vbusV > 0) rechargee = true;
+  }
+  var duree = Date.now() - debut;
+  verifier("semaine : 12 sorties effectuées", sorties === 12, sorties);
+  verifier("semaine : aucune minute en alerte", alertes === 0, alertes + " minutes");
+  verifier("semaine : boîtier en veille la plupart du temps", veilles > 7 * 24 * 60 * 0.8, veilles + " minutes");
+  verifier("semaine : le chargeur a été branché", rechargee);
+  verifier("semaine : batterie jamais sous 90 %", socMin > 0.9, socMin.toFixed(3));
+  
+  verifier("semaine : calculée en moins de 90 s", duree < 90000, duree + " ms");
   console.log("\n" + reussis + " réussis, " + rates + " en échec");
   if (rates > 0) process.exitCode = 1;
 })();

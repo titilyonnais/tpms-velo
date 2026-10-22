@@ -95,6 +95,7 @@ TPMS.creerMonde = function (options) {
     enregistrement: [],
     actions: [],                    // journal des actions (pour le rejeu)
     actionsAJouer: [],              // actions d'un rejeu, en attente
+    planning: [],                   // sorties programmées (semaine type)
     rafraichissementsEcran: [],     // événements pour la page
     bipsAJouer: 0
   };
@@ -154,6 +155,7 @@ TPMS.creerMonde = function (options) {
     m.boitier.reglages.seuils[pos].hautBar = Math.round(p * 1.25 * 10) / 10;
   });
 
+  m.planning = TPMS.genererPlanning(o);
   m.boitier.dernierMouvementMs = 0;
   return m;
 };
@@ -188,6 +190,13 @@ function appliquerAction(m, a) {
     case "garer":
       m.enSortie = false;
       break;
+    case "sortie":         // sortie programmée : on prend le vélo sur un autre parcours
+      changerParcours(m, a.parcoursId);
+      m.enSortie = true;
+      m.velo.distanceM = 0;
+      m.departSortieM = 0;
+      m.cycliste.etat = "roule";
+      break;
     case "percer": TPMS.pneuPercer(m.pneus[a.roue], { diametreMm: a.diametreMm, type: a.forme }); break;
     case "fuite": TPMS.pneuFuiteLente(m.pneus[a.roue], a.diametreMm); break;
     case "reparer": TPMS.pneuReparer(m.pneus[a.roue]); break;
@@ -215,6 +224,58 @@ function appliquerReglage(b, cle, valeur) {
   else if (cle === "ecoute") { b.reglages.ecouteFenetreMs = valeur[0]; b.reglages.ecoutePeriodeMs = valeur[1]; }
   else if (cle === "seuil") { b.reglages.seuils[valeur.roue][valeur.borne] = valeur.bar; }
   else b.reglages[cle] = valeur;
+}
+
+// ---------------------------------------------------------------------
+// Planning : une semaine type, répétée
+// ---------------------------------------------------------------------
+// Le jour 0 est un lundi. Du lundi au vendredi : trajet domicile-travail
+// le matin et le soir. Samedi et dimanche : une sortie sur le parcours
+// choisi. Dimanche soir : boîtier mis en charge 3 h. Le planning est
+// calculé à partir des options : un rejeu le refait à l'identique.
+TPMS.JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+TPMS.genererPlanning = function (o) {
+  if (o.planning !== "semaine") return [];
+  var loisir = o.parcoursId === "domicile-travail" ? "lyon-ville" : o.parcoursId;
+  var semaines = o.semaines || 4;
+  var evenements = [];
+  function ajouter(jour, heure, action, libelle) {
+    var tMs = Math.round(((jour * 24 + heure) - o.heureDepartH) * 3600000);
+    if (tMs >= 0) evenements.push({ tMs: tMs, action: action, libelle: libelle });
+  }
+  for (var s = 0; s < semaines; s++) {
+    for (var j = 0; j < 7; j++) {
+      var jour = s * 7 + j;
+      if (j < 5) {
+        ajouter(jour, 7.75, { type: "sortie", parcoursId: "domicile-travail" }, "Trajet vers le travail");
+        ajouter(jour, 17.5, { type: "sortie", parcoursId: "domicile-travail" }, "Retour du travail");
+      } else {
+        ajouter(jour, j === 5 ? 10 : 9.5, { type: "sortie", parcoursId: loisir }, "Sortie du week-end");
+      }
+      if (j === 6) {
+        ajouter(jour, 20, { type: "recharge", branche: true }, "Boîtier mis en charge");
+        ajouter(jour, 23, { type: "recharge", branche: false }, "Chargeur débranché");
+      }
+    }
+  }
+  evenements.sort(function (a, b) { return a.tMs - b.tMs; });
+  return evenements;
+};
+
+// Prochain événement du planning (pour l'affichage).
+TPMS.mondeProchainEvenement = function (m) {
+  return m.planning.length > 0 ? m.planning[0] : null;
+};
+
+function changerParcours(m, parcoursId) {
+  if (m.parcours.id === parcoursId) return;
+  var p = TPMS.parcoursParId(parcoursId);
+  m.parcours = p;
+  m.prep = TPMS.parcoursPreparer(p, m.graine);
+  var depart = TPMS.parcoursPoint(m.prep, 0);
+  m.origine = { lat: depart.lat, lon: depart.lon };
+  m.point = depart;
+  m.canal = TPMS.creerCanalRadio({ environnement: p.environnementRadio, graine: m.graine });
 }
 
 // Rejeu : on recrée le monde avec les mêmes options et on reprogramme
@@ -278,6 +339,12 @@ TPMS.mondeAvancer = function (m, dureeMs) {
       m.actions.push(act);
       appliquerAction(m, act.action);
     }
+    // Planning : pas noté dans les actions (il est recalculé au rejeu).
+    while (m.planning.length > 0 && m.planning[0].tMs <= m.tMs + 1e-6) {
+      var ev = m.planning.shift();
+      appliquerAction(m, ev.action);
+      TPMS.boitierJournal(m.boitier, m.tMs, "Planning : " + ev.libelle.toLowerCase());
+    }
     var calme = !m.enSortie && m.boitier.veille && m.velo.vitesseMs < 0.05;
     // Le choix du pas ne dépend que de l'état du monde : un rejeu refait
     // exactement les mêmes pas, et chaque action retombe pile sur un pas.
@@ -302,7 +369,7 @@ function unPas(m, dtS) {
   // Fin de la sortie : au bout du parcours, ou après le nombre de tours
   // prévu sur une boucle (1 par défaut).
   var toursPrevus = m.options.tours || 1;
-  if (m.enSortie && ((m.point.fini && !m.parcours.boucle) ||
+  if (m.enSortie && ((m.point.fini && !m.parcours.boucle) || m.cycliste.etat === "fini" ||
       (m.parcours.boucle && m.velo.distanceM - m.departSortieM >= toursPrevus * m.prep.longueurM))) {
     m.enSortie = false;
     m.cycliste.etat = "fini";
@@ -314,7 +381,12 @@ function unPas(m, dtS) {
     : { puissanceW: 0, freinage: m.velo.vitesseMs > 0 ? 1 : 0 };
   m.commande = commande;
   var ventFace = m.instant.ventMs * Math.cos((m.instant.ventDirDeg - m.point.capDeg) * Math.PI / 180);
-  TPMS.veloAvancer(m.velo, dtS, {
+  // Vélo garé et arrêté : il est sur sa béquille, il ne bouge plus (sans
+  // cela, garé dans une pente, il repartait seul et réveillait le boîtier
+  // toutes les heures — défaut révélé par la simulation d'une semaine).
+  var surBequille = !m.enSortie && m.velo.vitesseMs < 0.05;
+  if (surBequille) { m.velo.vitesseMs = 0; m.velo.topsAimant = []; }
+  else TPMS.veloAvancer(m.velo, dtS, {
     puissanceW: commande.puissanceW,
     freinage: commande.freinage,
     penteRad: m.point.penteRad,

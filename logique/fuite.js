@@ -21,6 +21,19 @@ TPMS.HISTO_ECART_MS = 30000;       // une mesure gardée toutes les 30 s
 TPMS.HISTO_DUREE_MIN_MS = 600000;
 TPMS.HISTO_SAUT_REGONFLAGE = 0.2;  // hausse brusque de 0,2 bar = regonflage
 
+// Compensation en température. Un pneu chauffé au soleil puis refroidi
+// en roulant perd 0,3 bar sans perdre d'air : sans correction, le boîtier
+// croyait à une fuite (défaut révélé par la simulation d'une semaine).
+// Loi des gaz à volume constant : P / T est constant si l'air ne fuit pas.
+// On ramène donc chaque mesure à 20 °C : P20 = P × 293,15 / (T + 273,15),
+// en pression ABSOLUE (on ajoute puis on retire 1,013 bar).
+// T est la température du capteur (dans le bouchon de valve) : elle suit
+// l'air du pneu imparfaitement, la correction est donc partielle.
+TPMS.pressionCompenseeBar = function (pressionRelBar, temperatureC) {
+  var absolue = pressionRelBar + 1.01325;
+  return absolue * 293.15 / (temperatureC + 273.15) - 1.01325;
+};
+
 // En C : deux tableaux de taille fixe et un compteur.
 TPMS.creerHistorique = function () {
   return { tMs: [], pression: [] };

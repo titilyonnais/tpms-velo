@@ -78,3 +78,9 @@ float penteMoindresCarresParHeure(const int32_t* tMs, const float* valeurs, int 
   if (denominateur == 0.0f) return 0.0f;
   return numerateur / denominateur;
 }
+
+// Traduction de TPMS.pressionCompenseeBar (logique/fuite.js).
+float pressionCompenseeBar(float pressionRelBar, float temperatureC) {
+  float absolue = pressionRelBar + 1.01325f;
+  return absolue * 293.15f / (temperatureC + 273.15f) - 1.01325f;
+}

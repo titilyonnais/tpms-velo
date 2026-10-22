@@ -17,8 +17,8 @@ void seuilsParDefaut(Seuils* s) {
   s->delaiPerteMs = 60000;   // en roulant : 1 min sans trame = capteur perdu
   // À l'arrêt, un capteur n'annonce plus qu'une fois par minute et le
   // boîtier n'écoute que 40 % du temps : 1 min donnait de fausses alertes
-  // (défaut révélé par la simulation). 4 min à l'arrêt.
-  s->delaiPerteArretMs = 240000;
+  // (défaut révélé par la simulation). 10 min à l'arrêt.
+  s->delaiPerteArretMs = 600000;  // 10 min : le boîtier s'endort avant
 }
 
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,

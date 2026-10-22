@@ -78,6 +78,7 @@
             </div>
             <div class="rangee">
               <button type="button" class="bouton principal grand" id="btnSortie">Démarrer la sortie</button>
+              <button type="button" class="bouton grand" id="btnSaut" hidden>Avancer jusqu'à la prochaine sortie</button>
               <button type="button" class="bouton grand" id="btnAllerConfig">Changer de parcours</button>
             </div>
           </article>
@@ -176,6 +177,13 @@
             <div class="formulaire">
               <label><span>Parcours</span><select id="cfgParcours"></select></label>
               <p class="discret" id="cfgDescription"></p>
+              <label><span>Déroulement</span>
+                <select id="cfgPlanning">
+                  <option value="une" selected>Une seule sortie</option>
+                  <option value="semaine">Semaine type (4 semaines)</option>
+                </select>
+              </label>
+              <p class="discret" id="cfgPlanningAide" hidden>Du lundi au vendredi : trajet domicile-travail à 7 h 45 et 17 h 30. Samedi et dimanche : une sortie sur le parcours choisi. Dimanche soir : boîtier en charge de 20 h à 23 h.</p>
               <label><span>Météo</span><select id="cfgMeteo"></select></label>
               <label><span>Heure de départ</span><span class="champ-unite"><input type="number" id="cfgHeure" min="0" max="23.5" step="0.5" value="8"><i>h</i></span></label>
               <label><span>Chambres à air</span><select id="cfgChambre"><option value="butyle">Butyle (standard)</option><option value="latex">Latex (perd vite)</option><option value="tubeless">Tubeless</option></select></label>
@@ -217,8 +225,8 @@
               <label><span>Alerte arrière si au-dessus</span><span class="champ-unite"><input type="number" id="seuilARhaut" step="0.1"><i>bar</i></span></label>
               <label><span>Écoute radio</span>
                 <select id="selEcoute">
-                  <option value="1000/5000">1 s toutes les 5 s</option>
-                  <option value="2000/5000" selected>2 s toutes les 5 s</option>
+                  <option value="2000/5000">2 s toutes les 5 s</option>
+                  <option value="3000/5000" selected>3 s toutes les 5 s</option>
                   <option value="5000/5000">Permanente</option>
                 </select>
               </label>

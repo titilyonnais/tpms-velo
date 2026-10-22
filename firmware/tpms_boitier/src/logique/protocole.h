@@ -61,7 +61,7 @@ struct Reglages {
   Seuils seuils;
   uint16_t circonferenceMm;
   int32_t ecoutePeriodeMs;    // la radio s'allume toutes les 5 s...
-  int32_t ecouteFenetreMs;    // ... et écoute pendant 2 s (40 % du temps)
+  int32_t ecouteFenetreMs;    // ... et écoute pendant 3 s (60 % du temps)
   int32_t delaiVeilleMs;      // veille après 5 min sans rouler
   int32_t periodeEcranMs;     // en roulant, au plus un rafraîchissement toutes les 2 s
 };

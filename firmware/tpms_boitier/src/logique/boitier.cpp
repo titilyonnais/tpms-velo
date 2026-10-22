@@ -40,7 +40,7 @@ void creerBoitier(Boitier* b) {
   seuilsParDefaut(&r->seuils);
   r->circonferenceMm = circonference;
   r->ecoutePeriodeMs = 5000;      // la radio s'allume toutes les 5 s...
-  r->ecouteFenetreMs = 2000;      // ... et écoute pendant 2 s (40 % du temps)
+  r->ecouteFenetreMs = 3000;      // ... et écoute pendant 3 s (60 % du temps)
   r->delaiVeilleMs = 5L * 60000;  // veille après 5 min sans rouler
   r->periodeEcranMs = 2000;       // en roulant, au plus un rafraîchissement toutes les 2 s
 
@@ -52,6 +52,7 @@ void creerBoitier(Boitier* b) {
   b->veille = false;
   b->dernierMouvementMs = 0;
   b->ecouteDepuisMs = 0;
+  b->ecouteContinueJusquaMs = -1;
   b->batteriePct = 100.0f;
   b->enCharge = false;
   b->bipDemande = false;
@@ -80,9 +81,35 @@ const char* texteResultat(Resultat r) {
   }
 }
 
+// Mélange un entier (même calcul que TPMS.melangerEntier en JS).
+static uint32_t melangerEntier(uint32_t x) {
+  x = (x ^ (x >> 16)) * 0x45d9f3bu;
+  x = (x ^ (x >> 16)) * 0x45d9f3bu;
+  return x ^ (x >> 16);
+}
+
+// Fenêtre d'écoute à position pseudo-aléatoire dans chaque période :
+// évite le verrouillage de phase avec un capteur qui annonce toutes les
+// 60 s (multiple de la période), révélé par la simulation.
 bool boitierEcoute(const Boitier* b, int32_t maintenantMs) {
   if (b->veille) return false;
-  return (maintenantMs % b->reglages.ecoutePeriodeMs) < b->reglages.ecouteFenetreMs;
+  if (maintenantMs < b->ecouteContinueJusquaMs) return true;   // écoute renforcée
+  int32_t periode = b->reglages.ecoutePeriodeMs, fenetre = b->reglages.ecouteFenetreMs;
+  if (fenetre >= periode) return true;
+  int32_t cycle = maintenantMs / periode;
+  int32_t decalage = (int32_t)(melangerEntier((uint32_t)cycle) % (uint32_t)(periode - fenetre));
+  int32_t dansCycle = maintenantMs - cycle * periode;
+  return dansCycle >= decalage && dansCycle < decalage + fenetre;
+}
+
+// Écoute renforcée : après une trame douteuse (changement brutal à
+// confirmer, deux émetteurs), radio allumée en continu pendant
+// ECOUTE_RENFORCEE_MS pour ne manquer aucune trame de confirmation.
+static const int32_t ECOUTE_RENFORCEE_MS = 15000;
+
+void boitierEcouteRenforcee(Boitier* b, int32_t maintenantMs) {
+  int32_t fin = maintenantMs + ECOUTE_RENFORCEE_MS;
+  if (fin > b->ecouteContinueJusquaMs) b->ecouteContinueJusquaMs = fin;
 }
 
 Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, int32_t maintenantMs) {
@@ -123,6 +150,7 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
         boitierJournal(b, maintenantMs, texte);
       }
       roue->intrusionJusquaMs = maintenantMs + QUARANTAINE_MS;
+      boitierEcouteRenforcee(b, maintenantMs);
     }
     // Pendant le signal suspect, on garde la dernière valeur de confiance.
     if (roue->intrusionJusquaMs > maintenantMs) {
@@ -144,6 +172,7 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
       return RESULTAT_HORS_LIMITES;
     }
     if (verdict == VERDICT_SUSPECTE) {
+      boitierEcouteRenforcee(b, maintenantMs);
       b->stats.rejetsVraisemblance++;
       return RESULTAT_SUSPECTE;
     }
@@ -163,7 +192,7 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
   }
   roue->dernierRecuMs = maintenantMs;
   roue->nbTrames++;
-  historiqueAjouter(&roue->historique, maintenantMs, mesure.pressionBar);
+  historiqueAjouter(&roue->historique, maintenantMs, pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC));
   roue->penteBarH = historiquePenteBarH(&roue->historique);
   b->stats.tramesAcceptees++;
   return RESULTAT_ACCEPTEE;

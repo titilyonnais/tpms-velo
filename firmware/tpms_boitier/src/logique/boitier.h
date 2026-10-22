@@ -83,6 +83,7 @@ struct Boitier {
   bool veille;
   int32_t dernierMouvementMs;
   int32_t ecouteDepuisMs;
+  int32_t ecouteContinueJusquaMs;   // écoute renforcée après une trame douteuse
   float batteriePct;
   bool enCharge;
   bool bipDemande;
@@ -132,6 +133,7 @@ void boitierJournal(Boitier* b, int32_t maintenantMs, const char* texte);
 // Elle est allumée pendant les fenetreMs premières millisecondes de
 // chaque période, et coupée en veille.
 bool boitierEcoute(const Boitier* b, int32_t maintenantMs);
+void boitierEcouteRenforcee(Boitier* b, int32_t maintenantMs);
 
 // Une annonce BLE a été reçue. Elle traverse les protections dans
 // l'ordre ; la première qui la refuse l'arrête.

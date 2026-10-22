@@ -25,7 +25,8 @@
     page: "accueil", enPause: false, facteur: 1, roueGraphe: "AV", variable: "pressions",
     rayonRadio: 2.5, versionsRegistres: { AV: -1, AR: -1 }, schemaInsere: false,
     rssi: { AV: [], AR: [] }, derniereTrameVue: null, echanges: [], journal: [],
-    vitesseReelle: 0, dernierToast: -Infinity
+    vitesseReelle: 0, dernierToast: -Infinity,
+    sautJusquaMs: null              // avance rapide vers le prochain événement du planning
   };
 
   function $(id) { return document.getElementById(id); }
@@ -87,12 +88,14 @@
       pressionAVBar: parseFloat($("cfgPAV").value) || 2.2,
       pressionARBar: parseFloat($("cfgPAR").value) || 2.4,
       vehiculesVoisins: parseInt($("cfgVoisins").value, 10) || 0,
-      plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5
+      plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5,
+      planning: $("cfgPlanning").value === "semaine" ? "semaine" : undefined
     };
   }
 
   function installerMonde(nouveau) {
     m = nouveau;
+    vue.sautJusquaMs = null;
     vue.versionsRegistres = { AV: -1, AR: -1 };
     vue.rssi = { AV: [], AR: [] };
     vue.echanges = [];
@@ -117,7 +120,8 @@
 
   function boucle() {
     var maintenant = performance.now();
-    if (dernierInstant !== null && !vue.enPause) {
+    if (vue.sautJusquaMs !== null) avancerSaut();
+    else if (dernierInstant !== null && !vue.enPause) {
       var dtReel = Math.min(maintenant - dernierInstant, 1000);
       var aFaire = dtReel * vue.facteur, debut = performance.now(), fait = 0;
       // On avance par tranches et on s'arrête si le calcul devient trop long :
@@ -151,6 +155,32 @@
     }
   }
 
+  // Avance rapide jusqu'au prochain événement du planning : on calcule
+  // aussi vite que possible (40 ms de calcul par image pour garder la page
+  // fluide) et on s'arrête net si une alerte apparaît en route.
+  function avancerSaut() {
+    var debut = performance.now(), alerteAvant = alertesEnCours().length;
+    while (m.tMs < vue.sautJusquaMs && performance.now() - debut < 40) {
+      TPMS.mondeAvancer(m, Math.min(60000, vue.sautJusquaMs - m.tMs));
+      if (alertesEnCours().length > alerteAvant) {
+        vue.sautJusquaMs = null;
+        notifier("Avance rapide interrompue", "Une alerte vient d'apparaître.", "alerte");
+        return;
+      }
+    }
+    if (m.tMs >= vue.sautJusquaMs) vue.sautJusquaMs = null;
+  }
+
+  function nomJour(jour) {
+    var n = TPMS.JOURS[jour % 7];
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  // « Mardi 07:45 » pour un instant de la simulation
+  function quand(tMs) {
+    var h = m.heureDepartH + tMs / 3600000;
+    return nomJour(Math.floor(h / 24)) + " " + heureTexte(h % 24).slice(0, 5);
+  }
+
   // -------------------------------------------------------------------
   // Barre du haut : ce qui se passe, en une phrase
   // -------------------------------------------------------------------
@@ -180,16 +210,21 @@
       detail = m.parcours.nom + " · " + avance;
     } else if (b.veille) {
       classe = "repos"; titre = "Vélo garé · boîtier en veille";
-      detail = "Démarre une sortie pour le réveiller.";
+      var prochain = TPMS.mondeProchainEvenement(m);
+      detail = prochain ? "Prochain événement : " + quand(prochain.tMs) + " · " + prochain.libelle.toLowerCase()
+        : "Démarre une sortie pour le réveiller.";
     } else {
       classe = "repos"; titre = m.cycliste.etat === "fini" ? "Sortie terminée" : "Prêt à partir";
-      detail = m.parcours.nom + " · " + avance;
+      var suivant = TPMS.mondeProchainEvenement(m);
+      detail = suivant ? "Prochain événement : " + quand(suivant.tMs) + " · " + suivant.libelle.toLowerCase()
+        : m.parcours.nom + " · " + avance;
     }
     $("etatGlobal").className = "etat-global " + classe;
     $("etatTitre").textContent = titre;
     $("etatDetail").textContent = detail;
     var h = TPMS.mondeHeure(m);
-    $("txtJour").textContent = "Jour " + (h.jour + 1);
+    $("txtJour").textContent = m.options.planning === "semaine"
+      ? nomJour(h.jour) + " · J" + (h.jour + 1) : "Jour " + (h.jour + 1);
     $("txtCharge").textContent = (!vue.enPause && vue.vitesseReelle > 0 && vue.vitesseReelle < vue.facteur * 0.9)
       ? "calcul limité à ×" + Math.round(vue.vitesseReelle) : "";
   }
@@ -250,6 +285,19 @@
     var btn = $("btnSortie");
     btn.textContent = m.enSortie ? "Arrêter et garer le vélo" : (fini ? "Repartir du début" : "Démarrer la sortie");
     btn.classList.toggle("principal", !m.enSortie);
+
+    // Semaine type : prochain événement et avance rapide
+    var ev = TPMS.mondeProchainEvenement(m), saut = $("btnSaut");
+    saut.hidden = !ev || m.enSortie;
+    if (ev && !m.enSortie) {
+      $("actionTitre").textContent = vue.sautJusquaMs !== null ? "Avance rapide…" : "Prochain événement : " + quand(ev.tMs);
+      $("actionTexte").textContent = ev.libelle + (ev.action.parcoursId ? " · " + TPMS.parcoursParId(ev.action.parcoursId).nom : "") +
+        ". Le planning s'en charge tout seul, ou démarre une sortie maintenant.";
+      saut.textContent = vue.sautJusquaMs !== null ? "Arrêter l'avance rapide" : "Avancer jusqu'à " + quand(ev.tMs);
+      saut.classList.add("principal");
+      btn.classList.remove("principal");
+      btn.textContent = "Sortir maintenant";
+    }
 
     // Pneus
     document.querySelectorAll(".tuile-pneu").forEach(function (tuile) {
@@ -969,6 +1017,14 @@
       }
     });
     $("btnAllerConfig").addEventListener("click", function () { ouvrirPage("config"); });
+    $("btnSaut").addEventListener("click", function () {
+      var ev = TPMS.mondeProchainEvenement(m);
+      if (vue.sautJusquaMs !== null || !ev) { vue.sautJusquaMs = null; return; }
+      vue.sautJusquaMs = ev.tMs;
+    });
+    $("cfgPlanning").addEventListener("change", function () {
+      $("cfgPlanningAide").hidden = $("cfgPlanning").value !== "semaine";
+    });
     document.querySelectorAll(".tuile-pneu").forEach(function (tuile) {
       var pos = tuile.dataset.roue;
       tuile.querySelector('[data-act="percer"]').addEventListener("click", function () { crever(pos); });
@@ -988,7 +1044,9 @@
     $("btnNouveau").addEventListener("click", function () {
       nouvelleSimulation();
       ouvrirPage("accueil");
-      notifier("Nouvelle simulation prête", "Clique sur « Démarrer la sortie ».", "ok");
+      notifier("Nouvelle simulation prête", m.planning.length > 0
+        ? "Semaine type : clique sur « Avancer jusqu'à… » pour aller au premier trajet."
+        : "Clique sur « Démarrer la sortie ».", "ok");
     });
     $("selCirconference").addEventListener("change", function (e) { action({ type: "reglage", cle: "circonferenceMm", valeur: parseInt(e.target.value, 10) }); });
     [["seuilAVbas", "AV", "basBar"], ["seuilAVhaut", "AV", "hautBar"], ["seuilARbas", "AR", "basBar"], ["seuilARhaut", "AR", "hautBar"]].forEach(function (s) {

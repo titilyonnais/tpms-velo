@@ -49,7 +49,7 @@ TPMS.creerBoitier = function () {
       seuils: TPMS.seuilsParDefaut(),
       circonferenceMm: circonference,
       ecoutePeriodeMs: 5000,      // la radio s'allume toutes les 5 s...
-      ecouteFenetreMs: 2000,      // ... et écoute pendant 2 s (40 % du temps)
+      ecouteFenetreMs: 3000,      // ... et écoute pendant 3 s (60 % du temps)
       delaiVeilleMs: 5 * 60000,   // veille après 5 min sans rouler
       periodeEcranMs: 2000        // en roulant, au plus un rafraîchissement toutes les 2 s
     },
@@ -60,6 +60,7 @@ TPMS.creerBoitier = function () {
     veille: false,
     dernierMouvementMs: 0,
     ecouteDepuisMs: 0,
+    ecouteContinueJusquaMs: -1,   // écoute renforcée après une trame douteuse
     batteriePct: 100,
     enCharge: false,
     bipDemande: false,
@@ -91,9 +92,41 @@ TPMS.boitierJournal = function (b, maintenantMs, texte) {
 // La radio écoute-t-elle à cet instant ?
 // Elle est allumée pendant les fenetreMs premières millisecondes de
 // chaque période, et coupée en veille.
+// La position de la fenêtre dans chaque période change d'une période à
+// l'autre (pseudo-hasard calculé à partir du numéro de période). Sans cela,
+// un capteur qui annonce toutes les 60 s (multiple des 5 s de la période)
+// tombe toujours au même moment du cycle : s'il tombe hors de la fenêtre,
+// il n'est JAMAIS entendu (verrouillage de phase, défaut révélé par la
+// simulation d'une semaine).
 TPMS.boitierEcoute = function (b, maintenantMs) {
   if (b.veille) return false;
-  return (maintenantMs % b.reglages.ecoutePeriodeMs) < b.reglages.ecouteFenetreMs;
+  if (maintenantMs < b.ecouteContinueJusquaMs) return true;   // écoute renforcée
+  var periode = b.reglages.ecoutePeriodeMs, fenetre = b.reglages.ecouteFenetreMs;
+  if (fenetre >= periode) return true;
+  var cycle = Math.floor(maintenantMs / periode);
+  var decalage = TPMS.melangerEntier(cycle) % (periode - fenetre);
+  var dansCycle = maintenantMs - cycle * periode;
+  return dansCycle >= decalage && dansCycle < decalage + fenetre;
+};
+
+// Écoute renforcée : dès qu'une trame sème le doute (changement brutal à
+// confirmer, deux émetteurs), la radio reste allumée en continu pendant
+// ECOUTE_RENFORCEE_MS. Les trames de confirmation ne peuvent plus tomber
+// hors fenêtre : une vraie crevaison est confirmée en quelques secondes
+// au lieu de plusieurs dizaines. Coût : quelques secondes de radio en plus,
+// seulement quand il se passe quelque chose.
+TPMS.ECOUTE_RENFORCEE_MS = 15000;
+
+TPMS.boitierEcouteRenforcee = function (b, maintenantMs) {
+  b.ecouteContinueJusquaMs = Math.max(b.ecouteContinueJusquaMs, maintenantMs + TPMS.ECOUTE_RENFORCEE_MS);
+};
+
+// Mélange un entier (hachage simple, même résultat en C avec uint32_t).
+TPMS.melangerEntier = function (n) {
+  var x = (n | 0) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  return (x ^ (x >>> 16)) >>> 0;
 };
 
 // Une annonce BLE passe dans l'air. Elle traverse les protections dans
@@ -135,6 +168,7 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
           position + " : trames trop rapprochées, deux émetteurs → SIGNAL SUSPECT");
       }
       roue.intrusionJusquaMs = maintenantMs + TPMS.QUARANTAINE_MS;
+      TPMS.boitierEcouteRenforcee(b, maintenantMs);
     }
     // Pendant le signal suspect, on garde la dernière valeur de confiance.
     if (roue.intrusionJusquaMs > maintenantMs) {
@@ -149,6 +183,7 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
     var verdict = TPMS.verifierVraisemblance(roue.verification, roue.mesure,
       roue.dernierRecuMs, mesure, maintenantMs, !doute);
     if (verdict === "hors-limites" || verdict === "suspecte") {
+      if (verdict === "suspecte") TPMS.boitierEcouteRenforcee(b, maintenantMs);
       b.stats.rejetsVraisemblance++;
       return verdict;
     }
@@ -165,7 +200,7 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
   }
   roue.dernierRecuMs = maintenantMs;
   roue.nbTrames++;
-  TPMS.historiqueAjouter(roue.historique, maintenantMs, mesure.pressionBar);
+  TPMS.historiqueAjouter(roue.historique, maintenantMs, TPMS.pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC));
   roue.penteBarH = TPMS.historiquePenteBarH(roue.historique);
   b.stats.tramesAcceptees++;
   return "acceptee";
