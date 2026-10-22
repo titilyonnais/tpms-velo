@@ -6,6 +6,11 @@ Auteur : Thibault MORRETTON.
 Le kit comprend deux capteurs TPMS en Bluetooth Low Energy, vissés sur les valves, un boîtier de guidon avec un écran e-paper, et une application.
 Le boîtier affiche la pression et la température de chaque pneu, ainsi que la vitesse et la distance. Il émet une alerte (bip et LED) en cas de pression anormale, de fuite lente ou de faux capteur.
 
+## En ligne
+
+- Application : https://titilyonnais.github.io/tpms-velo/app/ (sur iPhone, à ouvrir dans Bluefy)
+- Simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
+
 ## Organisation du dépôt
 
 | Dossier       | Contenu                                                                      |
@@ -39,6 +44,6 @@ On peut aussi ouvrir `simulateur/tests/tests.html` dans le navigateur.
 
 ## Application sur téléphone
 
-Web Bluetooth exige une page en HTTPS : publier le dépôt sur GitHub Pages, puis ouvrir `app/index.html`.
+Web Bluetooth exige une page en HTTPS : l'app est publiée par GitHub Pages à chaque `git push`.
 - **iPhone** : Safari ne gère pas Web Bluetooth, il faut ouvrir la page dans le navigateur gratuit **Bluefy**.
 - **PC et Android** : Chrome.
