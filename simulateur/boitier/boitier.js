@@ -240,7 +240,9 @@ TPMS.boitierVue = function (b, maintenantMs) {
 };
 
 TPMS.vueRoue = function (roue) {
-  if (roue.mesure === null) {
+  // Signal suspect : la dernière valeur a peut-être été fabriquée par le
+  // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
+  if (roue.mesure === null || roue.etat === TPMS.ETAT.INTRUSION) {
     return { etat: roue.etat, pressionBar: null };
   }
   return {

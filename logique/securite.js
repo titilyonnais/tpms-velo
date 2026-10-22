@@ -62,6 +62,14 @@ TPMS.TEMPERATURE_MAX_C = 85;
 // une pompe à pied gonfle à environ 0,05 bar/s : 0,3 bar/s laisse de la marge.
 TPMS.VARIATION_MAX_BAR_S = 0.3;
 TPMS.VARIATION_MAX_C_S = 1;
+// Plafond du temps qui sert à juger une variation (voir verifierVraisemblance).
+// Compromis mesuré dans le simulateur, écoute par fenêtres :
+//   5 s : vraie crevaison signalée en 11 s au pire ; une fausse pression
+//         entre 0,8 et 1,5 bar peut s'afficher 6 s avant « SIGNAL SUSPECT ».
+//   3 s : la fausse pression ne passe presque plus, mais la vraie
+//         crevaison n'est signalée qu'en 32 à 36 s.
+// On choisit 5 s : prévenir vite d'une vraie crevaison passe d'abord.
+// Dans les deux cas, masquer une crevaison par rejeu échoue (alerte en 7 s).
 TPMS.VARIATION_DT_MAX_S = 5;
 
 // Un changement brutal n'est accepté que s'il est confirmé par
@@ -83,9 +91,10 @@ TPMS.creerVerification = function () {
 // nouvelle  : mesure qui vient d'arriver
 // confirmationPermise : false quand on doute de l'émetteur (le contrôle
 //   du rythme a vu des trames trop rapprochées dans la dernière minute).
-//   On ne laisse alors confirmer aucun changement brutal : sinon un
-//   pirate obtient ses 3 trames de confirmation avant que le rythme ait
-//   réuni ses 3 anomalies.
+//   On n'accepte alors que des valeurs à moins de 0,1 bar de la dernière
+//   valeur de confiance, et aucune confirmation : sinon un pirate obtient
+//   ses 3 trames de confirmation avant que le rythme ait réuni ses
+//   3 anomalies.
 // Retourne "ok", "hors-limites", "suspecte" ou "confirmee".
 TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, maintenantMs, confirmationPermise) {
   if (nouvelle.pressionBar > TPMS.PRESSION_MAX_BAR ||
@@ -94,6 +103,13 @@ TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, mainte
     return "hors-limites";
   }
   if (ancienne === null) return "ok";   // rien à comparer
+
+  // En cas de doute sur l'émetteur, seules les valeurs quasi identiques
+  // à la dernière valeur de confiance passent.
+  if (confirmationPermise === false &&
+      Math.abs(nouvelle.pressionBar - ancienne.pressionBar) > TPMS.ECART_CONFIRMATION_BAR) {
+    return "suspecte";
+  }
 
   // On divise l'écart par le temps écoulé, compris entre 1 s et 5 s.
   // Pourquoi un plafond ? Avec l'écoute par fenêtres, la radio reste

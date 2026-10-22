@@ -286,6 +286,27 @@ function proche(a, b, tolerance) {
   verifier("pirate + écoute par fenêtres : aucun décalage ne trompe le boîtier",
     decalagesTrompes === 0, decalagesTrompes + " décalages sur 30");
 
+  // Attaque la plus dangereuse : le pneu crève vraiment et le pirate
+  // rejoue 2,2 bar pour masquer la crevaison. Le cycliste doit être
+  // prévenu (CREVAISON, BASSE ou SIGNAL SUSPECT) en moins de 10 s.
+  function delaiAlerteMasquage(phaseMs) {
+    var b = TPMS.creerBoitier();
+    for (var t = 0; t <= 120000; t += 10) {
+      var reelle = t < 30000 ? 2.2 : Math.max(0, 2.2 - 0.15 * (t - 30000) / 1000);
+      if ((t + phaseMs) % 3000 === 0) TPMS.boitierRecevoirTrame(b, trameAV(reelle), t);
+      if (t >= 30000 && (t - 400) % 1000 === 0) TPMS.boitierRecevoirTrame(b, trameAV(2.2), t);
+      if (t % 1000 === 0) {
+        TPMS.boitierMiseAJour(b, t);
+        if (t > 30000 && TPMS.estAlerte(b.roues.AV.etat)) return t - 30000;
+      }
+    }
+    return Infinity;
+  }
+  var pireDelai = 0;
+  for (var ph = 0; ph < 3000; ph += 200) pireDelai = Math.max(pireDelai, delaiAlerteMasquage(ph));
+  verifier("rejeu pour masquer une vraie crevaison : alerte en moins de 10 s",
+    pireDelai < 10000, pireDelai / 1000 + " s");
+
   // Un vrai regonflage (1,2 → 2,2 bar d'un coup) finit par être accepté.
   var b = TPMS.creerBoitier();
   b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
