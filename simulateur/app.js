@@ -25,7 +25,7 @@
     page: "accueil", enPause: false, facteur: 1, roueGraphe: "AV", variable: "pressions",
     rayonRadio: 2.5, versionsRegistres: { AV: -1, AR: -1 }, schemaInsere: false,
     rssi: { AV: [], AR: [] }, derniereTrameVue: null, echanges: [], journal: [],
-    vitesseReelle: 0, dernierToast: 0
+    vitesseReelle: 0, dernierToast: -Infinity
   };
 
   function $(id) { return document.getElementById(id); }
@@ -840,7 +840,7 @@
       if (!sel.querySelector('option[value="' + valeur + '"]')) {
         var o = document.createElement("option");
         o.value = valeur;
-        o.textContent = id === "selVeille" ? (valeur / 1000) + " s immobile" : valeur + " mm (réglé par l'app)";
+        o.textContent = id === "selVeille" ? (valeur / 1000) + " s immobile" : valeur + " mm (mesurée sur le vélo)";
         sel.appendChild(o);
       }
       sel.value = valeur;
@@ -929,6 +929,17 @@
       $("cfgPAR").value = (Math.round((nominale + 0.2) * 10) / 10).toFixed(1);
     });
     decrireParcours();
+    // Au-delà de la plage des capteurs (3,5 bar supposés), le boîtier
+    // affichera une valeur fausse : on prévient avant de lancer.
+    function verifierPlage() {
+      var max = Math.max(parseFloat($("cfgPAV").value) || 0, parseFloat($("cfgPAR").value) || 0);
+      var av = $("cfgAvertissement");
+      av.hidden = max <= 3.5;
+      av.textContent = "Au-delà de 3,5 bar, les capteurs TPMS saturent (plage supposée) : le boîtier affichera 3,50 bar au lieu de " +
+        nombre(max, 1) + " bar. C'est une vraie limite de ces capteurs pour les vélos de route.";
+    }
+    ["cfgPAV", "cfgPAR"].forEach(function (id) { $(id).addEventListener("input", verifierPlage); });
+    $("cfgParcours").addEventListener("change", verifierPlage);
 
     document.querySelectorAll("#navigation button").forEach(function (b) {
       b.addEventListener("click", function () { ouvrirPage(b.dataset.page); });
@@ -1047,4 +1058,8 @@
     }
   } catch (e) { /* sans stockage, pas de message d'accueil */ }
   setInterval(boucle, 33);
+
+  // Accès en lecture au monde depuis la console du navigateur (mise au point) :
+  // TPMS.mondeCourant().pneus.AV.pressionRelBar
+  TPMS.mondeCourant = function () { return m; };
 })();

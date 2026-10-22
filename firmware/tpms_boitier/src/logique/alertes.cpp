@@ -28,6 +28,9 @@ Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
 
   // Math.max(roue.dernierRecuMs, ecouteDepuisMs)
   int32_t depuisMs = (roue->dernierRecuMs > ecouteDepuisMs) ? roue->dernierRecuMs : ecouteDepuisMs;
+  // Le silence ne compte qu'à partir de la fin d'un « signal suspect » :
+  // pendant cette quarantaine, le boîtier rejette aussi le vrai capteur.
+  if (roue->intrusionJusquaMs > depuisMs) depuisMs = roue->intrusionJusquaMs;
   int32_t silenceMs = maintenantMs - depuisMs;
   int32_t delaiPerte = enMouvement ? seuils->delaiPerteMs : seuils->delaiPerteArretMs;
   if (silenceMs > delaiPerte) return ETAT_PERDU;

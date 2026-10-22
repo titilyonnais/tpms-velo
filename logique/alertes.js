@@ -46,7 +46,13 @@ TPMS.seuilsParDefaut = function () {
 TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs, enMouvement) {
   if (roue.intrusionJusquaMs > maintenantMs) return TPMS.ETAT.INTRUSION;
   if (roue.mesure === null) return TPMS.ETAT.ATTENTE;
-  var silenceMs = maintenantMs - Math.max(roue.dernierRecuMs, ecouteDepuisMs);
+  // Le silence se compte depuis la dernière trame acceptée, le dernier
+  // réveil, ou la fin d'un « signal suspect » (pendant cette quarantaine
+  // le boîtier rejette tout, y compris le vrai capteur : sans cela, il
+  // criait « capteur perdu » dès la fin de la quarantaine — défaut révélé
+  // par la simulation).
+  var finQuarantaineMs = roue.intrusionJusquaMs > 0 ? roue.intrusionJusquaMs : -1;
+  var silenceMs = maintenantMs - Math.max(roue.dernierRecuMs, ecouteDepuisMs, finQuarantaineMs);
   var delaiPerte = (enMouvement === false && seuils.delaiPerteArretMs) ? seuils.delaiPerteArretMs : seuils.delaiPerteMs;
   if (silenceMs > delaiPerte) return TPMS.ETAT.PERDU;
 

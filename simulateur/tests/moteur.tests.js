@@ -107,6 +107,44 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
     if (a.boitier.roues.AV.etat === "PERDU" || a.boitier.roues.AR.etat === "PERDU") fausses++;
   }
   verifier("arrêt : aucune fausse alerte « capteur perdu »", fausses === 0, fausses + " s en alerte");
+})();
+
+// 7. Le découpage du temps ne change rien : avancer de 10 min d'un coup,
+// ou par morceaux irréguliers (comme les images de la page), donne
+// exactement le même monde. Indispensable pour un rejeu exact.
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 21 }));
+  var b = TPMS.creerMonde(options({ graine: 21 }));
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  TPMS.mondeAction(b, { type: "partir", depuisDebut: true });
+  TPMS.mondeAvancer(a, 600000);
+  var alea = TPMS.creerAlea(4), fait = 0;
+  while (fait < 600000) {
+    var morceau = Math.min(600000 - fait, 1 + Math.floor(alea() * 3000));
+    TPMS.mondeAvancer(b, morceau);
+    fait += morceau;
+  }
+  verifier("découpage du temps sans effet : même distance", a.velo.distanceM === b.velo.distanceM, a.velo.distanceM + " / " + b.velo.distanceM);
+  verifier("découpage du temps sans effet : même pression", a.pneus.AV.pressionRelBar === b.pneus.AV.pressionRelBar);
+  verifier("découpage du temps sans effet : même batterie", a.lipo.etatCharge === b.lipo.etatCharge);
+})();
+
+// 8. Après une attaque repérée, pas de fausse alerte « capteur perdu » à la
+// fin de la quarantaine : le vrai capteur reprend la main.
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 13 }));
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  TPMS.mondeAvancer(a, 60000);
+  TPMS.mondeAction(a, { type: "pirate", pirate: { actif: true, cible: "AR", attaque: "usurpation", pressionFausseBar: 1.2, intervalleMs: 500 } });
+  TPMS.mondeAvancer(a, 20000);
+  TPMS.mondeAction(a, { type: "pirate", pirate: { actif: false } });
+  var perdu = 0;
+  for (var i = 0; i < 180; i++) {
+    TPMS.mondeAvancer(a, 1000);
+    if (a.boitier.roues.AR.etat === "PERDU") perdu++;
+  }
+  verifier("fin d'attaque : pas de fausse alerte « capteur perdu »", perdu === 0, perdu + " s en alerte");
+  verifier("fin d'attaque : la roue arrière revient à OK", a.boitier.roues.AR.etat === "OK", a.boitier.roues.AR.etat);
   console.log("\n" + reussis + " réussis, " + rates + " en échec");
   if (rates > 0) process.exitCode = 1;
 })();

@@ -136,6 +136,21 @@ TPMS.creerMonde = function (options) {
     });
   }
 
+  // Le cycliste a bien réglé son boîtier : circonférence mesurée de SA
+  // roue avant (pneu gonflé, vélo chargé). On peut ensuite la dérégler
+  // dans la configuration pour voir l'erreur de vitesse et de distance.
+  var chargeAV = (m.velo.masseCyclisteKg + m.velo.masseVeloKg) * TPMS.G_MS2 * m.velo.repartitionAV;
+  var circonference = Math.round(2 * Math.PI * TPMS.veloRayonRoulementM(m.velo, o.pressionAVBar, chargeAV) * 1000);
+  m.boitier.reglages.circonferenceMm = circonference;
+  m.boitier.compteur.circonferenceMm = circonference;
+  // Seuils d'alerte réglés autour des pressions de gonflage choisies :
+  // alerte sous 80 % et au-dessus de 125 % (à 0,1 bar près).
+  ["AV", "AR"].forEach(function (pos) {
+    var p = pos === "AV" ? o.pressionAVBar : o.pressionARBar;
+    m.boitier.reglages.seuils[pos].basBar = Math.round(p * 0.8 * 10) / 10;
+    m.boitier.reglages.seuils[pos].hautBar = Math.round(p * 1.25 * 10) / 10;
+  });
+
   m.boitier.dernierMouvementMs = 0;
   return m;
 };
@@ -246,24 +261,27 @@ function perteJante(angleDeg, estAvant) {
 // Avancer
 // ---------------------------------------------------------------------
 // Fait avancer le monde de dureeMs millisecondes, par petits pas.
+// Les pas ont toujours la même taille, quelle que soit la façon dont on
+// découpe le temps demandé (images de la page, vitesse ×1 ou ×3600) : le
+// reste est gardé pour la fois suivante (m.tempsEnAttenteMs). C'est ce qui
+// rend le rejeu exact : mêmes pas, mêmes calculs, mêmes résultats.
 TPMS.mondeAvancer = function (m, dureeMs) {
-  var fin = m.tMs + dureeMs;
+  m.tempsEnAttenteMs = (m.tempsEnAttenteMs || 0) + dureeMs;
   var garde = 0;
-  while (m.tMs < fin - 1e-6 && garde++ < 200000) {
-    var calme = !m.enSortie && m.boitier.veille && m.velo.vitesseMs < 0.05;
-    var pasS = Math.min(calme ? TPMS.PAS_CALME_S : TPMS.PAS_ROULAGE_S, (fin - m.tMs) / 1000);
-    // Une action de rejeu tombe pendant ce pas ? On s'arrête juste avant.
-    if (m.actionsAJouer.length > 0) {
-      var prochaine = m.actionsAJouer[0].tMs;
-      if (prochaine <= m.tMs) {
-        var act = m.actionsAJouer.shift();
-        m.actions.push(act);
-        appliquerAction(m, act.action);
-        continue;
-      }
-      pasS = Math.min(pasS, (prochaine - m.tMs) / 1000);
+  while (garde++ < 400000) {
+    // Actions d'un rejeu : appliquées à l'instant exact où elles avaient été faites.
+    while (m.actionsAJouer.length > 0 && m.actionsAJouer[0].tMs <= m.tMs + 1e-6) {
+      var act = m.actionsAJouer.shift();
+      m.actions.push(act);
+      appliquerAction(m, act.action);
     }
-    unPas(m, pasS);
+    var calme = !m.enSortie && m.boitier.veille && m.velo.vitesseMs < 0.05;
+    // Le choix du pas ne dépend que de l'état du monde : un rejeu refait
+    // exactement les mêmes pas, et chaque action retombe pile sur un pas.
+    var pasMs = (calme ? TPMS.PAS_CALME_S : TPMS.PAS_ROULAGE_S) * 1000;
+    if (m.tempsEnAttenteMs < pasMs) break;
+    m.tempsEnAttenteMs -= pasMs;
+    unPas(m, pasMs / 1000);
   }
 };
 
@@ -316,8 +334,15 @@ function unPas(m, dtS) {
     freinage: commande.freinage * Math.min(1, m.velo.vitesseMs / 8),
     pluie: m.instant.pluie
   };
-  TPMS.pneuAvancer(m.pneus.AV, dtS, ctxPneu);
-  TPMS.pneuAvancer(m.pneus.AR, dtS, ctxPneu);
+  // L'air d'un pneu évolue lentement (minutes) : un calcul toutes les
+  // 0,25 s suffit, sauf s'il est troué (il peut se vider en secondes).
+  ["AV", "AR"].forEach(function (pos) {
+    var pneu = m.pneus[pos];
+    pneu.attenteS = (pneu.attenteS || 0) + dtS;
+    if (pneu.orifices.length === 0 && pneu.attenteS < 0.25) return;
+    TPMS.pneuAvancer(pneu, pneu.attenteS, ctxPneu);
+    pneu.attenteS = 0;
+  });
 
   // 4. Aimant de roue → reed → boîtier
   var reedFerme = Math.abs(((m.velo.angleRoueAVDeg + 180) % 360) - 180) < 4;
@@ -356,11 +381,17 @@ function unPas(m, dtS) {
     // Un flux de cyclistes : celui qui s'est éloigné de plus de 300 m est
     // remplacé par un autre qui arrive de l'autre côté.
     if (Math.abs(v.decalageM) > 300) v.decalageM = -Math.sign(v.decalageM) * 290;
+    // Loin du boîtier, inutile de le calculer finement : une mise à jour
+    // par seconde suffit (ses annonces ne peuvent de toute façon pas arriver).
+    v.attenteS = (v.attenteS || 0) + dtS;
+    if (Math.abs(v.decalageM) > 150 && v.attenteS < 1) return;
+    var dtVoisinS = v.attenteS;
+    v.attenteS = 0;
     var d = m.velo.distanceM + v.decalageM;
     var p = TPMS.parcoursPoint(m.prep, Math.max(0, d));
     var pos = TPMS.mondeVersMetres(m, p.lat, p.lon);
-    TPMS.pneuAvancer(v.pneu, dtS, ctxPneu);
-    var annonces = TPMS.capteurTPMSAvancer(v.capteur, t, dtS, v.pneu, { altitudeM: p.altitudeM, vitesseMs: v.vitesseMs, temperatureAmbianteC: m.instant.temperatureC, ensoleillement: m.instant.ensoleillement });
+    TPMS.pneuAvancer(v.pneu, dtVoisinS, ctxPneu);
+    var annonces = TPMS.capteurTPMSAvancer(v.capteur, t, dtVoisinS, v.pneu, { altitudeM: p.altitudeM, vitesseMs: v.vitesseMs, temperatureAmbianteC: m.instant.temperatureC, ensoleillement: m.instant.ensoleillement });
     // Au-delà de 150 m, ses annonces n'ont aucune chance d'arriver : on ne
     // les passe pas à la radio (gain de calcul, tableau de trafic lisible).
     if (Math.abs(v.decalageM) > 150) return;
@@ -507,12 +538,24 @@ function electronique(m, t, dtS) {
     vbusV: m.vbusV,
     appConnectee: b.liaison.connecte
   };
-  var e = TPMS.circuitResoudre(entrees, m.lipo);
+  // Le circuit ne change que si une entrée change (fenêtre radio, écran,
+  // LED...) ou si la tension de la batterie bouge d'au moins 1 mV : sinon
+  // on garde le résultat précédent (gros gain de calcul).
+  var cle = entrees.veille + "|" + entrees.radioReception + "|" + entrees.radioEmission + "|" + entrees.ecran + "|" +
+    entrees.ledAlerte + "|" + entrees.eclairage + "|" + entrees.buzzer + "|" + entrees.reedFerme + "|" +
+    entrees.reedPullupActif + "|" + entrees.bouton1 + "|" + entrees.bouton2 + "|" + entrees.vbusV + "|" +
+    m.lipo.coupee + "|" + Math.round(m.lipo.tensionV * 1000);
+  var e = m.cleCircuit === cle ? m.electronique : TPMS.circuitResoudre(entrees, m.lipo);
+  m.cleCircuit = cle;
   m.electronique = e;
   TPMS.lipoAvancer(m.lipo, dtS, e.courantBatterieA, m.instant.temperatureC);
 
-  // Le boîtier ne connaît sa batterie que par la tension qu'il mesure.
-  b.batteriePct = pourcentageDepuisTension(m.lipo.tensionV, m.instant.temperatureC);
+  // Le boîtier ne connaît sa batterie que par la tension qu'il mesure
+  // (une mesure par seconde, comme le firmware).
+  if (!(t < m.prochaineJaugeMs)) {
+    b.batteriePct = pourcentageDepuisTension(m.lipo.tensionV, m.instant.temperatureC);
+    m.prochaineJaugeMs = t + 1000;
+  }
   b.enCharge = m.vbusV > 0 && m.lipo.etatCharge < 0.995;
 
   // Batterie coupée par sa protection : le boîtier s'éteint. L'e-paper

@@ -28,12 +28,22 @@ TPMS.PA_PAR_BAR = TPMS.PA_PAR_BAR || 100000;   // 1 bar = 100 000 Pa (aussi déf
 //   P(h) = P0 × (1 − L·h / T0) ^ (g·M / (R·L))
 // L'exposant vaut environ 5,256. Ordres de grandeur :
 //   0 m → 1013 hPa ; 1500 m → 846 hPa ; 3000 m → 701 hPa.
+// Petite mémoire : la fonction est appelée des milliers de fois par
+// seconde ; on arrondit l'altitude au décimètre (1 dm ≈ 1,2 Pa, soit
+// 0,00001 bar : invisible) et on ne refait le calcul que si elle change.
+var memoAltitude = NaN, memoPression = 0;
 TPMS.pressionAtmospheriquePa = function (altitudeM) {
-  var h = altitudeM || 0;
+  var h = Math.round((altitudeM || 0) * 10) / 10;
+  if (h === memoAltitude) return memoPression;
+  memoAltitude = h;
+  memoPression = pressionSansMemo(h);
+  return memoPression;
+};
+function pressionSansMemo(h) {
   var exposant = TPMS.G * TPMS.M_AIR / (TPMS.R_GAZ * TPMS.GRADIENT_THERMIQUE);
   var base = 1 - TPMS.GRADIENT_THERMIQUE * h / TPMS.T_MER_STANDARD_K;
   return TPMS.P_ATM_MER_PA * Math.pow(base, exposant);
-};
+}
 
 // Température à une altitude, connaissant celle d'en bas (même gradient
 // de −6,5 °C/km). Utile pour un col : 20 °C en bas → 10 °C à 1500 m de plus.
