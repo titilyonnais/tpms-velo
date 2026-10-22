@@ -1,0 +1,328 @@
+// =====================================================================
+// boitier.cpp — Le « cerveau » du boîtier de guidon
+// ---------------------------------------------------------------------
+// Traduction en C++ de : simulateur/boitier/boitier.js
+// LOGIQUE PURE : aucun appel Arduino.
+// =====================================================================
+#include "boitier.h"
+#include "ecran.h"
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+
+void creerRoue(Roue* roue) {
+  roue->aMesure = false;
+  memset(&roue->mesure, 0, sizeof(roue->mesure));
+  roue->pressionAfficheeConnue = false;
+  roue->pressionAffichee = 0.0f;
+  roue->dernierRecuMs = -1;
+  roue->nbTrames = 0;
+  creerHistorique(&roue->historique);
+  roue->penteBarH = 0.0f;
+  roue->etat = ETAT_ATTENTE;
+  roue->acquittee = false;
+  creerVerification(&roue->verification);
+  creerRythme(&roue->rythme);
+  roue->intrusionJusquaMs = -1;
+}
+
+void creerBoitier(Boitier* b) {
+  // On commence par tout mettre à zéro (compteurs de stats, etc.).
+  memset(b, 0, sizeof(Boitier));
+
+  uint16_t circonference = 2105;   // 700×25C, valeur par défaut
+  Reglages* r = &b->reglages;
+  // À VÉRIFIER : adresses du simulateur. Remplacer par celles des vrais
+  // capteurs (affichées en MODE_DECOUVERTE), ou les régler depuis l'app.
+  adresseDepuisTexte("EA:CA:3F:1B:07", r->appairage.adresse[POS_AV]);
+  adresseDepuisTexte("EA:CA:3F:1B:08", r->appairage.adresse[POS_AR]);
+  protectionsParDefaut(&r->protections);
+  seuilsParDefaut(&r->seuils);
+  r->circonferenceMm = circonference;
+  r->ecoutePeriodeMs = 5000;      // la radio s'allume toutes les 5 s...
+  r->ecouteFenetreMs = 2000;      // ... et écoute pendant 2 s (40 % du temps)
+  r->delaiVeilleMs = 5L * 60000;  // veille après 5 min sans rouler
+  r->periodeEcranMs = 2000;       // en roulant, au plus un rafraîchissement toutes les 2 s
+
+  creerRoue(&b->roues[POS_AV]);
+  creerRoue(&b->roues[POS_AR]);
+  creerCompteur(&b->compteur, circonference);
+  b->page = 0;
+  b->eclairage = false;
+  b->veille = false;
+  b->dernierMouvementMs = 0;
+  b->ecouteDepuisMs = 0;
+  b->batteriePct = 100.0f;
+  b->enCharge = false;
+  b->bipDemande = false;
+  creerEcran(&b->ecran);
+  creerEcran(&b->ecranAffiche);
+  b->partielsDepuisComplet = 0;
+  b->dernierDessinMs = -1000000;
+  b->ecranUrgent = true;
+  creerLiaison(&b->liaison);
+  b->journal = 0;
+}
+
+void boitierJournal(Boitier* b, int32_t maintenantMs, const char* texte) {
+  if (b->journal != 0) b->journal(maintenantMs, texte);
+}
+
+const char* texteResultat(Resultat r) {
+  switch (r) {
+    case RESULTAT_ACCEPTEE:     return "acceptee";
+    case RESULTAT_RADIO_COUPEE: return "radio-coupee";
+    case RESULTAT_INVALIDE:     return "invalide";
+    case RESULTAT_INCONNUE:     return "inconnue";
+    case RESULTAT_INTRUSION:    return "intrusion";
+    case RESULTAT_HORS_LIMITES: return "hors-limites";
+    default:                    return "suspecte";
+  }
+}
+
+bool boitierEcoute(const Boitier* b, int32_t maintenantMs) {
+  if (b->veille) return false;
+  return (maintenantMs % b->reglages.ecoutePeriodeMs) < b->reglages.ecouteFenetreMs;
+}
+
+Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, int32_t maintenantMs) {
+  const Protections* protections = &b->reglages.protections;
+  char texte[96];
+
+  // Une trame reçue alors que la fenêtre d'écoute est fermée (la radio
+  // vient juste d'être coupée) est comptée comme manquée, comme dans le
+  // simulateur.
+  if (!boitierEcoute(b, maintenantMs)) {
+    b->stats.tramesManquees++;
+    return RESULTAT_RADIO_COUPEE;
+  }
+
+  Mesure mesure;
+  if (!decoderTrame(octets, longueur, &mesure)) {
+    b->stats.tramesInvalides++;
+    return RESULTAT_INVALIDE;
+  }
+
+  // 1. De quelle roue s'agit-il ?
+  Position position = protections->listeBlanche
+    ? positionCapteur(&b->reglages.appairage, mesure.adresse)
+    : positionParNumero(mesure.numero);
+  if (position == POSITION_AUCUNE) {
+    b->stats.tramesInconnues++;
+    return RESULTAT_INCONNUE;
+  }
+  Roue* roue = &b->roues[position];
+
+  // 2. Rythme : deux émetteurs avec la même identité ?
+  if (protections->rythme) {
+    if (controlerRythme(&roue->rythme, maintenantMs)) {
+      if (roue->intrusionJusquaMs <= maintenantMs) {
+        b->stats.intrusions++;
+        snprintf(texte, sizeof(texte), "%s : trames trop rapprochées, deux émetteurs → SIGNAL SUSPECT",
+                 NOM_POSITION[position]);
+        boitierJournal(b, maintenantMs, texte);
+      }
+      roue->intrusionJusquaMs = maintenantMs + QUARANTAINE_MS;
+    }
+    // Pendant le signal suspect, on garde la dernière valeur de confiance.
+    if (roue->intrusionJusquaMs > maintenantMs) {
+      b->stats.rejetsRythme++;
+      return RESULTAT_INTRUSION;
+    }
+  }
+
+  // 3. Vraisemblance : la nouvelle valeur est-elle physiquement possible ?
+  if (protections->vraisemblance) {
+    // Si le contrôle du rythme a déjà un doute sur cet émetteur, aucun
+    // changement brutal ne peut être confirmé.
+    bool doute = protections->rythme && rythmeDouteux(&roue->rythme);
+    Verdict verdict = verifierVraisemblance(&roue->verification,
+      roue->aMesure ? &roue->mesure : 0,        // en JS : roue.mesure (ou null)
+      roue->dernierRecuMs, &mesure, maintenantMs, !doute);
+    if (verdict == VERDICT_HORS_LIMITES) {
+      b->stats.rejetsVraisemblance++;
+      return RESULTAT_HORS_LIMITES;
+    }
+    if (verdict == VERDICT_SUSPECTE) {
+      b->stats.rejetsVraisemblance++;
+      return RESULTAT_SUSPECTE;
+    }
+    if (verdict == VERDICT_CONFIRMEE) {
+      snprintf(texte, sizeof(texte), "%s : changement brutal confirmé par %d trames",
+               NOM_POSITION[position], (int)CONFIRMATIONS);
+      boitierJournal(b, maintenantMs, texte);
+    }
+  }
+
+  roue->mesure = mesure;
+  roue->aMesure = true;
+  if (!roue->pressionAfficheeConnue ||
+      fabsf(mesure.pressionBar - roue->pressionAffichee) >= HYSTERESIS_AFFICHAGE_BAR) {
+    roue->pressionAffichee = mesure.pressionBar;
+    roue->pressionAfficheeConnue = true;
+  }
+  roue->dernierRecuMs = maintenantMs;
+  roue->nbTrames++;
+  historiqueAjouter(&roue->historique, maintenantMs, mesure.pressionBar);
+  roue->penteBarH = historiquePenteBarH(&roue->historique);
+  b->stats.tramesAcceptees++;
+  return RESULTAT_ACCEPTEE;
+}
+
+void boitierReveiller(Boitier* b, int32_t maintenantMs, const char* raison) {
+  if (!b->veille) return;
+  b->veille = false;
+  b->ecouteDepuisMs = maintenantMs;
+  b->ecranUrgent = true;
+  char texte[64];
+  snprintf(texte, sizeof(texte), "Réveil (%s)", raison);
+  boitierJournal(b, maintenantMs, texte);
+}
+
+bool boitierTopRoue(Boitier* b, int32_t maintenantMs) {
+  bool accepte = compteurTop(&b->compteur, maintenantMs);
+  if (accepte) {
+    b->dernierMouvementMs = maintenantMs;
+    boitierReveiller(b, maintenantMs, "la roue tourne");
+  }
+  return accepte;
+}
+
+void boitierBouton(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs) {
+  b->dernierMouvementMs = maintenantMs;
+  b->ecranUrgent = true;
+  if (b->veille) {
+    char raison[16];
+    snprintf(raison, sizeof(raison), "bouton %d", numero);
+    boitierReveiller(b, maintenantMs, raison);
+    return;
+  }
+  if (numero == 1 && !appuiLong) {
+    b->page = (b->page + 1) % 2;
+  } else if (numero == 1 && appuiLong) {
+    compteurRemiseAZero(&b->compteur);
+    boitierJournal(b, maintenantMs, "Trajet remis à zéro");
+  } else if (numero == 2 && !appuiLong) {
+    b->eclairage = !b->eclairage;
+  } else if (numero == 2 && appuiLong) {
+    for (int i = 0; i < NB_ROUES; i++) {
+      Roue* roue = &b->roues[i];
+      if (estAlerte(roue->etat) && !roue->acquittee) {
+        roue->acquittee = true;
+        char texte[48];
+        snprintf(texte, sizeof(texte), "%s : alerte acquittée", NOM_POSITION[i]);
+        boitierJournal(b, maintenantMs, texte);
+      }
+    }
+  }
+}
+
+void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
+  const Compteur* c = &b->compteur;
+  vue->page = b->page;
+  vue->veille = b->veille;
+  vue->eclairage = b->eclairage && !b->veille;
+  vue->enCharge = b->enCharge;
+  vue->batterieBoitierPct = b->batteriePct;
+  vue->appConnectee = b->liaison.connecte;
+  strcpy(vue->codeAppairage, b->liaison.code);
+  vueRoue(&b->roues[POS_AV], &vue->roues[POS_AV]);
+  vueRoue(&b->roues[POS_AR], &vue->roues[POS_AR]);
+  vue->vitesseKmh = b->veille ? 0.0f : compteurVitesseKmh(c, maintenantMs);
+  vue->distanceKm = compteurDistanceKm(c);
+  vue->moyenneKmh = compteurMoyenneKmh(c);
+  vue->maxKmh = c->vitesseMaxKmh;
+  vue->dureeRoulageS = c->tempsRoulageMs / 1000.0f;
+}
+
+void vueRoue(const Roue* roue, VueRoue* vue) {
+  vue->etat = roue->etat;
+  // Signal suspect : la dernière valeur a peut-être été fabriquée par le
+  // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
+  if (!roue->aMesure || roue->etat == ETAT_INTRUSION) {
+    vue->connue = false;
+    vue->pressionBar = 0.0f;
+    vue->temperatureC = 0.0f;
+    vue->batteriePct = 0;
+    return;
+  }
+  vue->connue = true;
+  vue->pressionBar = roue->pressionAffichee;
+  vue->temperatureC = roue->mesure.temperatureC;
+  vue->batteriePct = roue->mesure.batteriePct;
+}
+
+Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
+  char texte[64];
+
+  // 1. Veille si le vélo ne roule plus depuis longtemps.
+  if (!b->veille && maintenantMs - b->dernierMouvementMs > b->reglages.delaiVeilleMs) {
+    b->veille = true;
+    b->ecranUrgent = true;
+    boitierJournal(b, maintenantMs, "Mise en veille (vélo immobile)");
+  }
+  // Le code d'appairage disparaît au bout d'une minute.
+  if (b->liaison.code[0] != '\0' && maintenantMs > b->liaison.codeJusquaMs) {
+    b->liaison.code[0] = '\0';
+    b->ecranUrgent = true;
+  }
+
+  // 2. État de chaque pneu (pas en veille : la radio est coupée).
+  bool alerteEnCours = false;
+  bool alerteNonAcquittee = false;
+  for (int i = 0; i < NB_ROUES; i++) {
+    Position pos = (Position)i;
+    Roue* roue = &b->roues[i];
+    if (!b->veille) {
+      Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs);
+      if (etat != roue->etat) {
+        roue->etat = etat;
+        roue->acquittee = false;
+        b->ecranUrgent = true;
+        snprintf(texte, sizeof(texte), "%s : %s", NOM_POSITION[i], texteEtat(etat));
+        boitierJournal(b, maintenantMs, texte);
+        if (estAlerte(etat)) b->bipDemande = true;
+      }
+    }
+    if (estAlerte(roue->etat)) {
+      alerteEnCours = true;
+      if (!roue->acquittee) alerteNonAcquittee = true;
+    }
+  }
+
+  // 3. Sorties : la LED clignote tant qu'une alerte n'est pas acquittée,
+  //    puis reste allumée tant que le problème dure.
+  Sorties sorties;
+  sorties.ledAlerte = alerteNonAcquittee ? LED_CLIGNOTE : (alerteEnCours ? LED_FIXE : LED_ETEINTE);
+  sorties.bip = b->bipDemande;
+  sorties.ledsEclairage = b->eclairage && !b->veille;
+  sorties.radio = boitierEcoute(b, maintenantMs);
+  sorties.appConnectee = b->liaison.connecte;
+  sorties.rafraichissement = RAFRAICHISSEMENT_AUCUN;
+  b->bipDemande = false;
+  if (b->veille) sorties.ledAlerte = LED_ETEINTE;
+
+  // 4. Écran : au plus un dessin toutes les periodeEcranMs, sauf urgence.
+  //    On n'envoie l'image à l'écran que si elle a changé.
+  if (!b->ecranUrgent && maintenantMs - b->dernierDessinMs < b->reglages.periodeEcranMs) {
+    return sorties;
+  }
+  b->ecranUrgent = false;
+  b->dernierDessinMs = maintenantMs;
+  Vue vue;
+  boitierVue(b, maintenantMs, &vue);
+  dessinerEcran(&b->ecran, &vue);
+  if (ecransDifferents(&b->ecran, &b->ecranAffiche)) {
+    ecranCopier(&b->ecranAffiche, &b->ecran);
+    if (b->partielsDepuisComplet >= PARTIELS_AVANT_COMPLET) {
+      b->partielsDepuisComplet = 0;
+      b->stats.rafraichissementsComplets++;
+      sorties.rafraichissement = RAFRAICHISSEMENT_COMPLET;
+    } else {
+      b->partielsDepuisComplet++;
+      b->stats.rafraichissementsPartiels++;
+      sorties.rafraichissement = RAFRAICHISSEMENT_PARTIEL;
+    }
+  }
+  return sorties;
+}

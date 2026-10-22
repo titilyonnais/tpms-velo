@@ -44,6 +44,7 @@ Total panier AliExpress relevé le 20/10/2026 : 59,73 € d'articles + 26,88 €
 10. Kit 100 LED 3 mm – item/1005007476457957 – 2,27 €
 11. Joints toriques NBR – item/1005006417147355 – 0,85 €
 Sur place : imprimante 3D, fer à souder fin/CMS, oscilloscope. Pas de mesureur de consommation (PPK2).
+**À commander en plus** (câblage retenu dans firmware/README.md) : 2 MOSFET canal N logique (AO3400 ou 2N7002) pour le buzzer et l'éclairage, 1 diode 1N4148, résistances 100 Ω, 100 kΩ, 150 Ω, 270 Ω ; option reed : 1 MΩ + 10 nF.
 
 ## Prochain chantier : le simulateur numérique (« jumeau numérique »)
 Demande de Thibault : un logiciel qui centralise tout et permet de faire **en numérique tout ce qui sera faisable en réel**, avant d'avoir le matériel.
