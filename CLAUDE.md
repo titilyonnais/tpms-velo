@@ -49,17 +49,12 @@ Total panier AliExpress relevé le 20/10/2026 : 59,73 € d'articles + 26,88 €
 Sur place : imprimante 3D, fer à souder fin/CMS, oscilloscope. Pas de mesureur de consommation (PPK2).
 **À commander en plus** (câblage retenu dans firmware/README.md) : 2 MOSFET canal N logique (AO3400 ou 2N7002) pour le buzzer et l'éclairage, 1 diode 1N4148, résistances 100 Ω, 100 kΩ, 150 Ω, 270 Ω ; option reed : 1 MΩ + 10 nF.
 
-## Prochain chantier : le simulateur numérique (« jumeau numérique »)
-Demande de Thibault : un logiciel qui centralise tout et permet de faire **en numérique tout ce qui sera faisable en réel**, avant d'avoir le matériel.
-- Usage : **outil de conception ET démo pour le jury**.
-- Format : **page web** (rien à installer).
-- Modules demandés :
-  1. **Capteurs + trames BLE** : régler pression / température / pile de chaque roue, voir la trame hexadécimale générée et décodée, simuler une crevaison ou une fuite lente.
-  2. **Boîtier virtuel** : écran e-paper 200×200 noir et blanc rendu au pixel près, boutons, buzzer, LED d'alerte et de nuit, vitesse/distance via une roue virtuelle et l'aimant, veille, niveau de batterie.
-  3. **App + historique** : seuils, circonférence, courbes de pression, détection de fuite lente.
-  4. **Cybersécurité** : capteur pirate qui usurpe une adresse ou rejoue des trames, et protections activables (liste blanche, vraisemblance, compteur anti-rejeu) pour montrer l'attaque puis la parade.
-  5. À ajouter : estimation d'autonomie (consommation par état, durée de vie batterie et piles CR1632).
-- Principe d'architecture : séparer la **logique** (décodage de trame, alertes, calcul de vitesse, détection de fuite, sécurité) des **sources de données** (simulées vs vraies). Cette logique doit pouvoir être portée telle quelle dans le firmware Arduino du XIAO et dans l'app Web Bluetooth.
+## Le simulateur (cœur du projet depuis le 22/10/2026)
+Décision de Thibault : en attendant le matériel, le projet est un **logiciel de simulation complète et réaliste** (page web, rien à installer) : physique du pneu et du vélo, météo et altitude, radio BLE réaliste, électronique animée, sorties sur plusieurs jours (planning « semaine type »), enregistrement et rejeu exact (graine + actions horodatées), statistiques, export CSV. Le firmware C++ et l'app Web Bluetooth restent dans le dépôt mais ne sont plus prioritaires.
+- Principe d'architecture : la **logique** (`logique/`, pure, temps passé en paramètre) est séparée des **sources de données** ; elle est traduite telle quelle en C++ dans `firmware/tpms_boitier/src/logique/` et réutilisée par l'app.
+- Réglages clés du boîtier : écoute radio 3 s toutes les 5 s à position variable + écoute renforcée 15 s après une trame douteuse ; capteur perdu après 60 s en roulant, 600 s à l'arrêt ; historique de pression compensé en température.
+- Tests : `node simulateur/tests/tout.js` (412 tests en 6 suites, tous verts au 22/10/2026).
+- Chiffres à jour et défauts révélés par la simulation : voir `docs/` (analyse de risques, bilan énergétique) et `docs/rapport-e6.md`.
 
 ## Organisation du dépôt
 ```
@@ -67,11 +62,13 @@ logique/      logique partagée (trames, vitesse, fuite, alertes, sécurité, pr
 simulateur/   jumeau numérique (boîtier virtuel dans simulateur/boitier/, sources simulées, tests)
 app/          application Web Bluetooth (transport réel ou simulé)
 firmware/     programme du boîtier (Arduino, XIAO nRF52840), traduction C++ de la logique
-docs/         cahier des charges, analyse de risques, bilan énergétique, protocole, architecture
+docs/         cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma, rapport E6
+presentation/ diaporama de soutenance (page web, publiée sur GitHub Pages)
 ```
-Le simulateur est l'outil de travail de Thibault (pas un support de soutenance). Style visuel : « fiche technique » (papier crème, encre noire, rouge de repère).
+Le simulateur est l'outil de travail de Thibault (pas de « mode jury »). Style visuel : tableau de bord sombre, fond noir, cartes arrondies, accent violet #A78BFA, barre latérale.
+En ligne (GitHub Pages, dépôt public titilyonnais/tpms-velo) : https://titilyonnais.github.io/tpms-velo/simulateur/ , /app/ et /presentation/. Commits avec l'adresse noreply 107395514+titilyonnais@users.noreply.github.com.
 Initialiser git dès le départ : l'historique des commits sert de preuve d'avancement pour le jury.
 
 ## Points encore ouverts
-- Nom de l'établissement, professeur référent, date de soutenance.
+- Nom de l'établissement, professeur référent, date de soutenance : laissés en champs à remplir ([Établissement], [Professeur référent], [Date de soutenance]) dans le rapport et la présentation.
 - Plage de pression réelle des capteurs TPMS et format exact des trames. La fiche AliExpress ne donne pas la plage (vérifié le 22/10/2026) ; la simulation suppose 3,5 bar par défaut, réglable dans Configuration.

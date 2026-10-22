@@ -268,13 +268,13 @@ Courant tiré sur la batterie (simulateur, VBAT ≈ 3,73 V), comparé à `logiqu
 
 Les tests vérifient que chaque situation reste à moins de 10 % du bilan de `energie.js`.
 
-**Journée type** (profil de `docs/bilan-energetique.md` : 1 h de roulage, 2 sorties, 15 min d'éclairage, 6 min d'application) simulée seconde par seconde jusqu'à la coupure de la batterie :
+**Journée type** (profil de `docs/bilan-energetique.md` : 1 h de roulage, 2 sorties, 15 min d'éclairage, 6 min d'application, écoute radio 3 s toutes les 5 s) simulée pas à pas (0,5 s éveillé, 1 min en veille) jusqu'à la coupure de la batterie :
 
 | Calcul | Consommation | Autonomie |
 |---|---|---|
-| `energie.js` (450 mAh utiles, courants fixes) | 5,90 mAh/jour | 76 jours |
-| Circuit + LiPo simulés, 20 °C | 7,15 mAh/jour au début, moins quand la batterie baisse | **78 jours** |
-| Circuit + LiPo simulés, 0 °C | — | 70 jours |
+| `energie.js` (450 mAh utiles, courants fixes) | 7,06 mAh/jour | 64 jours |
+| Circuit + LiPo simulés, 20 °C | 8,4 mAh/jour au début, moins quand la batterie baisse | **66 jours** |
+| Circuit + LiPo simulés, 0 °C | — | 59 jours |
 | Veille seule, 20 °C | 0,12 mAh/jour + autodécharge | ≈ 4 ans (1 490 jours) |
 
 Le circuit consomme davantage que le bilan au début, parce que les LED blanches tirent 7,8 mA chacune sur une batterie pleine au lieu de 5 mA. Mais il descend jusqu'à 3,0 V au lieu de s'arrêter à 90 % de la capacité. Les deux résultats se rejoignent : l'exigence d'**au moins une semaine** est largement tenue.

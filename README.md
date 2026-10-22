@@ -12,6 +12,13 @@ Le boîtier affiche la pression et la température de chaque pneu, ainsi que la 
 
 - Application : https://titilyonnais.github.io/tpms-velo/app/ (sur iPhone, à ouvrir dans Bluefy)
 - Simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
+- Présentation : https://titilyonnais.github.io/tpms-velo/presentation/
+
+## Dossier E6
+
+- Rapport : [`docs/rapport-e6.md`](docs/rapport-e6.md)
+- Présentation pour la soutenance : [`presentation/index.html`](presentation/index.html) (à ouvrir dans un navigateur, ou en ligne, lien ci-dessus)
+- Documentation technique : [`docs/`](docs/README.md) (cahier des charges, architecture, protocole BLE, analyse de risques, schéma électrique, bilan énergétique)
 
 ## Organisation du dépôt
 
@@ -21,7 +28,8 @@ Le boîtier affiche la pression et la température de chaque pneu, ainsi que la 
 | `simulateur/` | La simulation : monde physique (`monde/`, `moteur.js`), boîtier simulé (`boitier/`), affichage (`vues/`, `app.js`) |
 | `app/`        | Application Web Bluetooth (pneus, historique, fuite lente, réglages)          |
 | `firmware/`   | Programme du boîtier (Seeed XIAO nRF52840), traduction en C++ de la logique   |
-| `docs/`       | Cahier des charges, analyse de risques, bilan énergétique, protocole, architecture |
+| `docs/`       | Rapport E6, cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma électrique |
+| `presentation/` | Présentation pour la soutenance (page web)                                 |
 
 Le principe : la logique (`logique/` et `simulateur/boitier/`) ne connaît ni la page web ni la radio. Le simulateur lui fournit des données simulées, l'application et le firmware lui fournissent les vraies.
 
@@ -29,17 +37,17 @@ Le principe : la logique (`logique/` et `simulateur/boitier/`) ne connaît ni la
 
 Double-cliquer sur `simulateur/index.html` : la page s'ouvre dans le navigateur, sans rien installer.
 
-- **Boîtier**, à gauche : écran e-paper au pixel près, boutons SW1/SW2, LED, buzzer.
-- **§1 Sortie** : parcours réels autour de Lyon, météo, heure, pressions ; carte et profil d'altitude.
-- **§2 Pneus** : gaz parfait, chaleur, altitude, crevaisons, fuite lente, pompe ; capteurs et leur pile.
-- **§3 Radio** : propagation, masquage par la jante, collisions, brouillage, vélos voisins.
-- **§4 Boîtier** : réglages, compteurs, journal.
-- **§5 Électronique** : schéma animé, courants, LiPo et recharge, bilan d'énergie.
-- **§6 Application** : l'app (`app/`) reliée au boîtier simulé.
-- **§7 Cybersécurité** : pirate (usurpation, rejeu, brouillage) et protections.
-- **§8 Données** : courbes, statistiques, export CSV, sauvegarde et rejeu de scénarios.
+- **Vue d'ensemble** : pneus avant et arrière (crevaison, fuite lente, regonflage), vélo, boîtier de guidon (écran e-paper au pixel près, boutons 1 et 2, LED, buzzer), carte, batterie, sécurité, événements.
+- **Configuration** : parcours réels autour de Lyon, une sortie ou une semaine type, météo, heure, chambres à air, pressions, plage des capteurs (3,5, 5 ou 8 bar) ; réglages du boîtier.
+- **Pneus** : pression réelle et pression affichée, trames des capteurs.
+- **Radio et sécurité** : propagation, collisions, brouillage, vélos voisins ; pirate (usurpation, rejeu, brouillage) et protections.
+- **Électronique** : schéma animé, courants, LiPo et recharge, autonomie sur une journée type.
+- **Application** : l'app (`app/`) reliée au boîtier simulé.
+- **Données** : courbes, statistiques, export CSV, sauvegarde et rejeu de scénarios.
 
-Le temps peut être accéléré jusqu'à ×3600 pour simuler plusieurs jours.
+À la création d'une simulation, la circonférence de roue du boîtier est réglée sur la vraie roue, et les seuils d'alerte à 80 % et 125 % des pressions choisies.
+
+Le temps peut être accéléré jusqu'à ×3600. Avec la **semaine type** (trajets domicile-travail en semaine, une sortie le samedi et le dimanche, recharge le dimanche soir), le bouton « Avancer jusqu'à … » passe directement à l'événement suivant et s'arrête si une alerte apparaît.
 
 ## Tests
 
@@ -47,7 +55,7 @@ Le temps peut être accéléré jusqu'à ×3600 pour simuler plusieurs jours.
 node simulateur/tests/tout.js
 ```
 
-6 suites, 399 tests.
+6 suites, 412 tests : logique et boîtier (102), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (80), monde complet de bout en bout (34).
 
 On peut aussi ouvrir `simulateur/tests/tests.html` dans le navigateur.
 

@@ -133,7 +133,7 @@ Lue par `TPMS.liaisonLireReglages`, écrite par `TPMS.liaisonEcrireReglages` ; f
 | 13-17 | Adresse du capteur AV | 5 octets | identique aux octets 3-7 de la trame TPMS | non contrôlé |
 | 18-22 | Adresse du capteur AR | 5 octets | idem | non contrôlé |
 
-Le seuil de crevaison (0,5 bar), le seuil de fuite (−0,15 bar/h), le délai de perte (60 s), la fenêtre d'écoute et la période d'écran ne font pas partie de cette caractéristique : ils ne sont pas réglables depuis l'application.
+Le seuil de crevaison (0,5 bar), le seuil de fuite (−0,15 bar/h), le délai de perte (60 s en roulant, 600 s à l'arrêt), la fenêtre d'écoute et la période d'écran ne font pas partie de cette caractéristique : ils ne sont pas réglables depuis l'application.
 
 **Contrôle à l'écriture.** Le boîtier ne fait pas confiance aveuglément à ce qu'on lui écrit, même sur un lien chiffré : `TPMS.verifierReglages` (`logique/protocole.js`) renvoie la raison du refus si une valeur est hors plage, et rien n'est appliqué. L'application fait le même contrôle avant d'envoyer (`app/app.js`). Si l'adresse d'un capteur change, le boîtier oublie tout ce qu'il savait de l'ancien (`TPMS.creerRoue`).
 

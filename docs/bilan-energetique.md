@@ -4,7 +4,7 @@ Projet BTS CIEL option IR – Thibault MORRETTON – Épreuve E6 « Valorisation
 
 Objectif du cahier des charges (ENF-01) : **autonomie du boîtier d'au moins une semaine**, en visant plusieurs semaines.
 
-Toutes les valeurs de ce document viennent de `logique/energie.js`. Les chiffres des calculs ont été obtenus en **exécutant** les fonctions `TPMS.bilanJournee`, `TPMS.consoInstantaneeMa` et `TPMS.dureeViePileCapteurJours` avec Node.js, et non recopiés à la main. Le matériel n'étant pas encore reçu, les consommations sont des **hypothèses** tirées des fiches techniques ; le § 7 décrit comment les mesurer.
+Toutes les valeurs de ce document viennent de `logique/energie.js`. Les chiffres des calculs ont été obtenus en **exécutant** les fonctions `TPMS.bilanJournee`, `TPMS.consoInstantaneeMa` et `TPMS.dureeViePileCapteurJours` avec Node.js, et non recopiés à la main. Le matériel n'étant pas encore reçu, les consommations sont des **hypothèses** tirées des fiches techniques ; le § 8 décrit comment les mesurer.
 
 Unités : courant en mA, charge en mAh (1 mAh = 3,6 C = 3 600 mA·s). Pour les événements brefs (rafraîchir l'écran, biper), on raisonne en **charge par événement**, en mA·s : courant × durée.
 
@@ -61,7 +61,7 @@ Calculé avec `TPMS.consoInstantaneeMa` :
 
 | Choix | Où | Effet |
 |---|---|---|
-| Écoute radio par **fenêtres** : 2 s toutes les 5 s | `ecouteFenetreMs`, `ecoutePeriodeMs` dans `TPMS.creerBoitier` ; `TPMS.boitierEcoute` | La radio, premier poste de consommation hors éclairage, ne fonctionne que 40 % du temps éveillé |
+| Écoute radio par **fenêtres** : 3 s toutes les 5 s, à une position qui change d'une période à l'autre ; écoute continue de 15 s seulement quand une trame est douteuse | `ecouteFenetreMs`, `ecoutePeriodeMs` dans `TPMS.creerBoitier` ; `TPMS.boitierEcoute`, `TPMS.ECOUTE_RENFORCEE_MS` | La radio, premier poste de consommation, ne fonctionne que 60 % du temps éveillé |
 | Écran rafraîchi **au plus toutes les 2 s** en roulant, et **seulement si l'image change** | `periodeEcranMs` ; `TPMS.ecransDifferents` dans `TPMS.boitierMiseAJour` | Pas de rafraîchissement inutile ; à l'arrêt, l'écran ne consomme rien |
 | **Hystérésis** de 0,03 bar sur la pression affichée | `TPMS.HYSTERESIS_AFFICHAGE_BAR` | Le bruit du capteur (±0,01 bar) ne provoque pas de rafraîchissement |
 | **Veille** après 5 min sans tour de roue ni appui | `delaiVeilleMs` ; `TPMS.boitierMiseAJour` | Le boîtier passe à 5 µA ; réveil par la roue ou un bouton |
@@ -79,7 +79,7 @@ Calculé avec `TPMS.consoInstantaneeMa` :
 | Éclairage | 15 min (0,25 h) |
 | Application connectée | 6 min (0,1 h) |
 | Alertes | 0 |
-| Fenêtre d'écoute / période | 2 000 ms / 5 000 ms |
+| Fenêtre d'écoute / période | 3 000 ms / 5 000 ms |
 | Période d'écran en roulant | 2 000 ms |
 | Délai avant veille | 5 min (300 000 ms) |
 
@@ -93,22 +93,28 @@ heures d'éveil = 1 + 2 × 5 min = 1 + 0,1667 = **1,1667 h** ; heures de veille 
 
 | Poste | Calcul | mAh par jour | Part |
 |---|---|---|---|
-| Veille | 22,833 h × 0,005 mA | 0,114 | 1,9 % |
-| Processeur éveillé | 1,1667 h × 0,02 mA | 0,023 | 0,4 % |
-| Écoute radio des capteurs | 1,1667 h × (2/5) × 5 mA | 2,333 | 39,6 % |
-| Écran e-paper | 1 800 × 1,8 mA·s / 3 600 | 0,900 | 15,3 % |
-| Éclairage LED | 0,25 h × 10 mA | 2,500 | 42,4 % |
+| Veille | 22,833 h × 0,005 mA | 0,114 | 1,6 % |
+| Processeur éveillé | 1,1667 h × 0,02 mA | 0,023 | 0,3 % |
+| Écoute radio des capteurs | 1,1667 h × (3/5) × 5 mA | 3,500 | 49,6 % |
+| Écran e-paper | 1 800 × 1,8 mA·s / 3 600 | 0,900 | 12,7 % |
+| Éclairage LED | 0,25 h × 10 mA | 2,500 | 35,4 % |
 | Liaison avec l'app | 0,1 h × 0,25 mA | 0,025 | 0,4 % |
 | Alertes (bip + LED) | 0 alerte | 0,000 | 0 % |
-| **Total** | | **5,896 mAh/jour** | 100 % |
+| **Total** | | **7,063 mAh/jour** | 100 % |
 
 ### 3.3 Autonomie
 
-autonomie = 450 mAh / 5,896 mAh par jour = **76,3 jours**, soit environ 11 semaines.
+autonomie = 450 mAh / 7,063 mAh par jour = **63,7 jours**, soit environ 9 semaines.
 
-L'exigence ENF-01 (≥ 7 jours) est respectée avec une marge d'un facteur 10 environ, **selon le modèle**. Le test « énergie : autonomie supérieure à 1 semaine (cahier des charges) » de `simulateur/tests/tests.js` vérifie ce résultat, et le test « énergie : poste radio » vérifie le calcul du poste radio (1,1667 h × 40 % × 5 mA = 2,33 mAh).
+L'exigence ENF-01 (≥ 7 jours) est respectée avec une marge d'un facteur 9 environ, **selon le modèle**. Le test « énergie : autonomie supérieure à 1 semaine (cahier des charges) » de `simulateur/tests/tests.js` vérifie ce résultat, et le test « énergie : poste radio » vérifie le calcul du poste radio (1,1667 h × 60 % × 5 mA = 3,5 mAh).
 
-Deux postes représentent à eux seuls 82 % de la consommation : **l'écoute radio** et **l'éclairage**. Ce sont eux qu'il faudra mesurer en priorité.
+Deux postes représentent à eux seuls 85 % de la consommation : **l'écoute radio** et **l'éclairage**. Ce sont eux qu'il faudra mesurer en priorité.
+
+### 3.4 Pourquoi une fenêtre de 3 s plutôt que 2 s
+
+La fenêtre de 2 s donnait 76,3 jours. Mais la fenêtre doit maintenant changer de position d'une période à l'autre (voir § 4.1), et avec 2 s à position variable, le pire délai d'alerte d'une crevaison montait à 34 s. On accepte donc de perdre 12,6 jours d'autonomie (1,167 mAh/jour de plus) parce que la fenêtre de 3 s, avec l'écoute renforcée, ramène ce pire délai à 9 s (mesures détaillées au § 6.5 de `analyse-de-risques.md`). Une fenêtre de 3 s dure au moins une période d'annonce d'un capteur en roulage (3 s) : chaque fenêtre entend donc forcément le capteur.
+
+L'écoute renforcée (15 s de radio continue après une trame douteuse) n'est pas comptée dans ce bilan : elle ne se déclenche que lors d'un événement rare (crevaison, regonflage, attaque). Une écoute renforcée coûte au plus 15 s × 5 mA × 40 % (part du temps où la radio aurait été coupée) = 30 mA·s ≈ 0,008 mAh, soit environ 0,1 % de la journée type.
 
 ---
 
@@ -121,43 +127,70 @@ Chaque ligne modifie un seul paramètre du profil de base ; les autres restent i
 | Fenêtre | Part du temps en écoute | Poste radio (mAh/j) | Total (mAh/j) | Autonomie |
 |---|---|---|---|---|
 | 1 s | 20 % | 1,167 | 4,729 | 95,2 jours |
-| **2 s (défaut)** | **40 %** | **2,333** | **5,896** | **76,3 jours** |
-| 3 s | 60 % | 3,500 | 7,063 | 63,7 jours |
+| 2 s | 40 % | 2,333 | 5,896 | 76,3 jours |
+| **3 s (défaut)** | **60 %** | **3,500** | **7,063** | **63,7 jours** |
 | 5 s (écoute continue) | 100 % | 5,833 | 9,396 | 47,9 jours |
 
-Une fenêtre plus courte économise de l'énergie, mais le boîtier entend moins de trames : avec une annonce toutes les 3 s, une fenêtre de 2 s ne contient pas toujours une annonce. Le délai « capteur perdu » de 60 s et la mesure d'historique toutes les 30 s le tolèrent. L'écoute par fenêtres a aussi eu une conséquence sur la sécurité : elle a révélé une faille, corrigée depuis, décrite au § 6.4 de `analyse-de-risques.md`.
+Une fenêtre plus courte économise de l'énergie, mais le boîtier entend moins de trames : avec une annonce toutes les 3 s, une fenêtre de 2 s ne contient pas toujours une annonce, et une crevaison est signalée plus tard (§ 3.4).
+
+La position de la fenêtre dans la période de 5 s change à chaque période (pseudo-hasard calculé à partir du numéro de période, `TPMS.melangerEntier`). Avec une fenêtre toujours au même endroit, un capteur garé, qui n'annonce plus qu'une fois par minute (un multiple de 5 s), retombait toujours au même moment du cycle : s'il tombait hors de la fenêtre, il n'était jamais entendu, et le boîtier affichait une fausse alerte « capteur perdu ». Ce défaut (verrouillage de phase) a été révélé par la simulation d'une semaine. Il ne change pas la consommation.
+
+L'écoute par fenêtres a aussi eu une conséquence sur la sécurité : elle a révélé une faille, corrigée depuis, décrite au § 6.4 de `analyse-de-risques.md`.
 
 ### 4.2 Période de rafraîchissement de l'écran en roulant
 
 | Période | Poste écran (mAh/j) | Total (mAh/j) | Autonomie |
 |---|---|---|---|
-| 1 s | 1,800 | 6,796 | 66,2 jours |
-| **2 s (défaut)** | **0,900** | **5,896** | **76,3 jours** |
-| 5 s | 0,360 | 5,356 | 84,0 jours |
+| 1 s | 1,800 | 7,963 | 56,5 jours |
+| **2 s (défaut)** | **0,900** | **7,063** | **63,7 jours** |
+| 5 s | 0,360 | 6,523 | 69,0 jours |
 
 ### 4.3 Éclairage
 
 | Éclairage par jour | Poste éclairage (mAh/j) | Total (mAh/j) | Autonomie |
 |---|---|---|---|
-| 0 | 0 | 3,396 | 132,5 jours |
-| **15 min (défaut)** | **2,5** | **5,896** | **76,3 jours** |
-| 1 h | 10 | 13,396 | 33,6 jours |
-| 2 h | 20 | 23,396 | 19,2 jours |
+| 0 | 0 | 4,563 | 98,6 jours |
+| **15 min (défaut)** | **2,5** | **7,063** | **63,7 jours** |
+| 1 h | 10 | 14,563 | 30,9 jours |
+| 2 h | 20 | 24,563 | 18,3 jours |
 
-L'éclairage est le poste le plus sensible : 2 h d'éclairage par jour divisent l'autonomie par 4. Elle reste cependant supérieure à une semaine.
+L'éclairage est le poste le plus sensible : 2 h d'éclairage par jour divisent l'autonomie par 3,5 environ. Elle reste cependant supérieure à une semaine.
 
 ### 4.4 Délai avant veille, roulage, alertes
 
 | Variante | Total (mAh/j) | Autonomie |
 |---|---|---|
-| Veille après 30 s | 5,594 | 80,5 jours |
-| Veille après 1 h (maximum autorisé par `TPMS.verifierReglages`) | 9,590 | 46,9 jours |
-| 2 h de roulage par jour | 8,811 | 51,1 jours |
-| 5 alertes par jour (bip + 60 s de LED clignotante chacune) | 6,117 | 73,6 jours |
+| Veille après 10 s (minimum autorisé par `TPMS.verifierReglages`) | 6,577 | 68,4 jours |
+| Veille après 30 s | 6,610 | 68,1 jours |
+| Veille après 1 min | 6,661 | 67,6 jours |
+| Veille après 15 min | 8,068 | 55,8 jours |
+| Veille après 1 h (maximum autorisé par `TPMS.verifierReglages`) | 12,590 | 35,7 jours |
+| 2 h de roulage par jour | 10,977 | 41,0 jours |
+| 5 alertes par jour (bip + 60 s de LED clignotante chacune) | 7,283 | 61,8 jours |
 
 ### 4.5 Cas défavorable
 
 2 h de roulage, 2 h d'éclairage et radio en écoute continue : **32,8 mAh/jour**, soit **13,7 jours**. Même dans ce cas, l'exigence d'une semaine est tenue.
+
+### 4.6 Vérification par la simulation d'une semaine
+
+Le bilan ci-dessus est un calcul à partir de durées moyennes. Le simulateur permet de le recouper avec une semaine complète calculée pas à pas (`simulateur/moteur.js`, planning « semaine type ») : du lundi au vendredi, trajet domicile-travail à 7 h 45 et à 17 h 30 ; samedi à 10 h et dimanche à 9 h 30, une sortie sur le parcours choisi ; dimanche de 20 h à 23 h, boîtier en charge. Le boîtier, la radio, le circuit électrique et la LiPo (avec son autodécharge et son circuit de protection) sont simulés comme pendant une sortie.
+
+Résultats (parcours lyon-ville, 1 semaine, graine 8) :
+
+| Grandeur | Valeur |
+|---|---|
+| Sorties effectuées | 12, soit 462 min de roulage |
+| Temps passé en veille | 94,9 % |
+| Temps en alerte | 0 minute |
+| Trames acceptées par le boîtier | 8 685 |
+| Batterie avant la recharge du dimanche | 92,6 % (≈ 37 mAh consommés en 6,6 jours, soit ≈ 5,6 mAh/jour) |
+| Batterie après la recharge | 99,6 % |
+| Durée du calcul | ≈ 41 s |
+
+Comparaison avec le modèle : la semaine simulée **ne comporte ni éclairage ni application connectée**. On ne peut donc pas la comparer directement aux 7,063 mAh/jour de la journée type, dont 2,5 mAh viennent de l'éclairage. Avec le profil de la semaine (462 min de roulage et 12 sorties en 6,6 jours, soit 1,17 h et 1,8 sortie par jour, sans éclairage ni application), `TPMS.bilanJournee` donne 5,14 mAh/jour, soit 34 mAh en 6,6 jours. La simulation consomme environ 10 % de plus (37 mAh). L'écart (≈ 0,5 mAh/jour) est du même ordre que les postes que le simulateur ajoute au modèle : autodécharge de la LiPo (≈ 0,5 mAh/jour) et circuit de protection (3 µA, ≈ 0,07 mAh/jour), voir `schema-electrique.md` § 4.12.
+
+La semaine simulée confirme donc l'ordre de grandeur du modèle, sans vérifier le poste éclairage. Elle a surtout servi à révéler des défauts invisibles sur une seule sortie (verrouillage de phase de la fenêtre d'écoute, fausse fuite lente due au refroidissement du pneu, vélo garé qui dévalait la pente), tous corrigés.
 
 ---
 
@@ -203,9 +236,9 @@ C'est **environ 50 fois** le courant de veille (0,255 mA au lieu de 0,005 mA) :
 |---|---|---|
 | Veille normale | 0,005 mA | 3 750 jours en théorie (l'autodécharge de la LiPo, non modélisée, sera alors le vrai facteur limitant) |
 | Veille, reed resté fermé | 0,255 mA | 73,5 jours |
-| Journée type + reed fermé 24 h sur 24 | 5,896 + 6,0 = 11,9 mAh/j | 37,8 jours |
+| Journée type + reed fermé 24 h sur 24 | 7,063 + 6,0 = 13,1 mAh/j | 34,4 jours |
 
-L'autonomie reste supérieure à une semaine, mais elle est **divisée par deux** dans le cas de la journée type. Pistes pour le firmware (non encore réalisées) :
+L'autonomie reste supérieure à une semaine, mais elle est **presque divisée par deux** dans le cas de la journée type (34,4 jours au lieu de 63,7). Pistes pour le firmware (non encore réalisées) :
 
 - utiliser une résistance de tirage externe de forte valeur à la place de la résistance interne : avec 1 MΩ, le courant tombe à 3,3 µA ;
 - détecter qu'aucun top n'est arrivé alors que l'entrée reste à 0 depuis plusieurs secondes, puis désactiver la résistance de tirage avant la mise en veille ;
@@ -218,7 +251,7 @@ L'autonomie reste supérieure à une semaine, mais elle est **divisée par deux*
 - Les consommations sont des valeurs de fiches techniques ou des estimations, pas des mesures.
 - Ne sont pas modélisés : l'autodécharge de la LiPo, le courant de repos du régulateur et du circuit de charge de la carte XIAO, un éventuel pont diviseur de mesure de la tension batterie, la consommation de l'écran au repos s'il n'est pas mis hors tension.
 - En roulant, le modèle suppose que l'écran change toutes les 2 s (hypothèse pessimiste).
-- Le modèle de journée ne compte pas le cas du reed resté fermé (traité à part au § 6).
+- Le modèle de journée ne compte pas le cas du reed resté fermé (traité à part au § 6), ni l'écoute renforcée (négligeable, § 3.4).
 
 ---
 
@@ -251,7 +284,7 @@ Une résistance de faible valeur R est placée **en série** dans l'alimentation
 
 Le **courant de veille** (et celui du reed resté fermé) se mesure donc au **multimètre en série**, calibre µA : c'est un courant constant, l'oscilloscope n'apporte rien.
 
-Réglages de l'oscilloscope : couplage DC, limitation de bande passante à 20 MHz pour réduire le bruit, mode moyenne ou haute résolution si disponible, base de temps adaptée à l'événement (1 s/div pour voir les fenêtres d'écoute de 2 s toutes les 5 s, 100 ms/div pour un rafraîchissement d'écran).
+Réglages de l'oscilloscope : couplage DC, limitation de bande passante à 20 MHz pour réduire le bruit, mode moyenne ou haute résolution si disponible, base de temps adaptée à l'événement (1 s/div pour voir les fenêtres d'écoute de 3 s toutes les 5 s, dont la position change d'une période à l'autre, 100 ms/div pour un rafraîchissement d'écran).
 
 ### 8.3 Mesure de la charge par intégration
 
@@ -271,7 +304,7 @@ Deux méthodes :
 | Courant de veille | `veilleMa` = 0,005 mA | Multimètre, calibre µA |
 | Courant reed fermé, en veille | `reedColleMa` = 0,25 mA | Multimètre, aimant maintenu devant le reed |
 | Éveillé, radio coupée | `reposMa` = 0,02 mA | Oscilloscope (shunt 10 Ω) entre deux fenêtres, ou multimètre avec un firmware de test qui coupe la radio |
-| Écoute radio | `radioEcouteMa` = 5 mA | Oscilloscope, shunt 10 Ω, hauteur du plateau pendant la fenêtre de 2 s |
+| Écoute radio | `radioEcouteMa` = 5 mA | Oscilloscope, shunt 10 Ω, hauteur du plateau pendant la fenêtre de 3 s |
 | Rafraîchissement partiel / complet | 1,5 / 6 mA·s | Intégration (§ 8.3) |
 | Bip | 9 mA·s | Intégration, shunt 1 Ω |
 | LED d'éclairage | 10 mA | Shunt 1 Ω ou multimètre |
@@ -279,4 +312,4 @@ Deux méthodes :
 
 ### 8.5 Validation globale
 
-Une fois les valeurs mesurées reportées dans `logique/energie.js`, le bilan est recalculé automatiquement (tests et section §5 du simulateur). Pour une validation de bout en bout sans attendre deux mois : charger complètement la LiPo, faire fonctionner le boîtier en écoute radio continue (environ 5 mA, soit environ 90 h pour 450 mAh selon le modèle), relever la tension de la batterie à intervalles réguliers et comparer la durée obtenue à la prévision.
+Une fois les valeurs mesurées reportées dans `logique/energie.js`, le bilan est recalculé automatiquement (tests, et carte « Autonomie sur une journée type » de la page Électronique du simulateur). Pour une validation de bout en bout sans attendre deux mois : charger complètement la LiPo, faire fonctionner le boîtier en écoute radio continue (environ 5 mA, soit environ 90 h pour 450 mAh selon le modèle), relever la tension de la batterie à intervalles réguliers et comparer la durée obtenue à la prévision.

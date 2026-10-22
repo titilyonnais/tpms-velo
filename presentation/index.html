@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soutenance E6 · Kit TPMS vélo</title>
+  <meta name="description" content="Diaporama de soutenance E6 (BTS CIEL IR) de Thibault MORRETTON : kit de surveillance de la pression des pneus de vélo, conçu en simulation.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="presentation.css">
+</head>
+<body>
+
+<!--
+  Diaporama de soutenance — épreuve E6 « Valorisation de la donnée et cybersécurité »
+  Navigation : flèches, espace, Début/Fin, clic (tiers gauche = retour), glissement au doigt.
+  N : notes d'orateur · F : plein écran · Ctrl+P : export PDF (une diapositive par page).
+  Les chiffres viennent de la fiche des faits du 22/10/2026 et des documents de docs/.
+-->
+
+<div class="progression" id="progression"></div>
+
+<main class="scene" id="scene">
+
+<!-- ================================================================ 1 -->
+<section class="diapo" data-notes="Se présenter. Projet seul. Le matériel n'est pas encore arrivé : tout ce que je vais montrer a été conçu, testé et attaqué en simulation. L'écran à droite est dessiné par le code du boîtier.">
+  <div class="corps grille g-texte-visuel" style="align-items:center; grid-template-columns: 1fr 470px;">
+    <div>
+      <p class="repere">BTS CIEL option IR · Épreuve E6 · Valorisation de la donnée et cybersécurité</p>
+      <h1 class="titre-principal">Un kit de surveillance de la pression des pneus de vélo, <em>conçu et attaqué en simulation</em> avant d'exister</h1>
+      <p class="auteur">Thibault MORRETTON</p>
+      <p class="discret" style="margin:0">Projet individuel · capteurs TPMS BLE, boîtier de guidon e-paper, application Web Bluetooth</p>
+      <div class="champs">
+        <span class="champ">[Établissement]</span>
+        <span class="champ">[Professeur référent]</span>
+        <span class="champ">[Date de soutenance]</span>
+      </div>
+    </div>
+    <div class="boitier">
+      <div class="boitier-leds"><span class="led"></span></div>
+      <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="roulage" aria-label="Écran e-paper du boîtier en roulant"></canvas></div>
+      <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 2 -->
+<section class="diapo" data-notes="Le constat : une crevaison lente se voit trop tard. Les concurrents n'ont pas d'afficheur : il faut regarder son téléphone. Notre différence : un écran e-paper dédié, lisible au soleil, qui fonctionne sans smartphone.">
+  <p class="repere">Le besoin et le produit</p>
+  <h2>Une crevaison lente se remarque souvent quand le pneu est <em>déjà presque à plat</em></h2>
+  <div class="corps grille g-large-etroit">
+    <div>
+      <div class="carte carte-accent" style="margin-bottom:24px">
+        <span class="etiquette">Le kit</span>
+        <div class="chiffre">≈ 89 €<small>prix de vente visé</small></div>
+        <p class="discret">2 capteurs de pression vissés sur les valves · 1 boîtier de guidon à écran e-paper · 1 application web</p>
+      </div>
+      <div class="defile">
+        <table>
+          <thead><tr><th>Produit</th><th>Prix indicatif</th><th>Afficheur dédié</th></tr></thead>
+          <tbody>
+            <tr><td>SKS Airspy</td><td>≈ 100 € la paire de capteurs</td><td class="discret">Non, smartphone ou compteur</td></tr>
+            <tr><td>Quarq TyreWiz</td><td>≈ 250 £ la paire</td><td class="discret">Non, smartphone ou compteur</td></tr>
+            <tr class="retenu"><td><b>Ce projet</b></td><td>≈ 89 € le kit</td><td><b>Oui, e-paper</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="grille" style="gap:16px">
+      <div class="carte"><h3>Lisible en plein soleil</h3><p class="discret petit">E-paper réflectif, sans rétroéclairage ; une image affichée ne consomme rien.</p></div>
+      <div class="carte"><h3>Sans smartphone</h3><p class="discret petit">L'application ne sert qu'aux réglages et à l'historique.</p></div>
+      <div class="carte"><h3>Compteur intégré</h3><p class="discret petit">Vitesse et distance par aimant de rayon et interrupteur reed.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 3 -->
+<section class="diapo" data-notes="Chaque exigence a un critère mesurable. Je les retrouverai plus loin : crevaison en moins de 10 s, autonomie d'au moins une semaine, fuite lente, cybersécurité.">
+  <p class="repere">Cahier des charges</p>
+  <h2>Six exigences mesurables guident toute la conception</h2>
+  <div class="corps grille g3 grands" style="grid-auto-rows: 1fr;">
+    <div class="carte"><span class="etiquette rouge">EF-09</span><div class="chiffre">&lt; 10 s</div><p class="discret petit">entre le passage sous 0,5 bar et l'alerte CREVAISON (bip + LED + écran)</p></div>
+    <div class="carte"><span class="etiquette orange">EF-08</span><div class="chiffre">−0,15<small>bar/h</small></div><p class="discret petit">pente de la pression qui déclenche FUITE LENTE, calculée sur 10 à 20 min d'historique</p></div>
+    <div class="carte"><span class="etiquette vert">ENF-01</span><div class="chiffre">≥ 7<small>jours</small></div><p class="discret petit">d'autonomie pour le boîtier (LiPo 500 mAh), en visant plusieurs semaines</p></div>
+    <div class="carte"><span class="etiquette">EF-12</span><div class="chiffre">0<small>smartphone</small></div><p class="discret petit">nécessaire en roulant : pression, température, piles, vitesse et distance sur l'e-paper</p></div>
+    <div class="carte"><span class="etiquette">ENF-12 à 17</span><div class="chiffre">4<small>protections</small></div><p class="discret petit">liste blanche, vraisemblance, contrôle du rythme, liaison app appairée et chiffrée</p></div>
+    <div class="carte"><span class="etiquette">EF-13 à 15</span><div class="chiffre">1<small>page web</small></div><p class="discret petit">Web Bluetooth : réglages, courbes, fuite sur plusieurs jours, export CSV ; iPhone via Bluefy</p></div>
+  </div>
+</section>
+
+<!-- ================================================================ 4 -->
+<section class="diapo" data-notes="Deux liaisons radio de nature opposée. Capteurs vers boîtier : des annonces en clair, que je ne maîtrise pas, c'est là que porte l'analyse de risques. Boîtier vers application : une connexion que je maîtrise, appairée par code et chiffrée. Safari ne gère pas Web Bluetooth, d'où Bluefy sur iPhone.">
+  <p class="repere">Architecture</p>
+  <h2>Trois éléments reliés par deux liaisons radio : <em>l'une subie, l'autre maîtrisée</em></h2>
+  <div class="corps">
+    <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 500" role="img" aria-label="Capteurs TPMS vers boîtier XIAO nRF52840, boîtier vers application Web Bluetooth">
+      <defs>
+        <marker id="fl-rouge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f87171"/></marker>
+        <marker id="fl-gris" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b6b76"/></marker>
+        <marker id="fl-vert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+      </defs>
+      <!-- Capteurs -->
+      <rect x="0" y="20" width="290" height="120" rx="16" fill="#0e0e11" stroke="#24242c"/>
+      <text x="22" y="58" font-size="24" font-weight="600">Capteur avant</text>
+      <text x="22" y="90" font-size="18" fill="#a1a1aa">TPMS BLE, bouchon de valve</text>
+      <text x="22" y="116" font-size="18" fill="#a1a1aa">pile CR1632</text>
+      <rect x="0" y="170" width="290" height="120" rx="16" fill="#0e0e11" stroke="#24242c"/>
+      <text x="22" y="208" font-size="24" font-weight="600">Capteur arrière</text>
+      <text x="22" y="240" font-size="18" fill="#a1a1aa">TPMS BLE, bouchon de valve</text>
+      <text x="22" y="266" font-size="18" fill="#a1a1aa">pile CR1632</text>
+      <rect x="0" y="350" width="290" height="100" rx="16" fill="#0e0e11" stroke="#24242c"/>
+      <text x="22" y="388" font-size="22" font-weight="600">Aimant + reed</text>
+      <text x="22" y="420" font-size="18" fill="#a1a1aa">un top par tour de roue</text>
+
+      <!-- Liaison capteurs → boîtier -->
+      <path d="M296,80 C420,80 440,170 556,170" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
+      <path d="M296,230 C420,230 440,200 556,200" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
+      <path d="M296,400 L556,400" fill="none" stroke="#6b6b76" stroke-width="2.5" marker-end="url(#fl-gris)"/>
+      <text x="426" y="26" font-size="18" text-anchor="middle" fill="#f87171" font-weight="600">Annonces BLE en clair</text>
+      <text x="426" y="50" font-size="16" text-anchor="middle" fill="#a1a1aa">18 octets, sans chiffrement</text>
+      <text x="426" y="70" font-size="16" text-anchor="middle" fill="#a1a1aa">ni signature</text>
+      <text x="426" y="388" font-size="16" text-anchor="middle" fill="#a1a1aa">fil, entrée GPIO</text>
+
+      <!-- Boîtier -->
+      <rect x="562" y="20" width="350" height="430" rx="22" fill="#110f18" stroke="#a78bfa" stroke-opacity=".55"/>
+      <text x="590" y="62" font-size="26" font-weight="600">Boîtier de guidon</text>
+      <text x="590" y="100" font-size="19" fill="#a78bfa" class="mono">Seeed XIAO nRF52840</text>
+      <text x="590" y="146" font-size="19" fill="#d4d4d8">E-paper 1,54″ 200 × 200</text>
+      <text x="590" y="180" font-size="19" fill="#d4d4d8">Buzzer + LED d'alerte</text>
+      <text x="590" y="214" font-size="19" fill="#d4d4d8">2 LED d'éclairage latérales</text>
+      <text x="590" y="248" font-size="19" fill="#d4d4d8">2 boutons étanches</text>
+      <text x="590" y="282" font-size="19" fill="#d4d4d8">LiPo 500 mAh</text>
+      <text x="590" y="316" font-size="19" fill="#d4d4d8">Recharge magnétique</text>
+      <text x="590" y="350" font-size="19" fill="#d4d4d8">Boîtier 3D visé IPX7</text>
+      <text x="590" y="410" font-size="17" fill="#a1a1aa">Décode, filtre, alerte, affiche</text>
+
+      <!-- Liaison boîtier ↔ app -->
+      <path d="M922,235 L1126,235" fill="none" stroke="#34d399" stroke-width="3" marker-start="url(#fl-vert)" marker-end="url(#fl-vert)"/>
+      <text x="1024" y="196" font-size="18" text-anchor="middle" fill="#34d399" font-weight="600">BLE appairée</text>
+      <text x="1024" y="218" font-size="18" text-anchor="middle" fill="#34d399" font-weight="600">et chiffrée</text>
+      <text x="1024" y="266" font-size="15" text-anchor="middle" fill="#a1a1aa">LE Secure Connections</text>
+      <text x="1024" y="288" font-size="15" text-anchor="middle" fill="#a1a1aa">code à 6 chiffres</text>
+      <text x="1024" y="310" font-size="15" text-anchor="middle" fill="#a1a1aa">affiché sur l'e-paper</text>
+
+      <!-- Application -->
+      <rect x="1134" y="90" width="290" height="290" rx="22" fill="#0e0e11" stroke="#24242c"/>
+      <text x="1156" y="132" font-size="24" font-weight="600">Application web</text>
+      <text x="1156" y="166" font-size="18" fill="#a78bfa" class="mono">Web Bluetooth</text>
+      <text x="1156" y="206" font-size="18" fill="#d4d4d8">iPhone : Bluefy</text>
+      <text x="1156" y="234" font-size="18" fill="#d4d4d8">PC, Android : Chrome</text>
+      <text x="1156" y="278" font-size="17" fill="#a1a1aa">Réglages, seuils</text>
+      <text x="1156" y="304" font-size="17" fill="#a1a1aa">Historique, fuite lente</text>
+      <text x="1156" y="330" font-size="17" fill="#a1a1aa">Export CSV</text>
+    </svg></div>
+  </div>
+  <p class="note-bas">Safari n'implémente pas Web Bluetooth : sur l'iPhone, la page s'ouvre dans le navigateur Bluefy. Flutter a été écarté, car compiler pour iOS exige un Mac.</p>
+</section>
+
+<!-- ================================================================ 5 -->
+<section class="diapo" data-notes="Être honnête : la commande est passée le 20/10, rien n'est arrivé. C'est ce qui a motivé la simulation complète. Le schéma électrique est fait, il manque quelques composants (MOSFET, diode, résistances).">
+  <p class="repere">Matériel</p>
+  <h2>Le matériel est commandé pour 86,61 € TTC, <em>mais pas encore reçu</em></h2>
+  <div class="corps grille" style="grid-template-columns: 600px 1fr; gap: 40px; align-items:start;">
+    <div class="defile">
+      <table class="serre" style="font-size:18px">
+        <tbody>
+          <tr><td>Lot de 2 capteurs TPMS BLE</td><td class="n">22,19 €</td></tr>
+          <tr><td>Seeed XIAO nRF52840</td><td class="n">11,99 €</td></tr>
+          <tr><td>E-paper WeAct 1,54″ (SSD1681)</td><td class="n">8,49 €</td></tr>
+          <tr><td>LiPo 3,7 V 500 mAh</td><td class="n">5,59 €</td></tr>
+          <tr><td>Aimant de rayon + reed PS-3150</td><td class="n">3,95 €</td></tr>
+          <tr><td>2 boutons étanches, buzzer, LED, joints, connecteur</td><td class="n">7,52 €</td></tr>
+          <tr><td class="discret">Frais de port</td><td class="n discret">26,88 €</td></tr>
+          <tr class="retenu"><td><b>Total TTC (AliExpress, 20/10/2026)</b></td><td class="n"><b>86,61 €</b></td></tr>
+        </tbody>
+      </table>
+      <p class="discret tres-petit" style="margin:16px 0 0">À commander en plus : 2 MOSFET canal N, 1 diode 1N4148, résistances. Sur place : imprimante 3D, fer à souder CMS, oscilloscope ; pas de mesureur de consommation.</p>
+    </div>
+    <figure style="margin:0">
+      <div class="image-schema"><img src="../docs/schema/schema-boitier.svg" alt="Schéma électrique du boîtier de guidon"></div>
+      <figcaption class="discret tres-petit" style="margin-top:8px">Schéma électrique du boîtier (docs/schema/schema-boitier.svg)</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================================================================ 6 -->
+<section class="diapo" data-notes="Principe central : la logique est écrite une seule fois, sous forme de fonctions pures. Le temps est un paramètre, ce qui permet de simuler une semaine en quelques secondes. La même fonction existe en JS et en C++ : exemple de la compensation en température.">
+  <p class="repere">Méthode</p>
+  <h2>Sans matériel, le projet est devenu un jumeau numérique : <em>la même logique tourne partout</em></h2>
+  <div class="corps">
+    <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 300" role="img" aria-label="Le dossier logique est utilisé par le simulateur, l'application et le firmware">
+      <defs>
+        <marker id="fl-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
+      </defs>
+      <rect x="432" y="0" width="560" height="112" rx="18" fill="#110f18" stroke="#a78bfa" stroke-opacity=".6"/>
+      <text x="712" y="40" font-size="24" font-weight="600" text-anchor="middle" class="mono" fill="#a78bfa">logique/</text>
+      <text x="712" y="72" font-size="18" text-anchor="middle" fill="#d4d4d8">trame · vitesse · fuite · alertes · sécurité · protocole</text>
+      <text x="712" y="98" font-size="16" text-anchor="middle" fill="#a1a1aa">fonctions pures : ni page web, ni horloge, ni radio</text>
+      <path d="M560,114 L230,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <path d="M712,114 L712,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <path d="M864,114 L1194,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <rect x="0" y="196" width="450" height="104" rx="18" fill="#0e0e11" stroke="#24242c"/>
+      <text x="24" y="232" font-size="22" font-weight="600">Simulateur · JavaScript</text>
+      <text x="24" y="262" font-size="17" fill="#a1a1aa">sources simulées : monde physique,</text>
+      <text x="24" y="286" font-size="17" fill="#a1a1aa">radio, pirate</text>
+      <rect x="487" y="196" width="450" height="104" rx="18" fill="#0e0e11" stroke="#24242c"/>
+      <text x="511" y="232" font-size="22" font-weight="600">Application · JavaScript</text>
+      <text x="511" y="262" font-size="17" fill="#a1a1aa">fichiers inclus tels quels,</text>
+      <text x="511" y="286" font-size="17" fill="#a1a1aa">transport Web Bluetooth</text>
+      <rect x="974" y="196" width="450" height="104" rx="18" fill="#0e0e11" stroke="#24242c"/>
+      <text x="998" y="232" font-size="22" font-weight="600">Firmware XIAO · C++</text>
+      <text x="998" y="262" font-size="17" fill="#a1a1aa">traduction fidèle ; sources réelles :</text>
+      <text x="998" y="286" font-size="17" fill="#a1a1aa">scan BLE, reed, boutons</text>
+    </svg></div>
+    <div class="grille g2" style="margin-top:26px; gap:20px">
+      <div>
+        <p class="tres-petit discret" style="margin:0 0 6px">logique/fuite.js</p>
+<pre class="code"><span class="kw">TPMS.pressionCompenseeBar</span> = function (pressionRelBar, temperatureC) {
+  var absolue = pressionRelBar + 1.01325;
+  return absolue * 293.15 / (temperatureC + 273.15) - 1.01325;
+};</pre>
+      </div>
+      <div>
+        <p class="tres-petit discret" style="margin:0 0 6px">firmware/tpms_boitier/src/logique/fuite.cpp</p>
+<pre class="code">float <span class="kw">pressionCompenseeBar</span>(float pressionRelBar, float temperatureC) {
+  float absolue = pressionRelBar + 1.01325f;
+  return absolue * 293.15f / (temperatureC + 273.15f) - 1.01325f;
+}</pre>
+      </div>
+    </div>
+  </div>
+  <p class="note-bas">Le temps est toujours un paramètre : <code>maintenantMs</code> dans le simulateur, <code>millis()</code> dans le firmware. Une semaine se rejoue en quelques secondes.</p>
+</section>
+
+<!-- ================================================================ 7 -->
+<section class="diapo" data-notes="Autour du boîtier simulé, un monde physique : pneu, météo, vélo, radio, électronique. Pas fixes de 50 ms : même graine et mêmes actions donnent exactement le même résultat, ce qui permet de rejouer une sortie.">
+  <p class="repere">Le monde simulé</p>
+  <h2>Autour du boîtier, la simulation reproduit <em>la physique, la radio et l'électricité</em></h2>
+  <div class="corps grille g3 grands" style="grid-auto-rows: 1fr; gap:20px">
+    <div class="carte"><h3>Pneu</h3><p class="discret petit">Loi des gaz parfaits, échauffement au soleil et en roulant, perméation de la chambre, crevaison, fuite lente, pompe.</p></div>
+    <div class="carte"><h3>Atmosphère</h3><p class="discret petit">Pression selon l'altitude : le capteur mesure par rapport à 1 013 hPa, d'où une erreur en montagne. Météo heure par heure.</p></div>
+    <div class="carte"><h3>Vélo et cycliste</h3><p class="discret petit">Poids, roulement selon la pression, air, freins, pentes ; 4 parcours réels autour de Lyon ; passages de l'aimant devant le reed.</p></div>
+    <div class="carte"><h3>Radio BLE</h3><p class="discret petit">Distance, ombrage, masquage par la jante, canaux 37/38/39, collisions, Wi-Fi, brouillage, vélos voisins, pirate.</p></div>
+    <div class="carte"><h3>Électronique</h3><p class="discret petit">LiPo et chargeur, courant de chaque composant selon l'état du boîtier, schéma animé ; batterie vide, boîtier éteint.</p></div>
+    <div class="carte carte-accent"><h3>Temps reproductible</h3><p class="discret petit">Pas fixes de 50 ms en roulant, 1 s au calme ; ≈ 12,7 µs par pas. Graine + actions horodatées : rejeu identique.</p></div>
+  </div>
+</section>
+
+<!-- ================================================================ 8 -->
+<section class="diapo" data-notes="La donnée de départ : 18 octets diffusés en clair. Expliquer le little-endian sur la pression. Point important pour la cybersécurité : l'adresse est fixe et il n'y a ni compteur ni signature. Format supposé, à vérifier à la réception des capteurs.">
+  <p class="repere">La donnée brute</p>
+  <h2>Chaque capteur diffuse 18 octets <em>en clair</em>, décodés octet par octet</h2>
+  <div class="corps">
+    <div class="trame" aria-label="Trame d'exemple : capteur avant, 2,1 bar, 20,5 °C, pile 95 %">
+      <div class="octet c-fab"><span class="val" data-octet="0">00</span><span class="idx">0</span></div>
+      <div class="octet c-fab"><span class="val" data-octet="1">01</span><span class="idx">1</span></div>
+      <div class="octet c-num"><span class="val" data-octet="2">80</span><span class="idx">2</span></div>
+      <div class="octet c-adr"><span class="val" data-octet="3">EA</span><span class="idx">3</span></div>
+      <div class="octet c-adr"><span class="val" data-octet="4">CA</span><span class="idx">4</span></div>
+      <div class="octet c-adr"><span class="val" data-octet="5">3F</span><span class="idx">5</span></div>
+      <div class="octet c-adr"><span class="val" data-octet="6">1B</span><span class="idx">6</span></div>
+      <div class="octet c-adr"><span class="val" data-octet="7">07</span><span class="idx">7</span></div>
+      <div class="octet c-pres"><span class="val" data-octet="8">50</span><span class="idx">8</span></div>
+      <div class="octet c-pres"><span class="val" data-octet="9">34</span><span class="idx">9</span></div>
+      <div class="octet c-pres"><span class="val" data-octet="10">03</span><span class="idx">10</span></div>
+      <div class="octet c-pres"><span class="val" data-octet="11">00</span><span class="idx">11</span></div>
+      <div class="octet c-temp"><span class="val" data-octet="12">02</span><span class="idx">12</span></div>
+      <div class="octet c-temp"><span class="val" data-octet="13">08</span><span class="idx">13</span></div>
+      <div class="octet c-temp"><span class="val" data-octet="14">00</span><span class="idx">14</span></div>
+      <div class="octet c-temp"><span class="val" data-octet="15">00</span><span class="idx">15</span></div>
+      <div class="octet c-pile"><span class="val" data-octet="16">5F</span><span class="idx">16</span></div>
+      <div class="octet c-alarm"><span class="val" data-octet="17">00</span><span class="idx">17</span></div>
+    </div>
+    <div class="champs-trame">
+      <div class="champ-trame" style="grid-column: span 2"><b>Fabricant</b>00 01</div>
+      <div class="champ-trame c-num"><b>N°</b>1</div>
+      <div class="champ-trame c-adr" style="grid-column: span 5"><b>Adresse fixe</b>EA:CA:3F:1B:07</div>
+      <div class="champ-trame c-pres" style="grid-column: span 4"><b>Pression</b>2,10 bar</div>
+      <div class="champ-trame c-temp" style="grid-column: span 4"><b>Température</b>20,50 °C</div>
+      <div class="champ-trame"><b>Pile</b>95 %</div>
+      <div class="champ-trame c-alarm"><b>Alarme</b>non</div>
+    </div>
+    <div class="grille g2" style="margin-top:30px; gap:22px">
+      <div class="calcul">
+        <span class="fl">pression, little-endian :</span><br>
+        50 34 03 00 → 0x00033450 = 210 000 Pa → <span class="vert">2,10 bar</span><br>
+        <span class="fl">température, centièmes de °C :</span><br>
+        02 08 00 00 → 0x00000802 = 2 050 → <span class="orange">20,50 °C</span>
+      </div>
+      <div class="carte" style="padding:22px 26px">
+        <span class="etiquette rouge">Conséquence pour la sécurité</span>
+        <p class="petit">Ni compteur, ni signature : rien ne distingue une trame rejouée ou imitée d'une vraie. L'adresse fixe permet aussi de reconnaître un vélo.</p>
+      </div>
+    </div>
+  </div>
+  <p class="note-bas">Octets recalculés à l'ouverture par <code>TPMS.encoderTrame</code> (logique/trame.js). Format supposé, d'après github.com/schlumpf2009/TPMS : à confirmer à la réception des capteurs.</p>
+</section>
+
+<!-- ================================================================ 9 -->
+<section class="diapo" data-notes="Valorisation de la donnée : la trame brute devient une information fiable. Trois contrôles avant d'accepter. L'historique est compensé en température : sans cela, un pneu qui refroidit simulait une fuite. La pente est une régression linéaire. Les mêmes données alimentent écran, alertes et application.">
+  <p class="repere">Chaîne de la donnée</p>
+  <h2>De la trame à l'alerte, la donnée est <em>filtrée, compensée, puis interprétée</em></h2>
+  <div class="corps">
+    <div class="chaine">
+      <div class="etape"><span class="num">1</span><b>Réception</b>Écoute 3 s toutes les 5 s, position variable ; 15 s d'écoute renforcée si doute</div>
+      <div class="etape"><span class="num">2</span><b>Décodage</b>18 octets, identifiant fabricant, n° ≥ 0x80 ; sinon trame invalide</div>
+      <div class="etape"><span class="num">3</span><b>Contrôles</b>Liste blanche, rythme des trames, vraisemblance physique</div>
+      <div class="etape"><span class="num">4</span><b>Historique</b>Pression ramenée à 20 °C ; 1 point toutes les 30 s, 40 points = 20 min</div>
+      <div class="etape"><span class="num">5</span><b>Fuite lente</b>Pente par moindres carrés, après 10 min ; alerte sous −0,15 bar/h</div>
+      <div class="etape"><span class="num">6</span><b>État</b>Du plus grave au moins grave : suspect, perdu, crevaison, basse, haute, fuite, OK</div>
+    </div>
+    <div class="sorties">
+      <div class="carte"><h3>Écran e-paper</h3><p class="discret petit">Rafraîchi au plus toutes les 2 s, et seulement si l'image change.</p></div>
+      <div class="carte"><h3>Bip + LED</h3><p class="discret petit">À l'apparition d'une alerte ; acquittement par appui long.</p></div>
+      <div class="carte"><h3>Application</h3><p class="discret petit">Mesures toutes les 5 s, historique local sur plusieurs jours, export CSV.</p></div>
+    </div>
+    <div class="carte carte-formule">
+      <div class="formule">P<sub>20</sub> = (P + 1,013) × 293,15 / (T + 273,15) − 1,013</div>
+      <p class="discret petit">Gaz parfait à volume constant : sans cette compensation, un pneu chauffé au soleil puis refroidi déclenchait une fausse fuite lente.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 10 -->
+<section class="diapo" data-notes="Ces trois écrans ne sont pas des images : ils sont dessinés à l'ouverture de la page par ecran.js, epaper.js et la police 5x7, le code qui sera recopié dans le firmware. En alerte, la colonne passe en négatif, visible d'un coup d'œil.">
+  <p class="repere">Écran du boîtier</p>
+  <h2>Ces écrans sont dessinés par <em>le code destiné au boîtier</em>, au pixel près</h2>
+  <div class="corps trois-ecrans ecran-petit">
+    <figure>
+      <div class="boitier">
+        <div class="boitier-leds"><span class="led"></span></div>
+        <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="roulage" aria-label="Écran en roulant"></canvas></div>
+        <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+      </div>
+      <figcaption><b>En roulant</b><span class="discret">pressions, températures, piles, vitesse, distance</span></figcaption>
+    </figure>
+    <figure>
+      <div class="boitier">
+        <div class="boitier-leds"><span class="led allumee"></span></div>
+        <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="crevaison" aria-label="Écran avec crevaison arrière"></canvas></div>
+        <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+      </div>
+      <figcaption><b class="rouge">Crevaison arrière</b><span class="discret">colonne en négatif, bip et LED</span></figcaption>
+    </figure>
+    <figure>
+      <div class="boitier">
+        <div class="boitier-leds"><span class="led allumee"></span></div>
+        <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="suspect" aria-label="Écran avec signal suspect à l'avant"></canvas></div>
+        <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+      </div>
+      <figcaption><b class="orange">Signal suspect</b><span class="discret">pression masquée plutôt que fausse</span></figcaption>
+    </figure>
+  </div>
+  <p class="note-bas">200 × 200 pixels noir et blanc, soit 5 000 octets d'image · police 5×7 identique en JavaScript et en C++ · chiffres de 28 pixels de haut (≈ 3,9 mm) · valeurs d'exemple.</p>
+</section>
+
+<!-- ================================================================ 11 -->
+<section class="diapo" data-notes="Méthode EBIOS Risk Manager simplifiée. Onze scénarios, gravité fois vraisemblance. Les deux risques élevés, usurpation et rejeu, passent à faible. Trois risques sont assumés : le traçage par l'adresse fixe, l'attaque combinée brouillage plus imitation, et le déni de service créé par nos propres protections.">
+  <p class="repere">Analyse de risques · EBIOS RM simplifiée</p>
+  <h2>Les deux risques élevés sont ramenés à faible ; <em>trois risques résiduels sont assumés</em></h2>
+  <div class="corps matrices">
+    <div class="matrice-bloc">
+      <h3>Avant les mesures</h3>
+      <div class="matrice">
+        <div class="axe">4</div><div class="case moyen"></div><div class="case eleve"></div><div class="case eleve"></div><div class="case eleve"></div>
+        <div class="axe">3</div><div class="case faible"><span>S6</span></div><div class="case moyen"><span>S7</span><span>S8</span></div><div class="case eleve"><span>S3</span><span>S4</span></div><div class="case eleve"></div>
+        <div class="axe">2</div><div class="case faible"></div><div class="case moyen"><span>S5</span><span>S9</span></div><div class="case moyen"><span>S1</span><span>S2</span></div><div class="case eleve"></div>
+        <div class="axe">1</div><div class="case faible"></div><div class="case faible"><span>S10</span></div><div class="case faible"></div><div class="case moyen"></div>
+        <div></div><div class="axe">1</div><div class="axe">2</div><div class="axe">3</div><div class="axe">4</div>
+      </div>
+      <p class="titre-axe">gravité (vertical) × vraisemblance (horizontal)</p>
+    </div>
+    <div class="matrice-bloc">
+      <h3>Après les mesures</h3>
+      <div class="matrice">
+        <div class="axe">4</div><div class="case moyen"></div><div class="case eleve"></div><div class="case eleve"></div><div class="case eleve"></div>
+        <div class="axe">3</div><div class="case faible"><span>S3</span><span>S4</span><span class="residuel">S6</span><span>S7</span><span>S8</span></div><div class="case moyen"></div><div class="case eleve"></div><div class="case eleve"></div>
+        <div class="axe">2</div><div class="case faible"><span>S2</span><span>S9</span></div><div class="case moyen"></div><div class="case moyen"><span class="residuel">S1</span><span class="residuel">S11</span></div><div class="case eleve"></div>
+        <div class="axe">1</div><div class="case faible"><span>S10</span></div><div class="case faible"><span>S5</span></div><div class="case faible"></div><div class="case moyen"></div>
+        <div></div><div class="axe">1</div><div class="axe">2</div><div class="axe">3</div><div class="axe">4</div>
+      </div>
+      <div class="legende-niveaux">
+        <span><i style="background:rgba(52,211,153,.35)"></i>faible 1–3</span>
+        <span><i style="background:rgba(251,191,36,.4)"></i>moyen 4–6</span>
+        <span><i style="background:rgba(248,113,113,.5)"></i>élevé 8–16</span>
+        <span><i style="outline:1.5px solid #a1a1aa"></i>résiduel assumé</span>
+      </div>
+    </div>
+    <ul class="liste-scenarios">
+      <li><span class="code">S1</span>Écoute et traçage du vélo</li>
+      <li><span class="code">S2</span>Capteur d'un vélo voisin</li>
+      <li><span class="code">S3</span>Usurpation d'adresse</li>
+      <li><span class="code">S4</span>Rejeu de trames</li>
+      <li><span class="code">S5</span>Brouillage radio</li>
+      <li><span class="code">S6</span>Brouillage + imitation du rythme</li>
+      <li><span class="code">S7</span>Appairage malveillant</li>
+      <li><span class="code">S8</span>Code d'appairage par essais</li>
+      <li><span class="code">S9</span>Réglages absurdes</li>
+      <li><span class="code">S10</span>Vol des données de l'app</li>
+      <li><span class="code">S11</span>Fausse intrusion (déni de service)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ 12 -->
+<section class="diapo" data-notes="L'attaque est réaliste : une carte ESP32 sait écouter et émettre des annonces BLE. Les études sur les TPMS automobiles (Rouf et al., USENIX 2010) ont montré le même défaut. Sans protection, le boîtier affiche une fausse crevaison et le cycliste s'arrête.">
+  <p class="repere">Démonstration de l'attaque</p>
+  <h2>Une carte à environ 5 € suffit pour <em>se faire passer pour un capteur</em></h2>
+  <div class="corps grille" style="grid-template-columns: 1fr 400px; gap: 56px; align-items:start;">
+    <div>
+      <ol class="etapes">
+        <li>Le pirate écoute l'air<span>Une application de scan BLE ou une carte ESP32 lit les annonces en clair.</span></li>
+        <li>Il recopie l'identité du capteur avant<span>Numéro 0x80 et adresse fixe EA:CA:3F:1B:07.</span></li>
+        <li>Il émet 0,3 bar avec cette identité, une trame par seconde<span>Le vrai capteur continue d'annoncer 2,2 bar toutes les 3 s.</span></li>
+        <li>Variante : le rejeu<span>Il renvoie octet pour octet des trames enregistrées la veille, pneu bien gonflé, pour masquer une vraie crevaison.</span></li>
+      </ol>
+      <p class="discret petit" style="margin:4px 0 0">Même défaut que celui démontré sur les TPMS automobiles : Rouf et al., USENIX Security 2010. Le pirate est simulé par <code>simulateur/sources/pirate.js</code>.</p>
+    </div>
+    <figure style="margin:0; text-align:center" class="ecran-petit">
+      <div class="boitier">
+        <div class="boitier-leds"><span class="led allumee"></span></div>
+        <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="pirate" aria-label="Écran trompé : fausse crevaison à l'avant"></canvas></div>
+        <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+      </div>
+      <figcaption class="petit" style="margin-top:12px"><b class="rouge">Sans protection</b><br><span class="discret">fausse crevaison affichée à l'avant</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================================================================ 13 -->
+<section class="diapo" data-notes="On ne peut pas prouver qu'une trame vient du vrai capteur : on ne peut que trier. Une protection seule ne suffit pas, c'est l'empilement qui arrête le pirate. Le rythme détecte deux émetteurs sur la même adresse avant que la vraisemblance ne soit contournée. Résultat : 0 fausse valeur sur 300 décalages, et la pression est masquée plutôt que fausse.">
+  <p class="repere">Les parades</p>
+  <h2>Trois filtres empilés : la fausse crevaison du pirate <em>n'est jamais acceptée</em> (0 sur 300 décalages)</h2>
+  <div class="corps grille" style="grid-template-columns: 430px 1fr 320px; gap: 34px; align-items:start;">
+    <div class="filtres">
+      <div class="filtre"><b>1 · Liste blanche</b>seules les 2 adresses appairées sont lues</div>
+      <div class="fleche-bas">↓</div>
+      <div class="filtre"><b>2 · Rythme</b>2 trames d'une adresse à moins de 2 s = anomalie ; 3 en 60 s = SIGNAL SUSPECT, quarantaine 60 s</div>
+      <div class="fleche-bas">↓</div>
+      <div class="filtre"><b>3 · Vraisemblance</b>au plus 0,3 bar/s ; au-delà, 3 trames concordantes, jamais pendant un doute</div>
+    </div>
+    <div class="defile">
+      <table style="font-size:18px">
+        <thead><tr><th>Protections actives</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr><td>Liste blanche seule</td><td class="rouge">fausses trames acceptées</td></tr>
+          <tr><td>+ vraisemblance</td><td class="rouge">le pirate rapide finit par passer</td></tr>
+          <tr class="retenu"><td><b>Les trois</b></td><td><span class="vert">SIGNAL SUSPECT ; 0 fausse valeur acceptée sur 300 décalages</span></td></tr>
+          <tr><td>Rejeu pour masquer une vraie crevaison</td><td><span class="vert">alerte dans 120 cas sur 120</span>, au pire en 4 s</td></tr>
+        </tbody>
+      </table>
+      <p class="discret petit" style="margin:16px 0 0"><b class="orange">Limite assumée :</b> une fausse pression proche de la vraie (0,8 à 1,5 bar) peut s'afficher jusqu'à 6 s avant le SIGNAL SUSPECT.</p>
+      <p class="discret petit" style="margin:10px 0 0">Liaison avec l'application : code à 6 chiffres affiché sur l'e-paper ; 3 codes faux, blocage 60 s, soit ≈ 160 jours d'essais pour une chance sur deux.</p>
+    </div>
+    <figure style="margin:0; text-align:center" class="ecran-petit">
+      <div class="boitier">
+        <div class="boitier-leds"><span class="led allumee"></span></div>
+        <div class="ecran-cadre"><canvas class="ecran" width="200" height="200" data-ecran="suspect" aria-label="Écran protégé : signal suspect à l'avant"></canvas></div>
+        <div class="boitier-boutons"><span class="bouton-boitier"></span><span class="bouton-boitier"></span></div>
+      </div>
+      <figcaption class="petit" style="margin-top:12px"><b class="vert">Avec les protections</b><br><span class="discret">intrusion signalée</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================================================================ 14 -->
+<section class="diapo" data-notes="C'est le principal apport de la simulation : des défauts qu'on n'aurait trouvés qu'en roulant, voire jamais. Insister sur le verrouillage de phase et sur la fausse fuite lente : ils ne sont apparus qu'en simulant une semaine entière.">
+  <p class="repere">Ce que la simulation a appris</p>
+  <h2>La simulation a révélé <em>8 défauts</em>, corrigés avant de recevoir le matériel</h2>
+  <div class="corps defile">
+    <table style="font-size:18px">
+      <thead><tr><th style="width:90px">Où</th><th>Défaut observé</th><th>Correction</th></tr></thead>
+      <tbody>
+        <tr><td class="violet">Sécurité</td><td>Pirate + écoute par fenêtres : une fausse valeur passait dans 145 décalages sur 300</td><td>Temps de calcul plafonné à 5 s, aucune confirmation tant que le rythme est douteux</td></tr>
+        <tr><td class="violet">Radio</td><td>Capteur garé (une annonce par minute) jamais entendu : verrouillage de phase avec la fenêtre</td><td>Fenêtre placée de façon pseudo-aléatoire dans chaque période</td></tr>
+        <tr><td class="violet">Alertes</td><td>Fausse alerte « capteur perdu » à l'arrêt et juste après une quarantaine</td><td>60 s en roulant, 600 s à l'arrêt ; silence compté depuis la fin de la quarantaine</td></tr>
+        <tr><td class="violet">Radio</td><td>Crevaison signalée jusqu'à 34 s après, avec une fenêtre variable de 2 s</td><td>Fenêtre de 3 s + écoute renforcée de 15 s : 9 s au pire</td></tr>
+        <tr><td class="violet">Donnée</td><td>Fausse fuite lente : un pneu chauffé au soleil qui refroidit perd de la pression</td><td>Historique compensé en température (ramené à 20 °C)</td></tr>
+        <tr><td class="violet">Réglages</td><td>Circonférence par défaut fausse de 4 %, seuils fixes inadaptés au vélo de route</td><td>Circonférence réelle et seuils à 80 % et 125 % de la pression choisie</td></tr>
+        <tr><td class="discret">Modèle</td><td>Vélo garé en pente qui dévale et réveille le boîtier</td><td>Béquille dans le modèle du vélo</td></tr>
+        <tr><td class="discret">Modèle</td><td>Freinage à l'arrêt qui chauffait la jante</td><td>Chaleur de freinage proportionnelle à la vitesse</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ 15 -->
+<section class="diapo" data-notes="Le vrai compromis du projet : écouter plus longtemps coûte de l'énergie mais réduit la latence. La fenêtre de 3 s couvre au moins une période d'émission du capteur ; avec l'écoute renforcée, le pire cas passe de 34 à 9 s. Ça coûte 12 jours d'autonomie sur 76, il en reste 63,7, très au-dessus de l'exigence de 7 jours.">
+  <p class="repere">Compromis énergie / latence</p>
+  <h2>Fenêtre d'écoute de 3&nbsp;s : pire délai d'alerte ramené <em>de 34&nbsp;s à 9&nbsp;s</em>, pour 63,7&nbsp;jours d'autonomie</h2>
+  <div class="corps grille" style="grid-template-columns: 1.15fr 1fr; gap: 48px; align-items:start;">
+    <div>
+      <p class="petit discret" style="margin:0 0 16px">Délai entre le début d'une crevaison (0,15 bar/s) et la première alerte · 60 décalages</p>
+      <div class="barres">
+        <div class="barre-ligne"><span class="nom">Écoute permanente</span><div class="piste"><div class="barre mediane" style="width:14.3%"></div><span class="barre-val" style="left:calc(14.3% + 8px)">5 s</span><div class="barre pire" style="width:17.1%"></div><span class="barre-val b" style="left:calc(17.1% + 8px)">6 s</span></div></div>
+        <div class="barre-ligne"><span class="nom">Fenêtre fixe 2 s</span><div class="piste"><div class="barre mediane" style="width:20%"></div><span class="barre-val" style="left:calc(20% + 8px)">7 s</span><div class="barre pire" style="width:31.4%"></div><span class="barre-val b" style="left:calc(31.4% + 8px)">11 s</span></div></div>
+        <div class="barre-ligne"><span class="nom">Fenêtre 2 s variable</span><div class="piste"><div class="barre mediane" style="width:25.7%"></div><span class="barre-val" style="left:calc(25.7% + 8px)">9 s</span><div class="barre pire" style="width:97.1%"></div><span class="barre-val b" style="left:calc(97.1% - 40px); color:#fff">34 s</span></div></div>
+        <div class="barre-ligne retenu"><span class="nom">Fenêtre 3 s variable + écoute renforcée (retenu)</span><div class="piste"><div class="barre mediane" style="width:22.9%"></div><span class="barre-val" style="left:calc(22.9% + 8px)">8 s</span><div class="barre pire" style="width:25.7%"></div><span class="barre-val b" style="left:calc(25.7% + 8px)">9 s</span></div></div>
+      </div>
+      <div class="legende-niveaux" style="margin-top:18px"><span><i style="background:#6b6b76"></i>médiane</span><span><i style="background:#f87171"></i>pire cas</span></div>
+    </div>
+    <div>
+      <div class="defile">
+        <table style="font-size:19px">
+          <thead><tr><th>Fenêtre / 5 s</th><th class="n">mAh/jour</th><th class="n">Autonomie</th></tr></thead>
+          <tbody>
+            <tr><td>1 s</td><td class="n">4,729</td><td class="n">95,2 j</td></tr>
+            <tr><td>2 s</td><td class="n">5,896</td><td class="n">76,3 j</td></tr>
+            <tr class="retenu"><td><b>3 s (retenu)</b></td><td class="n"><b>7,063</b></td><td class="n"><b>63,7 j</b></td></tr>
+            <tr><td>5 s (continue)</td><td class="n">9,396</td><td class="n">47,9 j</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tres-petit discret" style="margin:20px 0 4px">Journée type de 7,063 mAh (1 h de roulage, 15 min d'éclairage) · LiPo 450 mAh utiles</p>
+      <div class="empile">
+        <div style="width:49.6%; background:#a78bfa" title="Écoute radio 3,500 mAh"></div>
+        <div style="width:35.4%; background:#fbbf24" title="Éclairage 2,500 mAh"></div>
+        <div style="width:12.7%; background:#34d399" title="Écran 0,900 mAh"></div>
+        <div style="width:2.3%; background:#6b6b76" title="Veille, processeur, app 0,162 mAh"></div>
+      </div>
+      <div class="legende-empile">
+        <span><i style="background:#a78bfa"></i>radio 3,500</span>
+        <span><i style="background:#fbbf24"></i>éclairage 2,500</span>
+        <span><i style="background:#34d399"></i>écran 0,900</span>
+        <span><i style="background:#6b6b76"></i>reste 0,162</span>
+      </div>
+    </div>
+  </div>
+  <p class="note-bas">Crevaison : état CREVAISON 0,7 s à 6,7 s après le passage sous 0,5 bar (médiane 1,7 s), EF-09 tenue. Cas défavorable (2 h de roulage, 2 h d'éclairage, écoute continue) : 13,7 jours, ENF-01 tenue.</p>
+</section>
+
+<!-- ================================================================ 16 -->
+<section class="diapo" data-notes="Planning semaine type : trajets domicile-travail en semaine, sorties le week-end, recharge le dimanche soir. Une semaine se calcule en environ 41 s. Le boîtier dort 95 % du temps ; la batterie ne descend qu'à 92,6 %. Aucune fausse alerte sur la semaine.">
+  <p class="repere">Une semaine simulée</p>
+  <h2>Une semaine entière : 12 sorties, <em>0 minute d'alerte</em>, batterie à 92,6 % avant la recharge</h2>
+  <div class="corps grille" style="grid-template-columns: 1fr 560px; gap: 48px; align-items:start;">
+    <div>
+      <div class="semaine">
+        <span class="jour">Lun</span><div class="jour-piste"><span class="evt" style="left:32.3%"></span><span class="evt" style="left:72.9%"></span></div>
+        <span class="jour">Mar</span><div class="jour-piste"><span class="evt" style="left:32.3%"></span><span class="evt" style="left:72.9%"></span></div>
+        <span class="jour">Mer</span><div class="jour-piste"><span class="evt" style="left:32.3%"></span><span class="evt" style="left:72.9%"></span></div>
+        <span class="jour">Jeu</span><div class="jour-piste"><span class="evt" style="left:32.3%"></span><span class="evt" style="left:72.9%"></span></div>
+        <span class="jour">Ven</span><div class="jour-piste"><span class="evt" style="left:32.3%"></span><span class="evt" style="left:72.9%"></span></div>
+        <span class="jour">Sam</span><div class="jour-piste"><span class="evt" style="left:41.7%"></span></div>
+        <span class="jour">Dim</span><div class="jour-piste"><span class="evt" style="left:39.6%"></span><span class="evt charge" style="left:83.3%; width:12.5%"></span></div>
+        <div class="heures"><span style="left:0">0 h</span><span style="left:25%">6 h</span><span style="left:50%">12 h</span><span style="left:75%">18 h</span><span style="left:100%; transform:translateX(-100%)">24 h</span></div>
+      </div>
+      <div class="legende-niveaux" style="margin-top:14px">
+        <span><i style="background:#a78bfa"></i>départ d'une sortie (7 h 45, 17 h 30, samedi 10 h, dimanche 9 h 30)</span>
+        <span><i style="background:#34d399"></i>recharge 20 h – 23 h</span>
+      </div>
+      <p class="discret petit" style="margin:18px 0 0">Parcours choisi : boucle des berges du Rhône (lyon-ville), graine 8 · 14 événements par semaine · calcul de la semaine ≈ 41 s.</p>
+    </div>
+    <div class="grille g2" style="gap:16px">
+      <div class="carte"><div class="chiffre">462<small>min</small></div><p class="discret petit">de roulage</p></div>
+      <div class="carte"><div class="chiffre">94,9<small>%</small></div><p class="discret petit">du temps en veille</p></div>
+      <div class="carte"><div class="chiffre">≈ 5,6<small>mAh/j</small></div><p class="discret petit">≈ 37 mAh en 6,6 jours, sans éclairage</p></div>
+      <div class="carte"><div class="chiffre">99,6<small>%</small></div><p class="discret petit">de batterie après la recharge du dimanche</p></div>
+      <div class="carte"><div class="chiffre">8 685</div><p class="discret petit">trames acceptées</p></div>
+      <div class="carte"><div class="chiffre vert">0<small>min</small></div><p class="discret petit">d'alerte sur la semaine</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 17 -->
+<section class="diapo" data-notes="412 tests, lancés en une commande. Ils couvrent la logique du boîtier jusqu'au monde complet de bout en bout : sortie normale, crevaison, pirate, deux jours garé, semaine type. Le rejeu est exact : même graine et mêmes actions donnent la même pression au même instant.">
+  <p class="repere">Vérification</p>
+  <h2><em>412 tests automatiques</em> en 6 suites, tous verts</h2>
+  <div class="corps grille" style="grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:start;">
+    <div class="barres tests-barres">
+      <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">102</span></div>
+      <div class="barre-ligne"><span class="nom">Électronique</span><div class="piste"><div class="barre" style="width:78.4%"></div></div><span class="total">80</span></div>
+      <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:70.6%"></div></div><span class="total">72</span></div>
+      <div class="barre-ligne"><span class="nom">Vélo et parcours</span><div class="piste"><div class="barre" style="width:60.8%"></div></div><span class="total">62</span></div>
+      <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:60.8%"></div></div><span class="total">62</span></div>
+      <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:33.3%"></div></div><span class="total">34</span></div>
+      <pre class="code" style="margin-top:14px">node simulateur/tests/tout.js</pre>
+    </div>
+    <div class="grille" style="gap:16px">
+      <div class="carte"><h3>Rejeu identique</h3><p class="discret petit">Un scénario sauvé en JSON (options + actions horodatées) redonne la même pression et la même distance au même instant.</p></div>
+      <div class="carte"><h3>De bout en bout</h3><p class="discret petit">Sortie normale, crevaison, deux jours garé, pirate, arrêt sans fausse perte, fin d'attaque, semaine type.</p></div>
+      <div class="carte"><h3>Dans le navigateur</h3><p class="discret petit">Buzzer (3 bips de 2,7 kHz), export CSV de 23 colonnes, sauvegarde et chargement de scénario.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 18 -->
+<section class="diapo" data-notes="Ouvrir le simulateur dans un nouvel onglet. Scénario conseillé : sortie normale, puis crevaison arrière, puis pirate sans protection et avec protections, enfin avance rapide d'une semaine. Revenir ensuite au diaporama, diapositive 19.">
+  <p class="repere">Démonstration</p>
+  <h2>Démonstration en direct : <em>quatre scénarios</em> dans le simulateur</h2>
+  <div class="corps grille" style="grid-template-columns: 1fr 520px; gap: 56px; align-items:start;">
+    <ol class="etapes">
+      <li>Sortie normale<span>Vue d'ensemble : écran du boîtier, vitesse, distance, trames reçues.</span></li>
+      <li>Crevaison arrière<span>Pneus : chute de pression, état CREVAISON, bip et LED.</span></li>
+      <li>Attaque pirate<span>Radio et sécurité : protections coupées, fausse crevaison ; protections actives, SIGNAL SUSPECT.</span></li>
+      <li>Semaine type<span>Avance rapide jusqu'au dimanche : batterie, veille, export CSV.</span></li>
+    </ol>
+    <div>
+      <a class="bouton-lien" href="../simulateur/index.html" target="_blank" rel="noopener">Ouvrir le simulateur <span aria-hidden="true">→</span></a>
+      <p class="mono discret petit" style="margin:16px 0 34px">titilyonnais.github.io/tpms-velo/simulateur/</p>
+      <a class="bouton-lien secondaire" href="../app/index.html" target="_blank" rel="noopener">Ouvrir l'application</a>
+      <p class="mono discret petit" style="margin:16px 0 0">titilyonnais.github.io/tpms-velo/app/</p>
+      <p class="discret petit" style="margin:30px 0 0">Rien à installer : une page web, qui s'ouvre aussi par double-clic.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 19 -->
+<section class="diapo" data-notes="Être clair sur les limites : la simulation repose sur des hypothèses. Le format des trames, l'intervalle d'annonce et les consommations sont les points les plus importants. Pour la consommation, pas de PPK2 : mesure avec une résistance shunt et l'oscilloscope.">
+  <p class="repere">Limites</p>
+  <h2>Ce que <em>seul le matériel</em> pourra confirmer</h2>
+  <div class="corps defile">
+    <table style="font-size:21px">
+      <thead><tr><th>Hypothèse</th><th>Valeur dans le code</th><th>Vérification prévue</th></tr></thead>
+      <tbody>
+        <tr><td>Format des trames</td><td>18 octets, fabricant 00 01, pression en Pa</td><td>Capture avec une application de scan BLE, comparaison à un manomètre</td></tr>
+        <tr><td>Plage des capteurs</td><td>0 à 3,5 bar par défaut (réglable 5 ou 8)</td><td>Essai au gonfleur ; la fiche du vendeur ne la donne pas</td></tr>
+        <tr><td>Intervalle d'annonce</td><td>3 s en roulant, 60 s à l'arrêt</td><td>Mesure : il doit rester au-dessus de 2 s pour le contrôle du rythme</td></tr>
+        <tr><td>Copies sur 3 canaux</td><td>ignorées si moins de 100 ms d'écart</td><td>Observation des annonces reçues par le XIAO</td></tr>
+        <tr><td>Consommations</td><td>valeurs de fiches techniques (63,7 j)</td><td>Résistance shunt et oscilloscope</td></tr>
+        <tr><td>Appairage sur iPhone</td><td>Bluefy, code à 6 chiffres</td><td>Essai avec l'iPhone et le boîtier réel</td></tr>
+        <tr><td>Firmware</td><td>traduit en C++, jamais exécuté sur la carte</td><td>Compilation Arduino, tests de la logique sur le XIAO</td></tr>
+        <tr><td>Boîtier mécanique</td><td>IPX7, fixation quart de tour</td><td>Impression 3D, immersion 30 min à 1 m, parcours pavé</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ 20 -->
+<section class="diapo" data-notes="Conclure sur la démarche : concevoir, tester et attaquer avant d'avoir le matériel. Prochaine étape : réception, capture des trames réelles, mesure des consommations. Remercier le jury.">
+  <p class="repere">Conclusion</p>
+  <h2>Un produit conçu, testé et attaqué <em>avant d'avoir reçu une seule pièce</em></h2>
+  <div class="grille g3" style="gap:22px">
+    <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression filtrée, compensée en température, une tendance de fuite et un export CSV.</p></div>
+    <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">0 / 300</div><p class="discret">fausse crevaison du pirate acceptée, grâce à trois filtres empilés ; 11 scénarios analysés.</p></div>
+    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">8 défauts</div><p class="discret">trouvés en simulation et corrigés ; 412 tests ; la même logique en JavaScript et en C++.</p></div>
+  </div>
+  <div class="carte" style="margin-top:22px">
+    <h3>Prochaines étapes</h3>
+    <p class="discret">Réception du matériel → capture des vraies trames → mesure des consommations → montage et impression du boîtier → essais sur le vélo.</p>
+  </div>
+  <p class="note-bas" style="font-size:34px; color:var(--texte); font-weight:600">Merci. Questions ?</p>
+</section>
+
+</main>
+
+<!-- Commandes discrètes (masquées à l'impression et sur téléphone) -->
+<nav class="commandes" aria-label="Navigation du diaporama">
+  <button type="button" id="btnPrec" aria-label="Diapositive précédente">←</button>
+  <span id="compteur">1 / 20</span>
+  <button type="button" id="btnSuiv" aria-label="Diapositive suivante">→</button>
+</nav>
+<div class="notes" id="notes" hidden></div>
+
+<!-- Code du projet : dessin de l'écran e-paper et codage des trames.
+     Ce sont les fichiers du dépôt, pas des copies. -->
+<script src="../logique/trame.js"></script>
+<script src="../logique/alertes.js"></script>
+<script src="../simulateur/boitier/police5x7.js"></script>
+<script src="../simulateur/boitier/epaper.js"></script>
+<script src="../simulateur/boitier/ecran.js"></script>
+<script src="presentation.js"></script>
+</body>
+</html>

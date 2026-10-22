@@ -266,7 +266,7 @@ function proche(a, b, tolerance) {
   verifier("pirate + toutes protections : dernière valeur de confiance gardée",
     proche(avec.boitier.roues.AV.mesure.pressionBar, 2.2, 1e-9), avec.boitier.roues.AV.mesure.pressionBar);
 
-  // Même attaque, mais avec l'écoute par fenêtres du boîtier (2 s toutes
+  // Même attaque, mais avec l'écoute par fenêtres du boîtier (3 s toutes
   // les 5 s) et le pirate décalé de 0 à 2,9 s par rapport au vrai capteur.
   // Faille trouvée lors de la relecture : le silence radio permettait au
   // pirate de « confirmer » sa valeur avant la détection du rythme.
@@ -397,14 +397,14 @@ function proche(a, b, tolerance) {
 (function () {
   var profil = {
     heuresRoulage: 1, sortiesParJour: 2, heuresEclairage: 0.25, heuresApp: 0.1, alertesParJour: 0,
-    fenetreMs: 2000, periodeMs: 5000, periodeEcranMs: 2000, delaiVeilleMs: 300000
+    fenetreMs: 3000, periodeMs: 5000, periodeEcranMs: 2000, delaiVeilleMs: 300000
   };
   var bilan = TPMS.bilanJournee(profil);
   verifier("énergie : autonomie supérieure à 1 semaine (cahier des charges)",
     bilan.autonomieJours >= 7, bilan.autonomieJours.toFixed(1) + " jours");
   var radio = bilan.postes[2].mAhJour;
-  // 1 h de roulage + 2 × 5 min = 1,167 h éveillé × 40 % × 5 mA = 2,33 mAh
-  verifier("énergie : poste radio", proche(radio, 1.1667 * 0.4 * 5, 0.01), radio);
+  // 1 h de roulage + 2 × 5 min = 1,167 h éveillé × 60 % × 5 mA = 3,5 mAh
+  verifier("énergie : poste radio", proche(radio, 1.1667 * 0.6 * 5, 0.01), radio);
   profil.fenetreMs = 5000;   // radio allumée en permanence
   verifier("énergie : écoute continue → autonomie plus courte",
     TPMS.bilanJournee(profil).autonomieJours < bilan.autonomieJours);
