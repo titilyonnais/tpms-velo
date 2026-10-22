@@ -7,9 +7,14 @@
 // Le boîtier expose UN service BLE avec trois « caractéristiques »
 // (des cases mémoire que le téléphone peut lire, écrire ou écouter) :
 //
-//   MESURES   (lecture + notification) : 20 octets envoyés toutes les 5 s
+//   MESURES   (lecture + notification) : 20 octets toutes les 5 s, CHIFFRÉ et APPAIRÉ
 //   REGLAGES  (lecture + écriture)     : 23 octets, CHIFFRÉ et APPAIRÉ
 //   COMMANDE  (écriture)               : 1 octet,   CHIFFRÉ et APPAIRÉ
+//
+// MESURES est chiffrée elle aussi : la pression n'est pas secrète, mais
+// la position (vitesse, distance) et les habitudes de sortie le sont.
+// REGLAGES dépasse 20 octets : il faut une MTU négociée plus grande
+// (le firmware la demande) ou une écriture longue. À VÉRIFIER avec Bluefy.
 //
 // Contrairement aux capteurs TPMS, cette liaison est maîtrisée : elle
 // utilise BLE Secure Connections (appairage par code à 6 chiffres affiché

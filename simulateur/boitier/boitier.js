@@ -145,8 +145,9 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
 
   // 3. Vraisemblance : la nouvelle valeur est-elle physiquement possible ?
   if (protections.vraisemblance) {
+    var doute = protections.rythme && TPMS.rythmeDouteux(roue.rythme);
     var verdict = TPMS.verifierVraisemblance(roue.verification, roue.mesure,
-      roue.dernierRecuMs, mesure, maintenantMs);
+      roue.dernierRecuMs, mesure, maintenantMs, !doute);
     if (verdict === "hors-limites" || verdict === "suspecte") {
       b.stats.rejetsVraisemblance++;
       return verdict;

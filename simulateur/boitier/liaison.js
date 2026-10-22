@@ -42,6 +42,10 @@ TPMS.liaisonConnexion = function (b, maintenantMs) {
     return "connecte";
   }
   if (maintenantMs < l.bloqueJusquaMs) return "bloque";
+  // Un code déjà affiché et encore valide n'est pas remplacé : sinon
+  // n'importe qui à portée pourrait changer le code sous les yeux du
+  // cycliste à chaque tentative et l'empêcher de s'appairer.
+  if (l.code !== null && maintenantMs <= l.codeJusquaMs) return "code-requis";
   // Dans le firmware : nombre tiré par le générateur aléatoire matériel du nRF52840.
   l.code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
   l.codeJusquaMs = maintenantMs + TPMS.CODE_DUREE_MS;

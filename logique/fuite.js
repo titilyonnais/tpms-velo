@@ -16,7 +16,9 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
 TPMS.HISTO_TAILLE = 40;            // 40 points × 30 s = 20 minutes
 TPMS.HISTO_ECART_MS = 30000;       // une mesure gardée toutes les 30 s
-TPMS.HISTO_DUREE_MIN_MS = 300000;  // au moins 5 min de données pour conclure
+// Au moins 10 min de données pour conclure. Avec 5 min, le bruit du
+// capteur (±0,01 bar) donnait environ 1 fausse alerte pour 100 sorties.
+TPMS.HISTO_DUREE_MIN_MS = 600000;
 TPMS.HISTO_SAUT_REGONFLAGE = 0.2;  // hausse brusque de 0,2 bar = regonflage
 
 // En C : deux tableaux de taille fixe et un compteur.

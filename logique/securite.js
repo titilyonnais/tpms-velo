@@ -62,6 +62,7 @@ TPMS.TEMPERATURE_MAX_C = 85;
 // une pompe à pied gonfle à environ 0,05 bar/s : 0,3 bar/s laisse de la marge.
 TPMS.VARIATION_MAX_BAR_S = 0.3;
 TPMS.VARIATION_MAX_C_S = 1;
+TPMS.VARIATION_DT_MAX_S = 5;
 
 // Un changement brutal n'est accepté que s'il est confirmé par
 // 3 trames de suite qui donnent la même valeur (à 0,1 bar près).
@@ -80,8 +81,13 @@ TPMS.creerVerification = function () {
 // ancienne  : dernière mesure acceptée (ou null)
 // ancienneMs: instant de cette mesure
 // nouvelle  : mesure qui vient d'arriver
+// confirmationPermise : false quand on doute de l'émetteur (le contrôle
+//   du rythme a vu des trames trop rapprochées dans la dernière minute).
+//   On ne laisse alors confirmer aucun changement brutal : sinon un
+//   pirate obtient ses 3 trames de confirmation avant que le rythme ait
+//   réuni ses 3 anomalies.
 // Retourne "ok", "hors-limites", "suspecte" ou "confirmee".
-TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, maintenantMs) {
+TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, maintenantMs, confirmationPermise) {
   if (nouvelle.pressionBar > TPMS.PRESSION_MAX_BAR ||
       nouvelle.temperatureC < TPMS.TEMPERATURE_MIN_C ||
       nouvelle.temperatureC > TPMS.TEMPERATURE_MAX_C) {
@@ -89,9 +95,14 @@ TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, mainte
   }
   if (ancienne === null) return "ok";   // rien à comparer
 
-  // Si on n'a rien reçu depuis longtemps (veille, radio coupée), un
-  // grand écart est normal : on divise par le temps écoulé (au moins 1 s).
-  var dtS = Math.max(1, (maintenantMs - ancienneMs) / 1000);
+  // On divise l'écart par le temps écoulé, compris entre 1 s et 5 s.
+  // Pourquoi un plafond ? Avec l'écoute par fenêtres, la radio reste
+  // coupée 3 s sur 5 : sans plafond, le silence « dilue » l'écart, et un
+  // pirate qui annonce 0,3 bar juste après ce silence passe pour une
+  // baisse lente. Avec le plafond, un grand écart doit toujours être
+  // confirmé par 3 trames, ce qui laisse au contrôle du rythme le temps
+  // de détecter le second émetteur.
+  var dtS = Math.min(TPMS.VARIATION_DT_MAX_S, Math.max(1, (maintenantMs - ancienneMs) / 1000));
   var vitessePression = Math.abs(nouvelle.pressionBar - ancienne.pressionBar) / dtS;
   var vitesseTemperature = Math.abs(nouvelle.temperatureC - ancienne.temperatureC) / dtS;
 
@@ -108,11 +119,16 @@ TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, mainte
     v.candidatBar = nouvelle.pressionBar;
     v.nbConfirmations = 1;
   }
-  if (v.nbConfirmations >= TPMS.CONFIRMATIONS) {
+  if (v.nbConfirmations >= TPMS.CONFIRMATIONS && confirmationPermise !== false) {
     v.nbConfirmations = 0;
     return "confirmee";
   }
   return "suspecte";
+};
+
+// Le contrôle du rythme a-t-il un doute sur cette roue ?
+TPMS.rythmeDouteux = function (r) {
+  return r.anomaliesMs.length > 0;
 };
 
 // ---------------------------------------------------------------------

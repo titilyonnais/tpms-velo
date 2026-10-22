@@ -120,7 +120,7 @@ function proche(a, b, tolerance) {
 
   var court = TPMS.creerHistorique();
   for (var u = 0; u <= 120; u += 30) TPMS.historiqueAjouter(court, u * 1000, 2.2 - u / 100);
-  verifier("moins de 5 min : pas de conclusion", TPMS.historiquePenteBarH(court) === 0);
+  verifier("moins de 10 min : pas de conclusion", TPMS.historiquePenteBarH(court) === 0);
 
   TPMS.historiqueAjouter(h, 1230 * 1000, 2.5);
   verifier("regonflage : historique remis à zéro", h.tMs.length === 1, h.tMs.length);
@@ -265,6 +265,26 @@ function proche(a, b, tolerance) {
     avec.faussesAcceptees === 0, avec.faussesAcceptees);
   verifier("pirate + toutes protections : dernière valeur de confiance gardée",
     proche(avec.boitier.roues.AV.mesure.pressionBar, 2.2, 1e-9), avec.boitier.roues.AV.mesure.pressionBar);
+
+  // Même attaque, mais avec l'écoute par fenêtres du boîtier (2 s toutes
+  // les 5 s) et le pirate décalé de 0 à 2,9 s par rapport au vrai capteur.
+  // Faille trouvée lors de la relecture : le silence radio permettait au
+  // pirate de « confirmer » sa valeur avant la détection du rythme.
+  function scenarioFenetres(decalageMs) {
+    var b = TPMS.creerBoitier();
+    var faussesAcceptees = 0;
+    for (var t = 0; t <= 90000; t += 10) {
+      if (t % 3000 === 0) TPMS.boitierRecevoirTrame(b, trameAV(2.2), t);
+      if (t >= 30000 && (t - decalageMs) % 1000 === 0 &&
+          TPMS.boitierRecevoirTrame(b, trameAV(0.3), t) === "acceptee") faussesAcceptees++;
+      if (t % 1000 === 0) TPMS.boitierMiseAJour(b, t);
+    }
+    return faussesAcceptees;
+  }
+  var decalagesTrompes = 0;
+  for (var d = 0; d < 3000; d += 100) if (scenarioFenetres(d) > 0) decalagesTrompes++;
+  verifier("pirate + écoute par fenêtres : aucun décalage ne trompe le boîtier",
+    decalagesTrompes === 0, decalagesTrompes + " décalages sur 30");
 
   // Un vrai regonflage (1,2 → 2,2 bar d'un coup) finit par être accepté.
   var b = TPMS.creerBoitier();
