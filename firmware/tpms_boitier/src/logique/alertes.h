@@ -38,7 +38,8 @@ struct Seuils {
   SeuilsRoue roue[NB_ROUES];
   float crevaisonBar;
   float fuiteBarH;          // pente en dessous de laquelle on alerte
-  int32_t delaiPerteMs;     // sans trame pendant ce délai = capteur perdu
+  int32_t delaiPerteMs;     // en roulant : sans trame pendant ce délai = capteur perdu
+  int32_t delaiPerteArretMs;  // à l'arrêt (capteurs plus lents) : délai plus long
 };
 
 // Seuils par défaut (réglables depuis l'application).
@@ -54,8 +55,9 @@ struct Roue;
 // ecouteDepuisMs : instant où le boîtier s'est remis à écouter (réveil).
 //   On ne reproche pas au capteur de s'être tu pendant que le boîtier
 //   dormait : le délai de perte ne compte qu'à partir du réveil.
+// enMouvement = la roue tourne (le boîtier le sait grâce à l'aimant).
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
-                 int32_t maintenantMs, int32_t ecouteDepuisMs);
+                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement = true);
 
 // Les états qui déclenchent bip + LED.
 bool estAlerte(Etat etat);

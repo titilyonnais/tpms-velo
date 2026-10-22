@@ -28,7 +28,12 @@ TPMS.seuilsParDefaut = function () {
     AR: { basBar: 2.0, hautBar: 3.4 },
     crevaisonBar: 0.5,
     fuiteBarH: -0.15,       // pente en dessous de laquelle on alerte
-    delaiPerteMs: 60000     // 1 min sans trame = capteur perdu
+    delaiPerteMs: 60000,    // en roulant : 1 min sans trame = capteur perdu
+    // À l'arrêt, un capteur TPMS n'annonce plus qu'une fois par minute
+    // environ, et le boîtier n'écoute que 40 % du temps : il peut rater
+    // plusieurs annonces de suite. Défaut révélé par la simulation : avec
+    // 1 min, chaque arrêt déclenchait une fausse alerte « capteur perdu ».
+    delaiPerteArretMs: 240000   // à l'arrêt : 4 min
   };
 };
 
@@ -37,11 +42,13 @@ TPMS.seuilsParDefaut = function () {
 // ecouteDepuisMs = instant où le boîtier s'est remis à écouter (réveil).
 //   On ne reproche pas au capteur de s'être tu pendant que le boîtier
 //   dormait : le délai de perte ne compte qu'à partir du réveil.
-TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs) {
+// enMouvement = la roue tourne (le boîtier le sait grâce à l'aimant).
+TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs, enMouvement) {
   if (roue.intrusionJusquaMs > maintenantMs) return TPMS.ETAT.INTRUSION;
   if (roue.mesure === null) return TPMS.ETAT.ATTENTE;
   var silenceMs = maintenantMs - Math.max(roue.dernierRecuMs, ecouteDepuisMs);
-  if (silenceMs > seuils.delaiPerteMs) return TPMS.ETAT.PERDU;
+  var delaiPerte = (enMouvement === false && seuils.delaiPerteArretMs) ? seuils.delaiPerteArretMs : seuils.delaiPerteMs;
+  if (silenceMs > delaiPerte) return TPMS.ETAT.PERDU;
 
   var p = roue.mesure.pressionBar;
   if (p < seuils.crevaisonBar || roue.mesure.alarme === 0x01) return TPMS.ETAT.CREVAISON;

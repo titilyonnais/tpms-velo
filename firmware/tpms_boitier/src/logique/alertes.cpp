@@ -14,18 +14,23 @@ void seuilsParDefaut(Seuils* s) {
   s->roue[POS_AR].hautBar = 3.4f;
   s->crevaisonBar = 0.5f;
   s->fuiteBarH = -0.15f;
-  s->delaiPerteMs = 60000;   // 1 min sans trame = capteur perdu
+  s->delaiPerteMs = 60000;   // en roulant : 1 min sans trame = capteur perdu
+  // À l'arrêt, un capteur n'annonce plus qu'une fois par minute et le
+  // boîtier n'écoute que 40 % du temps : 1 min donnait de fausses alertes
+  // (défaut révélé par la simulation). 4 min à l'arrêt.
+  s->delaiPerteArretMs = 240000;
 }
 
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
-                 int32_t maintenantMs, int32_t ecouteDepuisMs) {
+                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement) {
   if (roue->intrusionJusquaMs > maintenantMs) return ETAT_INTRUSION;
   if (!roue->aMesure) return ETAT_ATTENTE;
 
   // Math.max(roue.dernierRecuMs, ecouteDepuisMs)
   int32_t depuisMs = (roue->dernierRecuMs > ecouteDepuisMs) ? roue->dernierRecuMs : ecouteDepuisMs;
   int32_t silenceMs = maintenantMs - depuisMs;
-  if (silenceMs > seuils->delaiPerteMs) return ETAT_PERDU;
+  int32_t delaiPerte = enMouvement ? seuils->delaiPerteMs : seuils->delaiPerteArretMs;
+  if (silenceMs > delaiPerte) return ETAT_PERDU;
 
   float p = roue->mesure.pressionBar;
   if (p < seuils->crevaisonBar || roue->mesure.alarme == 0x01) return ETAT_CREVAISON;

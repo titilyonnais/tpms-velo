@@ -94,5 +94,19 @@ verifier("pirate : le boîtier détecte l'intrusion", p.boitier.stats.intrusions
 verifier("pirate : la fausse crevaison n'est pas acceptée",
   !p.boitier.roues.AV.mesure || p.boitier.roues.AV.mesure.pressionBar > 1, p.boitier.roues.AV.mesure && p.boitier.roues.AV.mesure.pressionBar);
 
-console.log("\n" + reussis + " réussis, " + rates + " en échec");
-if (rates > 0) process.exitCode = 1;
+// 6. Vélo arrêté en fin de parcours : pas de fausse alerte « capteur perdu »
+// (les capteurs n'annoncent plus qu'une fois par minute à l'arrêt).
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 5 }));
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  TPMS.mondeAvancer(a, 120000);
+  TPMS.mondeAction(a, { type: "garer" });
+  var fausses = 0;
+  for (var i = 0; i < 4 * 60; i++) {           // 4 min arrêté, boîtier encore éveillé
+    TPMS.mondeAvancer(a, 1000);
+    if (a.boitier.roues.AV.etat === "PERDU" || a.boitier.roues.AR.etat === "PERDU") fausses++;
+  }
+  verifier("arrêt : aucune fausse alerte « capteur perdu »", fausses === 0, fausses + " s en alerte");
+  console.log("\n" + reussis + " réussis, " + rates + " en échec");
+  if (rates > 0) process.exitCode = 1;
+})();

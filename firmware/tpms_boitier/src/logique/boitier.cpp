@@ -274,7 +274,8 @@ Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
     Position pos = (Position)i;
     Roue* roue = &b->roues[i];
     if (!b->veille) {
-      Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs);
+      bool enMouvement = compteurVitesseKmh(&b->compteur, maintenantMs) > 0;
+      Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs, enMouvement);
       if (etat != roue->etat) {
         roue->etat = etat;
         roue->acquittee = false;

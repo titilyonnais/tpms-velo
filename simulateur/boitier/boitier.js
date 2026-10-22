@@ -277,7 +277,8 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
     var pos = positions[i];
     var roue = b.roues[pos];
     if (!b.veille) {
-      var etat = TPMS.evaluerRoue(roue, pos, b.reglages.seuils, maintenantMs, b.ecouteDepuisMs);
+      var enMouvement = TPMS.compteurVitesseKmh(b.compteur, maintenantMs) > 0;
+      var etat = TPMS.evaluerRoue(roue, pos, b.reglages.seuils, maintenantMs, b.ecouteDepuisMs, enMouvement);
       if (etat !== roue.etat) {
         roue.etat = etat;
         roue.acquittee = false;
