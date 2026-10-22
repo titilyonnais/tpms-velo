@@ -11,6 +11,7 @@ Kit de surveillance de la pression des pneus de vélo : 2 capteurs TPMS BLE, un 
 | [Architecture](architecture.md) | Les trois parties du kit et le simulateur, principe « logique séparée des sources de données », rôle de chaque fichier, organisation du dépôt, lancement du simulateur et des tests |
 | [Protocole BLE](protocole-ble.md) | Liaison boîtier ↔ application (service, caractéristiques octet par octet, sécurité, déroulé de l'appairage) et format supposé des trames des capteurs TPMS, avec exemples en hexadécimal |
 | [Analyse de risques](analyse-de-risques.md) | Analyse de cybersécurité inspirée d'EBIOS Risk Manager : biens essentiels, sources de menace, scénarios, gravité × vraisemblance avant et après mesures, défense en profondeur, risques résiduels assumés |
+| [Schéma électrique](schema-electrique.md) | Schéma du boîtier (SVG), liaisons broche par broche, nomenclature, calculs justifiés |
 | [Bilan énergétique](bilan-energetique.md) | Consommation par état, journée type, autonomie du boîtier, influence des réglages, durée de vie des piles CR1632, piège du reed resté fermé, protocole de mesure sans PPK2 |
 
 ## Ordre de lecture conseillé
@@ -25,7 +26,7 @@ Kit de surveillance de la pression des pneus de vélo : 2 capteurs TPMS BLE, un 
 
 - Le matériel n'est pas encore reçu : tout ce qui concerne le comportement réel des capteurs (format des trames, plage de pression, intervalle d'annonce) et les consommations est une **hypothèse**, signalée comme telle dans chaque document.
 - Les valeurs chiffrées (exemples de trames, bilans énergétiques, résultats de simulation) ont été obtenues en exécutant le code du dépôt.
-- La logique est vérifiée par 102 tests automatiques : `node simulateur/tests/tests.js`.
+- La simulation est vérifiée par 399 tests automatiques en 6 suites : `node simulateur/tests/tout.js`.
 
 ## À venir
 

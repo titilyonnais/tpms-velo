@@ -60,7 +60,7 @@ Tout ce qui « réfléchit » (décoder une trame, décider qu'un pneu est en cr
 - elles reçoivent des données (octets d'une trame, instant en millisecondes, réglages) et renvoient un résultat ;
 - elles ne touchent ni à la page web, ni à l'horloge, ni à la radio.
 
-Ce qui fournit les données (un capteur simulé dans le navigateur, ou une vraie annonce BLE reçue par le nRF52840) est une **source de données**, interchangeable. Le boîtier ne fait pas la différence entre une trame produite par `simulateur/sources/capteur-simule.js` et une trame venant d'un vrai capteur : ce sont les mêmes 18 octets.
+Ce qui fournit les données (un capteur simulé dans le navigateur, ou une vraie annonce BLE reçue par le nRF52840) est une **source de données**, interchangeable. Le boîtier ne fait pas la différence entre une trame produite par le capteur simulé (`simulateur/monde/capteur.js`) et une trame venant d'un vrai capteur : ce sont les mêmes 18 octets.
 
 Conséquence pratique : le temps est toujours passé en paramètre (`maintenantMs`). Dans le simulateur, c'est l'horloge simulée (qui peut être accélérée × 600) ; dans le firmware, ce sera `millis()`. C'est ce qui permet de tester en une fraction de seconde un scénario de 20 minutes (fuite lente) ou une attaque complète.
 
@@ -70,7 +70,8 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 |---|---|---|---|
 | Logique pure | `logique/` | Fonctions sans état global ni accès matériel | Simulateur, application, firmware (traduit en C++) |
 | Comportement du boîtier | `simulateur/boitier/` | Boucle principale, liaison avec l'app, dessin de l'écran | Simulateur ; traduit en C++ dans le firmware |
-| Sources de données et interface | `simulateur/sources/`, `simulateur/app.js` | Capteurs virtuels, pirate, roue virtuelle, affichage de la page | Simulateur uniquement |
+| Monde simulé | `simulateur/monde/`, `simulateur/moteur.js`, `simulateur/sources/` | Physique du pneu, capteurs TPMS, vélo et cycliste, parcours, météo, radio BLE, LiPo et circuit, pirate | Simulateur uniquement |
+| Interface | `simulateur/app.js`, `simulateur/vues/` | Affichage : boîtier, carte, graphes, schéma animé | Simulateur uniquement |
 
 ### 2.3 Les fichiers de `logique/`
 
@@ -93,10 +94,19 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 | `simulateur/boitier/ecran.js` | Mise en page de l'écran 200×200 à partir d'une « vue » (valeurs à afficher) |
 | `simulateur/boitier/epaper.js` | Mémoire d'image et primitives de dessin, nommées comme Adafruit GFX (`fillRect`, `drawRect`…) |
 | `simulateur/boitier/police5x7.js` | Police bitmap 5×7, la même table sera copiée en C |
-| `simulateur/sources/capteur-simule.js` | Capteur TPMS virtuel : pression réglable, bruit ±0,01 bar, fuite lente, crevaison (0,15 bar/s), une annonce toutes les 3 s |
+| `simulateur/monde/atmosphere.js` | Pression atmosphérique selon l'altitude, météo heure par heure (température, soleil, vent, pluie) |
+| `simulateur/monde/pneu.js` | Chambre à air : loi des gaz parfaits, échauffement, perméation (butyle, latex, tubeless), écoulement par les trous (crevaison, fuite lente), pompe |
+| `simulateur/monde/capteur.js` | Électronique du capteur TPMS : mesure absolue moins 1013 hPa (erreur en altitude), décalage et bruit, plage limitée à 3,5 bar, détection du roulage, pile CR1632 |
+| `simulateur/monde/parcours.js` | 4 parcours réels approchés autour de Lyon : altitude, pente, virages, revêtement, feux |
+| `simulateur/monde/velo.js` | Dynamique du vélo (poids, roulement selon la pression, air, freins), cycliste (puissance, feux, virages, crevaison), rotation des roues et passages de l'aimant |
+| `simulateur/monde/radio.js` | Propagation BLE (distance, ombrage, évanouissement, masquage par la jante), canaux 37/38/39, collisions, Wi-Fi, brouillage |
+| `simulateur/monde/lipo.js`, `circuit.js` | Batterie LiPo et chargeur ; tensions et courants de chaque composant du schéma |
+| `simulateur/monde/alea.js` | Hasard reproductible (graine) : même graine et mêmes actions donnent la même sortie |
+| `simulateur/moteur.js` | Assemble le monde et le fait avancer pas à pas ; journal des actions pour le rejeu |
+| `simulateur/vues/` | Graphes, carte et profil, vue radio de dessus, schéma électrique animé |
 | `simulateur/sources/pirate.js` | Attaquant : usurpation d'identité (fausse pression) ou rejeu de trames enregistrées |
-| `simulateur/app.js`, `index.html`, `style.css` | Interface du simulateur : fait avancer le temps, fait émettre les capteurs, tourner la roue, affiche le résultat |
-| `simulateur/tests/tests.js`, `tests.html` | 102 tests automatiques de la logique |
+| `simulateur/app.js`, `index.html`, `style.css` | Interface du simulateur : fait avancer le monde au rythme choisi, transmet les actions, affiche le résultat |
+| `simulateur/tests/` | 399 tests automatiques en 6 suites (`node simulateur/tests/tout.js`) |
 
 ### 2.5 Portage vers le firmware et l'application
 
@@ -118,19 +128,35 @@ Le code JavaScript est volontairement écrit dans un style proche du C :
 
 ---
 
-## 3. Le simulateur (« jumeau numérique »)
+## 3. Le simulateur : une simulation complète
 
-Le simulateur est une page web qui reproduit en numérique tout ce qui sera faisable en réel. Il sert d'outil de conception et de support de démonstration pour le jury.
+Le projet est devenu un **logiciel de simulation complète** : tout ce qui se passerait dans la réalité est calculé, sans matériel. Le boîtier simulé exécute la même logique que le firmware ; autour de lui, `simulateur/moteur.js` fait vivre un monde physique.
 
-La page comporte cinq sections (§1 à §5 dans `simulateur/index.html`), à côté d'un « banc » toujours visible : le boîtier virtuel (écran agrandi 2 fois, boutons SW1/SW2, LED, buzzer) et la roue virtuelle avec son aimant.
+À chaque pas de temps (50 ms quand il se passe quelque chose, 1 s vélo garé), le moteur enchaîne :
 
-| Section | Contenu | Logique utilisée |
-|---|---|---|
-| §1 Capteurs et trames | Réglage pression / température / pile, trame hexadécimale générée et décodée, crevaison, fuite lente | `trame.js`, `capteur-simule.js` |
-| §2 Boîtier | Réglages du banc, compteurs, journal du boîtier (équivalent du port série) | `boitier.js`, `alertes.js`, `vitesse.js`, `fuite.js` |
-| §3 Application | L'application de `app/` intégrée dans un cadre, échanges GATT octet par octet | `protocole.js`, `liaison.js` |
-| §4 Cybersécurité | Attaquant (usurpation, rejeu), protections activables, comparaison entre la réalité et ce que croit le boîtier | `securite.js`, `pirate.js` |
-| §5 Autonomie | Consommation mesurée dans la simulation, journée type, piles CR1632 des capteurs | `energie.js` |
+1. heure du jour et météo, position sur le parcours (altitude, pente, revêtement) ;
+2. commande du cycliste, puis dynamique du vélo : vitesse, rotation des roues, passages de l'aimant devant le reed ;
+3. pneus : température de l'air, pression par la loi des gaz, fuites par les trous ;
+4. capteurs TPMS : mesure, pile, annonces BLE ; vélos voisins équipés ; pirate ;
+5. radio : position de chaque émetteur (la valve tourne avec la roue), affaiblissement, collisions, fenêtres d'écoute du boîtier ;
+6. boîtier : trames reçues, tops du reed, mise à jour chaque seconde ;
+7. électronique : courants de chaque composant selon l'état du boîtier, décharge ou recharge de la LiPo ; batterie vide, boîtier éteint ;
+8. enregistrement d'un point (chaque seconde en roulant, chaque minute vélo garé).
+
+Toutes les actions de l'utilisateur passent par `TPMS.mondeAction`, qui les horodate : une sortie peut être sauvée en fichier (réglages + actions) et rejouée à l'identique.
+
+La page comporte huit sections, à côté du boîtier toujours visible :
+
+| Section | Contenu |
+|---|---|
+| §1 Sortie | Choix du parcours, de la météo, de l'heure, des chambres, des pressions et de la graine ; carte, profil d'altitude, mesures instantanées |
+| §2 Pneus | État physique de chaque pneu et de son capteur, crevaisons (épine, pincement, valve), fuite lente, réparation, pompe ; courbe pression réelle / pression retenue ; trames décodées |
+| §3 Radio | Vue de dessus (vélo ou alentours), devenir des annonces (reçue, radio coupée, trop faible, collision, corrompue, brouillée), RSSI, trafic |
+| §4 Boîtier | Réglages, compteurs (dont circonférence réglée / réelle), journal |
+| §5 Électronique | Schéma animé (courants, tensions), batterie LiPo et recharge, courants par composant, bilan d'une journée type |
+| §6 Application | L'application de `app/` reliée au boîtier simulé |
+| §7 Cybersécurité | Pirate (usurpation, rejeu, brouillage ; position, puissance, cadence), protections, vérité terrain |
+| §8 Données | Courbes de tout l'enregistrement, statistiques, export CSV, sauvegarde et rejeu de scénario |
 
 ### Application intégrée au simulateur
 
@@ -159,11 +185,13 @@ projet-tpms-velo/
 │   ├── securite.js
 │   ├── protocole.js
 │   └── energie.js
-├── simulateur/            jumeau numérique (page web)
-│   ├── index.html, app.js, style.css
+├── simulateur/            simulation complète (page web)
+│   ├── index.html, app.js, style.css, moteur.js
 │   ├── boitier/           boitier.js, liaison.js, ecran.js, epaper.js, police5x7.js
-│   ├── sources/           capteur-simule.js, pirate.js
-│   └── tests/             tests.js, tests.html
+│   ├── monde/             alea, atmosphere, pneu, capteur, parcours, velo, radio, lipo, circuit
+│   ├── sources/           pirate.js
+│   ├── vues/              graphe.js, carte.js, schema.js
+│   └── tests/             tout.js et 6 suites
 ├── app/                   application Web Bluetooth (en cours)
 │   ├── index.html, app.js, app.css
 │   └── transport-ble.js, transport-simule.js
@@ -186,7 +214,7 @@ Ouvrir `simulateur/index.html` dans un navigateur (double-clic). Rien à install
 
 ### Tests
 
-Les 102 tests vérifient la logique (trames, vitesse, fuite, alertes, boîtier complet, sécurité, protocole, liaison, énergie, écran).
+Les tests sont répartis en 6 suites, 399 au total : logique et boîtier (102), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (80), monde complet de bout en bout (21). Pour tout lancer : `node simulateur/tests/tout.js`. Le détail ci-dessous concerne la première suite.
 
 En ligne de commande, depuis la racine du dépôt (Node.js requis) :
 

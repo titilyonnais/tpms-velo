@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TPMS-01 · Jumeau numérique</title>
+  <title>TPMS-01 · Simulation</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%23f2efe6%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%275.5%27 fill=%27none%27 stroke=%27%231a1a18%27 stroke-width=%272%27/%3E%3Ccircle cx=%278%27 cy=%272.5%27 r=%271.6%27 fill=%27%23c8361e%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
@@ -15,19 +15,20 @@
 <header class="cartouche">
   <div class="cartouche-titre">
     <span class="reference">TPMS-01</span>
-    <span class="designation">Jumeau numérique — kit capteur de pression vélo</span>
+    <span class="designation">Simulation complète — kit capteur de pression vélo</span>
   </div>
   <div class="cartouche-temps">
-    <span class="etiquette">Temps simulé</span>
-    <span id="horloge" class="chrono">0:00:00</span>
+    <span class="etiquette" id="txtJour">Jour 1</span>
+    <span id="horloge" class="chrono">08:00:00</span>
     <button id="btnPause" type="button" class="bouton">Pause</button>
     <div class="segments" id="choixFacteur" role="group" aria-label="Vitesse du temps">
       <button type="button" data-facteur="1" class="actif">×1</button>
       <button type="button" data-facteur="10">×10</button>
       <button type="button" data-facteur="60">×60</button>
       <button type="button" data-facteur="600">×600</button>
+      <button type="button" data-facteur="3600">×3600</button>
     </div>
-    <button id="btnReinit" type="button" class="bouton">Réinitialiser</button>
+    <span class="etiquette" id="txtCharge" title="Rapport entre le temps simulé et le temps réel"></span>
   </div>
 </header>
 
@@ -38,14 +39,14 @@
     <figure class="figure">
       <div class="boitier">
         <div class="boitier-haut">
-          <span class="repere"><span class="led led-alerte" id="ledAlerte"></span>D1 alerte</span>
+          <span class="repere"><span class="led led-alerte" id="ledAlerte"></span>LED1 alerte</span>
           <span class="repere"><span class="led led-radio" id="voyantRadio"></span>RX radio</span>
           <span class="repere"><span class="led led-buzzer" id="buzzer"></span>BZ1</span>
         </div>
         <div class="boitier-milieu">
-          <span class="led-eclairage" id="ledEclairageG" title="D2 éclairage"></span>
+          <span class="led-eclairage" id="ledEclairageG" title="LED2 éclairage"></span>
           <div class="ecran-cadre"><canvas id="ecran" width="200" height="200"></canvas></div>
-          <span class="led-eclairage" id="ledEclairageD" title="D3 éclairage"></span>
+          <span class="led-eclairage" id="ledEclairageD" title="LED3 éclairage"></span>
         </div>
         <div class="boitier-bas">
           <button class="bouton-physique" id="bouton1" type="button">SW1</button>
@@ -53,74 +54,111 @@
         </div>
       </div>
       <figcaption>
-        <b>Fig. 1</b> — Boîtier de guidon. Écran e-paper 200×200 agrandi 2 fois, au pixel près.<br>
-        SW1 : page · appui long : remise à zéro du trajet.<br>
-        SW2 : éclairage D2/D3 · appui long : acquitter l'alerte.
+        <b>Fig. 1</b> — Boîtier de guidon, écran e-paper au pixel près (×2).<br>
+        SW1 : page · long : remise à zéro du trajet. SW2 : éclairage · long : acquitter.
       </figcaption>
     </figure>
-
-    <figure class="figure">
-      <div class="roue-zone">
-        <svg id="roueSvg" viewBox="0 0 200 200" class="roue-svg" aria-label="Roue virtuelle">
-          <circle cx="100" cy="100" r="90" class="pneu"/>
-          <circle cx="100" cy="100" r="80" class="jante"/>
-          <g id="roueRotation">
-            <line x1="100" y1="21" x2="100" y2="179" class="rayon"/>
-            <line x1="21" y1="100" x2="179" y2="100" class="rayon"/>
-            <line x1="44" y1="44" x2="156" y2="156" class="rayon"/>
-            <line x1="156" y1="44" x2="44" y2="156" class="rayon"/>
-            <rect x="94" y="44" width="12" height="8" class="aimant"/>
-          </g>
-          <circle cx="100" cy="100" r="7" class="moyeu"/>
-          <line x1="100" y1="0" x2="100" y2="92" class="fourche"/>
-          <rect id="reed" x="105" y="40" width="18" height="7" class="reed"/>
-          <text x="127" y="46" class="cote">ILS</text>
-        </svg>
-        <div class="roue-commandes">
-          <div class="mesure-grande"><span id="txtVitesseVelo">0,0</span><small>km/h</small></div>
-          <input type="range" id="curVitesseVelo" min="0" max="60" step="0.5" value="0" aria-label="Vitesse du vélo">
-          <div class="segments petit" id="raccourcisVitesse">
-            <button type="button" data-vitesse="0" class="actif">0</button>
-            <button type="button" data-vitesse="15">15</button>
-            <button type="button" data-vitesse="25">25</button>
-            <button type="button" data-vitesse="40">40</button>
-          </div>
-        </div>
-      </div>
-      <figcaption><b>Fig. 2</b> — Roue avant. L'aimant (rouge) passe devant l'ILS fixé sur la fourche à chaque tour : un « top ».</figcaption>
-    </figure>
-
     <dl class="releve" id="releveBanc"></dl>
   </aside>
 
   <!-- ================= SECTIONS ================= -->
   <main class="feuille">
     <nav class="sections" id="sections">
-      <button type="button" data-section="s1" class="actif"><span>§1</span>Capteurs et trames</button>
-      <button type="button" data-section="s2"><span>§2</span>Boîtier</button>
-      <button type="button" data-section="s3"><span>§3</span>Application</button>
-      <button type="button" data-section="s4"><span>§4</span>Cybersécurité</button>
-      <button type="button" data-section="s5"><span>§5</span>Autonomie</button>
+      <button type="button" data-section="s1" class="actif"><span>§1</span>Sortie</button>
+      <button type="button" data-section="s2"><span>§2</span>Pneus</button>
+      <button type="button" data-section="s3"><span>§3</span>Radio</button>
+      <button type="button" data-section="s4"><span>§4</span>Boîtier</button>
+      <button type="button" data-section="s5"><span>§5</span>Électronique</button>
+      <button type="button" data-section="s6"><span>§6</span>Application</button>
+      <button type="button" data-section="s7"><span>§7</span>Cybersécurité</button>
+      <button type="button" data-section="s8"><span>§8</span>Données</button>
     </nav>
 
-    <!-- §1 CAPTEURS ET TRAMES -->
+    <!-- §1 SORTIE -->
     <section class="section" id="s1">
-      <div class="deux-colonnes" id="blocsCapteurs"></div>
+      <div class="trois-colonnes">
+        <div>
+          <h3 class="intertitre">Préparer la sortie</h3>
+          <div class="formulaire">
+            <label>Parcours <select id="cfgParcours"></select></label>
+            <label>Météo <select id="cfgMeteo"></select></label>
+            <label>Départ <span class="duo"><input type="number" id="cfgHeure" min="0" max="23.5" step="0.5" value="8"> h</span></label>
+            <label>Chambres à air
+              <select id="cfgChambre">
+                <option value="butyle">butyle</option>
+                <option value="latex">latex</option>
+                <option value="tubeless">tubeless</option>
+              </select>
+            </label>
+            <label>Pressions <span class="duo"><input type="number" id="cfgPAV" step="0.1" value="2.2"> / <input type="number" id="cfgPAR" step="0.1" value="2.4"> bar</span></label>
+            <label>Vélos équipés autour <span class="duo"><input type="number" id="cfgVoisins" min="0" max="20" step="1" value="2"></span></label>
+            <label>Graine <span class="duo"><input type="number" id="cfgGraine" min="0" step="1" value="2026"></span></label>
+          </div>
+          <div class="actions">
+            <button type="button" class="bouton actif" id="btnNouveau">Nouvelle simulation</button>
+          </div>
+          <p class="note">La graine fixe tout le hasard : même graine et mêmes actions = même sortie.</p>
+        </div>
+        <div class="colonne-large">
+          <h3 class="intertitre">Carte <small id="txtParcours"></small>
+            <span class="actions-titre">
+              <button type="button" class="bouton" id="btnPartir">Partir</button>
+              <button type="button" class="bouton" id="btnGarer">Garer le vélo</button>
+            </span>
+          </h3>
+          <svg id="carte" viewBox="0 0 640 380" class="carte" aria-label="Carte du parcours"></svg>
+          <svg id="profil" viewBox="0 0 640 130" class="graphe" aria-label="Profil d'altitude"></svg>
+        </div>
+      </div>
+      <h3 class="intertitre">En ce moment</h3>
+      <dl class="mesures" id="mesuresSortie"></dl>
+    </section>
 
-      <h3 class="intertitre">Trames diffusées <small>18 octets de « manufacturer data », format supposé</small></h3>
-      <div id="registres"></div>
-
-      <h3 class="intertitre">Trafic radio
-        <label class="interrupteur"><input type="checkbox" id="chkVoisin"> Vélo voisin à proximité</label>
+    <!-- §2 PNEUS -->
+    <section class="section" id="s2" hidden>
+      <div class="deux-colonnes" id="blocsPneus"></div>
+      <h3 class="intertitre">Pression réelle et pression retenue par le boîtier
+        <span class="segments petit" id="choixRouePneu">
+          <button type="button" data-roue="AV" class="actif">Avant</button>
+          <button type="button" data-roue="AR">Arrière</button>
+        </span>
       </h3>
+      <svg id="graphePneu" viewBox="0 0 900 220" class="graphe"></svg>
+      <p class="legende"><span class="trait-serie s1"></span>réelle <span class="trait-serie s2"></span>retenue par le boîtier</p>
+      <h3 class="intertitre">Dernières trames <small>18 octets de « manufacturer data », format supposé</small></h3>
+      <div id="registres"></div>
+    </section>
+
+    <!-- §3 RADIO -->
+    <section class="section" id="s3" hidden>
+      <div class="deux-colonnes">
+        <div>
+          <h3 class="intertitre">Vue de dessus <small id="txtEnvRadio"></small>
+            <span class="segments petit" id="choixZoomRadio" style="margin-left:auto">
+              <button type="button" data-rayon="2.5" class="actif">Vélo</button>
+              <button type="button" data-rayon="30">Alentours</button>
+            </span>
+          </h3>
+          <svg id="vueRadio" viewBox="0 0 440 440" class="vue-radio"></svg>
+          <p class="note">Chaque trait relie un émetteur au boîtier pour sa dernière annonce : plein si reçue, pointillé si perdue, avec la puissance reçue (RSSI).</p>
+        </div>
+        <div>
+          <h3 class="intertitre">Devenir des annonces</h3>
+          <table class="tableau releve-table" id="tableRadio"></table>
+          <h3 class="intertitre">RSSI des capteurs</h3>
+          <svg id="grapheRssi" viewBox="0 0 440 180" class="graphe"></svg>
+          <p class="legende"><span class="trait-serie s1"></span>avant <span class="trait-serie s2"></span>arrière</p>
+        </div>
+      </div>
+      <h3 class="intertitre">Trafic radio</h3>
       <table class="tableau trafic" id="tableTrafic"></table>
     </section>
 
-    <!-- §2 BOÎTIER -->
-    <section class="section" id="s2" hidden>
+    <!-- §4 BOÎTIER -->
+    <section class="section" id="s4" hidden>
       <div class="deux-colonnes">
         <div>
-          <h3 class="intertitre">Réglages du banc <small>accès direct, sans passer par l'app</small></h3>
+          <h3 class="intertitre">Réglages <small>accès direct, comme par l'app</small></h3>
           <div class="formulaire">
             <label>Circonférence de roue
               <select id="selCirconference">
@@ -155,8 +193,6 @@
                 <option value="300000" selected>5 min immobile</option>
               </select>
             </label>
-            <label>Batterie du boîtier <span class="duo"><input type="range" id="curBatterie" min="0" max="100" value="100"><output id="txtBatterie">100 %</output></span></label>
-            <label class="case"><input type="checkbox" id="chkCharge"> Câble de recharge branché</label>
             <label class="case"><input type="checkbox" id="chkSon" checked> Son du buzzer</label>
           </div>
         </div>
@@ -169,14 +205,45 @@
       <ol class="journal" id="journal"></ol>
     </section>
 
-    <!-- §3 APPLICATION -->
-    <section class="section" id="s3" hidden>
+    <!-- §5 ÉLECTRONIQUE -->
+    <section class="section" id="s5" hidden>
+      <div class="schema-zone" id="schemaZone"></div>
+      <div class="deux-colonnes">
+        <div>
+          <h3 class="intertitre">Batterie LiPo 500 mAh
+            <label class="interrupteur"><input type="checkbox" id="chkRecharge"> Câble magnétique branché</label>
+          </h3>
+          <table class="tableau releve-table" id="tableLipo"></table>
+          <svg id="grapheVbat" viewBox="0 0 440 180" class="graphe"></svg>
+        </div>
+        <div>
+          <h3 class="intertitre">Courants par composant</h3>
+          <table class="tableau releve-table" id="tableCourants"></table>
+          <p class="note" id="alertesCircuit"></p>
+        </div>
+      </div>
+      <h3 class="intertitre">Bilan d'une journée type <small>calcul avec les réglages actuels</small></h3>
+      <div class="formulaire ligne" id="formProfil">
+        <label>Roulage <span class="duo"><input type="number" id="pfRoulage" value="1" min="0" max="24" step="0.25"> h/j</span></label>
+        <label>Sorties <span class="duo"><input type="number" id="pfSorties" value="2" min="0" max="20" step="1"> /j</span></label>
+        <label>Éclairage <span class="duo"><input type="number" id="pfEclairage" value="0.25" min="0" max="24" step="0.25"> h/j</span></label>
+        <label>App <span class="duo"><input type="number" id="pfApp" value="0.1" min="0" max="24" step="0.1"> h/j</span></label>
+        <label>Alertes <span class="duo"><input type="number" id="pfAlertes" value="0" min="0" max="50" step="1"> /j</span></label>
+      </div>
+      <figure class="figure">
+        <svg id="grapheBilan" viewBox="0 0 640 230" class="graphe barres" role="img" aria-label="Consommation par poste"></svg>
+        <figcaption id="legendeBilan"></figcaption>
+      </figure>
+    </section>
+
+    <!-- §6 APPLICATION -->
+    <section class="section" id="s6" hidden>
       <div class="app-zone">
         <figure class="figure telephone-figure">
           <div class="telephone">
             <iframe id="cadreApp" title="Application TPMS" src="../app/index.html?transport=simule"></iframe>
           </div>
-          <figcaption><b>Fig. 3</b> — La vraie application (dossier <code>app/</code>), reliée au boîtier virtuel au lieu de la radio.</figcaption>
+          <figcaption><b>Fig. 3</b> — L'application (dossier <code>app/</code>), reliée au boîtier simulé.</figcaption>
         </figure>
         <div class="app-cote">
           <h3 class="intertitre">Liaison boîtier ↔ app</h3>
@@ -184,17 +251,17 @@
           <div class="actions">
             <button type="button" class="bouton" id="btnOublierTel">Oublier le téléphone (côté boîtier)</button>
           </div>
-          <h3 class="intertitre">Échanges GATT <small>octets réellement transmis</small></h3>
+          <h3 class="intertitre">Échanges GATT <small>octets transmis</small></h3>
           <table class="tableau echanges" id="tableEchanges"></table>
         </div>
       </div>
     </section>
 
-    <!-- §4 CYBERSÉCURITÉ -->
-    <section class="section" id="s4" hidden>
+    <!-- §7 CYBERSÉCURITÉ -->
+    <section class="section" id="s7" hidden>
       <div class="deux-colonnes">
         <div>
-          <h3 class="intertitre">Attaquant <small>émetteur BLE à quelques euros, à moins de 10 m</small></h3>
+          <h3 class="intertitre">Attaquant <small>émetteur BLE à quelques euros</small></h3>
           <div class="formulaire">
             <label class="case"><input type="checkbox" id="chkPirate"> Pirate actif</label>
             <label>Roue visée
@@ -207,8 +274,17 @@
               <span class="segments" id="choixAttaque">
                 <button type="button" data-attaque="usurpation" class="actif">Usurpation</button>
                 <button type="button" data-attaque="rejeu">Rejeu</button>
+                <button type="button" data-attaque="brouillage">Brouillage</button>
               </span>
             </label>
+            <label>Position
+              <span class="segments" id="choixPosition">
+                <button type="button" data-suit="1" class="actif">Suit le vélo</button>
+                <button type="button" data-suit="0">Posté au départ</button>
+              </span>
+            </label>
+            <label>Distance au vélo <span class="duo"><input type="range" id="curDistancePirate" min="1" max="60" step="1" value="8"><output id="txtDistancePirate">8 m</output></span></label>
+            <label>Puissance d'émission <span class="duo"><input type="range" id="curPuissancePirate" min="-20" max="20" step="1" value="4"><output id="txtPuissancePirate">+4 dBm</output></span></label>
             <label>Cadence
               <span class="segments" id="choixCadence">
                 <button type="button" data-cadence="500">0,5 s</button>
@@ -230,48 +306,47 @@
           <div class="protections" id="protections"></div>
         </div>
       </div>
-
       <h3 class="intertitre">Vérité terrain et ce que croit le boîtier</h3>
       <table class="tableau" id="tableVerite"></table>
-
-      <h3 class="intertitre">Trafic radio</h3>
-      <table class="tableau trafic" id="tableTrafic4"></table>
     </section>
 
-    <!-- §5 AUTONOMIE -->
-    <section class="section" id="s5" hidden>
+    <!-- §8 DONNÉES -->
+    <section class="section" id="s8" hidden>
+      <h3 class="intertitre">Enregistrement
+        <span class="segments petit" id="choixVariable">
+          <button type="button" data-variable="pressions" class="actif">Pressions</button>
+          <button type="button" data-variable="temperatures">Températures</button>
+          <button type="button" data-variable="vitesse">Vitesse</button>
+          <button type="button" data-variable="altitude">Altitude</button>
+          <button type="button" data-variable="batterie">Batterie</button>
+          <button type="button" data-variable="piles">Piles capteurs</button>
+        </span>
+      </h3>
+      <svg id="grapheDonnees" viewBox="0 0 900 260" class="graphe"></svg>
+      <p class="legende" id="legendeDonnees"></p>
       <div class="deux-colonnes">
         <div>
-          <h3 class="intertitre">Mesure dans la simulation</h3>
-          <table class="tableau releve-table" id="tableMesureEnergie"></table>
-          <div class="formulaire">
-            <label class="case"><input type="checkbox" id="chkDecharge" checked> La batterie du boîtier suit la consommation simulée</label>
-          </div>
-          <p class="note">Le courant suit l'état réel du boîtier virtuel : veille, fenêtres d'écoute, rafraîchissements d'écran, LED, bips, liaison avec l'app. Arrête la roue avec l'aimant devant l'ILS pour voir le courant perdu dans la résistance de tirage.</p>
+          <h3 class="intertitre">Statistiques</h3>
+          <table class="tableau releve-table" id="tableResume"></table>
         </div>
         <div>
-          <h3 class="intertitre">Journée type</h3>
-          <div class="formulaire" id="formProfil">
-            <label>Roulage <span class="duo"><input type="number" id="pfRoulage" value="1" min="0" max="24" step="0.25"> h/j</span></label>
-            <label>Sorties <span class="duo"><input type="number" id="pfSorties" value="2" min="0" max="20" step="1"> /j</span></label>
-            <label>Éclairage <span class="duo"><input type="number" id="pfEclairage" value="0.25" min="0" max="24" step="0.25"> h/j</span></label>
-            <label>App connectée <span class="duo"><input type="number" id="pfApp" value="0.1" min="0" max="24" step="0.1"> h/j</span></label>
-            <label>Alertes <span class="duo"><input type="number" id="pfAlertes" value="0" min="0" max="50" step="1"> /j</span></label>
+          <h3 class="intertitre">Exporter, rejouer</h3>
+          <div class="actions">
+            <button type="button" class="bouton" id="btnCsv">Exporter en CSV</button>
+            <button type="button" class="bouton" id="btnSauver">Sauver le scénario</button>
+            <label class="bouton">Charger un scénario<input type="file" id="fichierScenario" accept=".json" hidden></label>
+            <button type="button" class="bouton actif" id="btnRejouer">Rejouer depuis le début</button>
           </div>
-          <p class="note">Écoute radio, période d'écran et délai de veille sont ceux du §2.</p>
+          <p class="note">Le scénario contient les réglages de départ et toutes tes actions horodatées. Le rejouer redonne exactement la même sortie.</p>
+          <h3 class="intertitre">Actions enregistrées</h3>
+          <ol class="journal" id="listeActions"></ol>
         </div>
       </div>
-      <figure class="figure">
-        <svg id="grapheBilan" viewBox="0 0 640 230" class="graphe" role="img" aria-label="Consommation par poste"></svg>
-        <figcaption id="legendeBilan"></figcaption>
-      </figure>
-      <h3 class="intertitre">Capteurs de valve <small>pile CR1632, 130 mAh</small></h3>
-      <table class="tableau" id="tablePiles"></table>
     </section>
   </main>
 </div>
 
-<!-- Logique partagée (traduite en C++ dans le firmware, réutilisée par l'app) -->
+<!-- Logique partagée (le « firmware » du boîtier, aussi utilisée par l'app) -->
 <script src="../logique/trame.js"></script>
 <script src="../logique/vitesse.js"></script>
 <script src="../logique/fuite.js"></script>
@@ -279,16 +354,28 @@
 <script src="../logique/securite.js"></script>
 <script src="../logique/protocole.js"></script>
 <script src="../logique/energie.js"></script>
-<!-- Boîtier : dessin de l'écran, liaison avec l'app, cerveau -->
+<!-- Boîtier simulé -->
 <script src="boitier/police5x7.js"></script>
 <script src="boitier/epaper.js"></script>
 <script src="boitier/ecran.js"></script>
 <script src="boitier/liaison.js"></script>
 <script src="boitier/boitier.js"></script>
-<!-- Sources de données simulées -->
-<script src="sources/capteur-simule.js"></script>
+<!-- Le monde physique -->
+<script src="monde/alea.js"></script>
+<script src="monde/atmosphere.js"></script>
+<script src="monde/pneu.js"></script>
+<script src="monde/capteur.js"></script>
+<script src="monde/parcours.js"></script>
+<script src="monde/velo.js"></script>
+<script src="monde/radio.js"></script>
+<script src="monde/lipo.js"></script>
+<script src="monde/circuit.js"></script>
 <script src="sources/pirate.js"></script>
-<!-- Interface du simulateur -->
+<script src="moteur.js"></script>
+<!-- Affichage -->
+<script src="vues/graphe.js"></script>
+<script src="vues/carte.js"></script>
+<script src="vues/schema.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

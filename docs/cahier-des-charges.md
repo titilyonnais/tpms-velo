@@ -169,7 +169,7 @@ Remarques :
 | Identifiant fabricant (octets 0-1) | `00 01` | `TPMS.ID_FABRICANT` | Même capture |
 | Unité de la pression | Pa, little-endian (÷ 100 000 → bar) | `TPMS.PA_PAR_BAR` | Comparer avec un manomètre à plusieurs pressions |
 | Plage de mesure des capteurs | Souvent annoncée autour de 3,5 bar pour ce type de capteur : convient au VTT et au vélo de ville, pas aux pneus de route. Le code accepte jusqu'à 8 bar (`TPMS.PRESSION_MAX_BAR`) et des seuils jusqu'à 6 bar. | `logique/securite.js`, `logique/protocole.js` | Fiche du vendeur et essai au gonfleur ; ajuster `PRESSION_MAX_BAR` et la plage des seuils |
-| Intervalle d'annonce des capteurs | 3 s | `capteur-simule.js`, `securite.js` (`RYTHME_MIN_MS` = 2 s) | Mesurer l'écart entre annonces ; vérifier qu'il reste supérieur à 2 s, sinon la protection « rythme » donnerait de fausses alertes |
+| Intervalle d'annonce des capteurs | 3 s | `simulateur/monde/capteur.js`, `securite.js` (`RYTHME_MIN_MS` = 2 s) | Mesurer l'écart entre annonces ; vérifier qu'il reste supérieur à 2 s, sinon la protection « rythme » donnerait de fausses alertes |
 | Copies d'une même annonce | Une annonce BLE est émise sur 3 canaux en quelques millisecondes | Commentaire de `securite.js` | Le firmware devra ignorer les copies identiques reçues à moins de 100 ms d'écart |
 | Consommations du boîtier | Valeurs de fiches techniques | `logique/energie.js` | Protocole de mesure de `bilan-energetique.md` |
 | Compatibilité Bluefy | Web Bluetooth, notifications et appairage avec code disponibles sur iPhone | – | Essai sur l'iPhone de Thibault avec le boîtier réel |

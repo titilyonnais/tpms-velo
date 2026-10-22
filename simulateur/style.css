@@ -324,3 +324,84 @@ figcaption b { color: var(--encre); font-family: var(--mono); font-weight: 500; 
   .telephone { width: 100%; height: 680px; border-radius: 30px; padding: 8px; }
   .telephone iframe { border-radius: 22px; }
 }
+
+/* ===================================================================
+   Simulation complète : carte, graphes, radio, électronique
+   =================================================================== */
+.sections { gap: 0 20px; }
+.sections button { font-size: 14px; }
+.trois-colonnes { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+.actions-titre { margin-left: auto; display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.formulaire.ligne { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); column-gap: 24px; }
+
+/* Mesures instantanées : une grille de petites cases */
+.mesures { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 0; border-top: 1px solid var(--encre); }
+.mesures div { padding: 6px 10px 8px 0; border-bottom: 1px solid var(--filet); }
+.mesures dt { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--encre-2); }
+.mesures dd { margin: 2px 0 0; font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+/* Carte */
+.carte { width: 100%; height: auto; display: block; border: 1px solid var(--encre); background: #fbfaf6; }
+.carte .grille { stroke: var(--filet); stroke-width: .6; }
+.carte .trace { fill: none; stroke: var(--encre); stroke-width: 2.2; stroke-linejoin: round; }
+.carte .borne-km { fill: var(--papier); stroke: var(--encre); stroke-width: 1.2; }
+.carte .depart { fill: var(--encre); }
+.carte .trait { stroke: var(--encre); stroke-width: 1.5; }
+.carte .cycliste { fill: var(--rouge); stroke: var(--papier); stroke-width: 1; }
+.carte .voisin { fill: var(--papier); stroke: var(--encre-2); stroke-width: 1.4; }
+.carte .pirate { fill: none; stroke: var(--rouge); stroke-width: 2; stroke-dasharray: 3 2; }
+.carte .axe, .graphe .axe, .vue-radio .axe { font-family: var(--mono); font-size: 10px; fill: var(--encre-2); }
+
+/* Graphes */
+.graphe { width: 100%; height: auto; display: block; margin-top: 8px; }
+.graphe .grille { stroke: var(--filet); stroke-width: .7; }
+.graphe .vide { font-family: var(--mono); font-size: 12px; fill: var(--encre-3); }
+.graphe .serie { fill: none; stroke: var(--encre); stroke-width: 1.6; stroke-linejoin: round; }
+.graphe .serie.s2 { stroke: var(--rouge); }
+.graphe .serie.s3 { stroke: var(--encre-3); stroke-dasharray: 5 3; }
+.graphe .serie.points { stroke-width: 0; }
+.graphe .serie.points.s1 { stroke: var(--encre); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 6; }
+.graphe .serie.points.s2 { stroke: var(--rouge); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 6; }
+.graphe .serie-altitude { fill: none; stroke: var(--encre); stroke-width: 1.4; }
+.graphe .repere { stroke: var(--rouge); stroke-width: 1; stroke-dasharray: 3 3; }
+.graphe .repere-texte { fill: var(--rouge); }
+.graphe .curseur { stroke: var(--rouge); stroke-width: 1.5; }
+.graphe .libelle { font-family: var(--texte); font-size: 12px; fill: var(--encre); }
+.graphe .valeur { font-family: var(--mono); font-size: 11px; fill: var(--encre); }
+.graphe .barre { fill: var(--encre); }
+.graphe .barre.max { fill: var(--rouge); }
+.legende { font-family: var(--mono); font-size: 11px; color: var(--encre-2); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 0; }
+.trait-serie { display: inline-block; width: 20px; border-top: 2px solid var(--encre); margin-left: 8px; }
+.trait-serie.s2 { border-top-color: var(--rouge); }
+.trait-serie.s3 { border-top: 2px dashed var(--encre-3); }
+
+/* Vue radio de dessus */
+.vue-radio { width: 100%; max-width: 440px; height: auto; display: block; border: 1px solid var(--encre); background: #fbfaf6; }
+.vue-radio .anneau { fill: none; stroke: var(--filet); stroke-width: 1; }
+.vue-radio .velo-trait { stroke: var(--encre); stroke-width: 3; stroke-linecap: round; }
+.vue-radio .lien { stroke-width: 1.2; }
+.vue-radio .lien-ok { stroke: var(--encre); }
+.vue-radio .lien-perdu { stroke: var(--rouge); stroke-dasharray: 4 3; }
+.vue-radio .capteur { fill: var(--encre); }
+.vue-radio .voisin { fill: var(--papier); stroke: var(--encre-2); stroke-width: 1.4; }
+.vue-radio .pirate { fill: var(--rouge); }
+.vue-radio .portee-pirate { fill: rgba(200, 54, 30, .06); stroke: var(--rouge); stroke-width: 1; stroke-dasharray: 2 4; }
+.vue-radio .boitier-radio { fill: var(--papier); stroke: var(--encre); stroke-width: 2; }
+.vue-radio .etiquette-radio { font-family: var(--mono); font-size: 11px; fill: var(--encre); }
+
+/* Pneus */
+.pneu-bloc { margin-bottom: 14px; }
+.pneu-bloc .actions { align-items: center; }
+
+/* Schéma électrique animé */
+.schema-zone { border: 1px solid var(--encre); background: #fff; overflow-x: auto; margin-bottom: 8px; }
+.schema-zone svg { display: block; width: 100%; height: auto; min-width: 900px; }
+
+@media (max-width: 1100px) {
+  .trois-colonnes { grid-template-columns: 1fr; }
+}
+.trois-colonnes > div { min-width: 0; }
+.formulaire > label > select { max-width: 62%; min-width: 0; text-overflow: ellipsis; }
+.formulaire { grid-template-columns: minmax(0, 1fr); }
+.formulaire.ligne { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.vue-radio .roue-trait { stroke: var(--encre-3); stroke-width: 4; stroke-linecap: round; }

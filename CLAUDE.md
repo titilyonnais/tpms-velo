@@ -9,6 +9,9 @@ Contexte de reprise : ce fichier résume tout ce qui a été décidé dans une c
 - Claude écrit le code, mais Thibault doit pouvoir **l'expliquer au jury** : code simple, commenté en français, choix justifiés.
 - Ambition déclarée : projet ambitieux, quitte à prendre des risques.
 
+## Direction du projet (décision du 22/10/2026)
+Le projet devient un **logiciel de simulation complète et réaliste** (page web) : tout se passe en simulation, aucun matériel réel n'est requis. Thibault veut que tout soit simulé « comme la réalité » : physique du pneu et du vélo (gaz parfait, température, altitude, fuites, pompe, dynamique, pentes), radio BLE réaliste (distance, RSSI, pertes, collisions, brouillage, plusieurs vélos), électronique simulée (schéma animé, tensions et courants, courbe LiPo, recharge) et sorties complètes (parcours sur carte, météo, plusieurs jours, enregistrement et rejeu, statistiques). Le firmware C++ et l'app Web Bluetooth réelle restent dans le dépôt mais ne sont plus prioritaires.
+
 ## Le produit (comme si c'était une entreprise)
 Kit vendu environ 89 € : 2 capteurs de pression sur les valves + boîtier de guidon à écran e-paper + application.
 Concurrents : SKS Airspy (~100 € la paire, sans afficheur), Quarq TyreWiz (~250 £ la paire).
