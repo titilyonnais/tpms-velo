@@ -1,0 +1,11 @@
+# Fichiers générés par PlatformIO (firmware)
+.pio/
+.vscode/
+
+# Fichiers système
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Configuration locale de l'aperçu (propre à chaque poste)
+.claude/launch.json
