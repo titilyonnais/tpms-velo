@@ -148,7 +148,7 @@ TPMS.vueRadioDessiner = function (svg, m, rayonM) {
   function emetteur(id, pos, classe, texte) {
     if (!pos) return;
     var tr = vus[id];
-    if (tr) {
+    if (tr && tr.rssiDbm !== null) {
       svg.appendChild(TPMS.svgElement("line", { x1: X(pos.x), y1: Y(pos.y), x2: L / 2, y2: H / 2, class: "lien " + (tr.raison === "ok" ? "lien-ok" : "lien-perdu") }));
       svg.appendChild(TPMS.svgElement("text", { x: X(pos.x) + 6, y: Y(pos.y) + 14, class: "axe" },
         Math.round(tr.rssiDbm) + " dBm"));

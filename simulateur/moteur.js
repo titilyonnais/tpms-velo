@@ -114,7 +114,10 @@ TPMS.creerMonde = function (options) {
     m.capteurs[pos] = TPMS.creerCapteurTPMS({
       numero: i + 1,
       adresse: TPMS.adresseDepuisTexte(m.boitier.reglages.appairage[pos]),
-      graine: graine + 10 + i
+      graine: graine + 10 + i,
+      // Plage de mesure des capteurs : inconnue tant qu'ils ne sont pas
+      // reçus (la fiche AliExpress ne la donne pas) ; 3,5 bar par défaut.
+      plageMaxBar: o.plageCapteurBar || 3.5
     });
   });
 
@@ -416,7 +419,12 @@ function unPas(m, dtS) {
       sensibiliteDbm: -95
     };
     emissions.sort(function (a, c) { return a.tMs - c.tMs; });
-    var resultats = TPMS.radioResoudre(m.canal, emissions, recepteur);
+    // Boîtier endormi ou éteint : sa radio est coupée, inutile de calculer
+    // la propagation (gros gain de calcul vélo garé).
+    var radioCoupee = m.boitierMort || b.veille;
+    var resultats = radioCoupee
+      ? emissions.map(function (e) { return { id: e.id, recu: false, rssiDbm: null, canalBle: null, raison: "hors-ecoute" }; })
+      : TPMS.radioResoudre(m.canal, emissions, recepteur);
     for (var i = 0; i < emissions.length; i++) {
       var e = emissions[i], r = resultats[i];
       if (e.type !== "annonce") continue;

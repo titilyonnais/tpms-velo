@@ -74,4 +74,4 @@ Initialiser git dès le départ : l'historique des commits sert de preuve d'avan
 
 ## Points encore ouverts
 - Nom de l'établissement, professeur référent, date de soutenance.
-- Plage de pression réelle des capteurs TPMS et format exact des trames.
+- Plage de pression réelle des capteurs TPMS et format exact des trames. La fiche AliExpress ne donne pas la plage (vérifié le 22/10/2026) ; la simulation suppose 3,5 bar par défaut, réglable dans Configuration.

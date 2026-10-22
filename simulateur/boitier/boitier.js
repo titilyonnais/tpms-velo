@@ -308,7 +308,11 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
 
   // 4. Écran : au plus un dessin toutes les periodeEcranMs, sauf urgence.
   //    On n'envoie l'image à l'écran que si elle a changé.
-  if (!b.ecranUrgent && maintenantMs - b.dernierDessinMs < b.reglages.periodeEcranMs) {
+  //    En veille, le processeur dort : on ne redessine que sur urgence
+  //    (réveil, alerte). À l'arrêt, une image toutes les 10 s suffit.
+  var periodeMs = b.reglages.periodeEcranMs;
+  if (TPMS.compteurVitesseKmh(b.compteur, maintenantMs) === 0) periodeMs = 10000;
+  if (!b.ecranUrgent && (b.veille || maintenantMs - b.dernierDessinMs < periodeMs)) {
     return sorties;
   }
   b.ecranUrgent = false;

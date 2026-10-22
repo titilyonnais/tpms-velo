@@ -181,6 +181,13 @@
               <label><span>Chambres à air</span><select id="cfgChambre"><option value="butyle">Butyle (standard)</option><option value="latex">Latex (perd vite)</option><option value="tubeless">Tubeless</option></select></label>
               <label><span>Pression avant</span><span class="champ-unite"><input type="number" id="cfgPAV" step="0.1" value="2.2"><i>bar</i></span></label>
               <label><span>Pression arrière</span><span class="champ-unite"><input type="number" id="cfgPAR" step="0.1" value="2.4"><i>bar</i></span></label>
+              <label><span>Plage des capteurs</span>
+                <select id="cfgPlage">
+                  <option value="3.5" selected>0 à 3,5 bar (hypothèse)</option>
+                  <option value="5">0 à 5 bar</option>
+                  <option value="8">0 à 8 bar</option>
+                </select>
+              </label>
               <p class="avertissement" id="cfgAvertissement" hidden></p>
               <label><span>Vélos équipés autour</span><input type="number" id="cfgVoisins" min="0" max="20" step="1" value="2"></label>
               <label><span>Graine du hasard</span><input type="number" id="cfgGraine" min="0" step="1" value="2026"></label>

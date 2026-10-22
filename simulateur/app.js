@@ -86,7 +86,8 @@
       chambre: $("cfgChambre").value,
       pressionAVBar: parseFloat($("cfgPAV").value) || 2.2,
       pressionARBar: parseFloat($("cfgPAR").value) || 2.4,
-      vehiculesVoisins: parseInt($("cfgVoisins").value, 10) || 0
+      vehiculesVoisins: parseInt($("cfgVoisins").value, 10) || 0,
+      plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5
     };
   }
 
@@ -485,7 +486,7 @@
       });
       var bloc = $("registre" + pos);
       bloc.querySelector(".registre-tete").innerHTML = "<b>Capteur " + NOMS[pos] + "</b><span>" + horodatage(tr.tMs) +
-        " · " + nombre(tr.pressionBar, 2) + " bar annoncés · " + Math.round(tr.rssiDbm) + " dBm · " + verdict(tr) + "</span>";
+        " · " + nombre(tr.pressionBar, 2) + " bar annoncés · " + (tr.rssiDbm === null ? "–" : Math.round(tr.rssiDbm) + " dBm") + " · " + verdict(tr) + "</span>";
       bloc.querySelector(".registre").innerHTML = '<tr class="index">' + index + '</tr><tr class="hexa">' + hexa + '</tr><tr class="champs">' + champs + "</tr>";
     });
   }
@@ -533,7 +534,7 @@
       return { nom: RAISONS[r][1], valeur: n, classe: RAISONS[r][0], texte: nombre(100 * n / total, 1) + " %" };
     }));
     m.trafic.forEach(function (tr) {
-      if ((tr.source === "AV" || tr.source === "AR") && (!vue.derniereTrameVue || tr.tMs > vue.derniereTrameVue)) {
+      if ((tr.source === "AV" || tr.source === "AR") && tr.rssiDbm !== null && (!vue.derniereTrameVue || tr.tMs > vue.derniereTrameVue)) {
         vue.rssi[tr.source].push([tr.tMs / 1000, tr.rssiDbm]);
         if (vue.rssi[tr.source].length > 300) vue.rssi[tr.source].shift();
       }
@@ -571,7 +572,7 @@
     var html = "<tr><th>Heure</th><th>Émetteur</th><th>Annonce</th><th>RSSI</th><th>Devenir</th></tr>";
     m.trafic.slice(0, 16).forEach(function (tr) {
       html += "<tr" + (tr.source === "pirate" ? ' class="ligne-pirate"' : "") + "><td>" + horodatage(tr.tMs) + "</td><td>" + nomSource(tr.source) +
-        '</td><td class="mono">' + nombre(tr.pressionBar, 2) + ' bar</td><td class="mono">' + Math.round(tr.rssiDbm) + " dBm</td><td>" + verdict(tr) + "</td></tr>";
+        '</td><td class="mono">' + nombre(tr.pressionBar, 2) + ' bar</td><td class="mono">' + (tr.rssiDbm === null ? "–" : Math.round(tr.rssiDbm) + " dBm") + "</td><td>" + verdict(tr) + "</td></tr>";
     });
     $("tableTrafic").innerHTML = html;
   }
@@ -933,12 +934,15 @@
     // affichera une valeur fausse : on prévient avant de lancer.
     function verifierPlage() {
       var max = Math.max(parseFloat($("cfgPAV").value) || 0, parseFloat($("cfgPAR").value) || 0);
+      var plage = parseFloat($("cfgPlage").value) || 3.5;
       var av = $("cfgAvertissement");
-      av.hidden = max <= 3.5;
-      av.textContent = "Au-delà de 3,5 bar, les capteurs TPMS saturent (plage supposée) : le boîtier affichera 3,50 bar au lieu de " +
-        nombre(max, 1) + " bar. C'est une vraie limite de ces capteurs pour les vélos de route.";
+      av.hidden = max <= plage;
+      av.textContent = "Au-delà de " + nombre(plage, 1) + " bar, les capteurs saturent : le boîtier affichera " + nombre(plage, 2) +
+        " bar au lieu de " + nombre(max, 1) + " bar et restera en alerte. Choisis une plage plus large ou une pression plus basse.";
     }
     ["cfgPAV", "cfgPAR"].forEach(function (id) { $(id).addEventListener("input", verifierPlage); });
+    $("cfgPlage").addEventListener("change", verifierPlage);
+    verifierPlage();
     $("cfgParcours").addEventListener("change", verifierPlage);
 
     document.querySelectorAll("#navigation button").forEach(function (b) {
