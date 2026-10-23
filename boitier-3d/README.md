@@ -76,7 +76,7 @@ node boitier-3d/outils/verifier-interferences.js   # collisions et parois (≈ 6
 node boitier-3d/outils/composantes-stl.js boitier-3d/stl/coque.stl
 ```
 
-Les deux premiers scripts cherchent OpenSCAD dans la variable d'environnement `OPENSCAD`, sinon dans `C:/Users/utilisateur/outils/openscad-2021.01/`.
+Les deux premiers scripts cherchent OpenSCAD dans la variable d'environnement `OPENSCAD`, sinon aux emplacements habituels (`outils/openscad-2021.01/` du dossier personnel, `C:/Program Files/OpenSCAD/`, puis le PATH) : voir `outils/trouver-openscad.js`.
 
 La console d'OpenSCAD affiche les grandeurs calculées :
 

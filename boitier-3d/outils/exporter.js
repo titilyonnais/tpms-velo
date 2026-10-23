@@ -4,8 +4,8 @@
 // Utilisation (depuis la racine du dépôt) :
 //   node boitier-3d/outils/exporter.js            (pièces + images)
 //   node boitier-3d/outils/exporter.js --images   (images seulement)
-// Chemin d'OpenSCAD : variable d'environnement OPENSCAD, sinon l'endroit
-// où il est installé sur le PC de développement (version 2021.01).
+// Chemin d'OpenSCAD : variable d'environnement OPENSCAD, sinon les emplacements
+// habituels (voir trouver-openscad.js).
 //
 // Pour chaque pièce imprimable :
 //   1. rendu complet (CGAL, comme F6) avec $fn = 96, export dans stl/ ;
@@ -24,7 +24,7 @@ const fs = require("fs");
 const os = require("os");
 
 const dossier = path.join(__dirname, "..");
-const openscad = process.env.OPENSCAD || "C:/Users/utilisateur/outils/openscad-2021.01/openscad.com";
+const openscad = require("./trouver-openscad.js")();   // variable OPENSCAD, sinon emplacements habituels
 const modele = path.join(dossier, "boitier.scad");
 const PARALLELE = Math.max(2, Math.min(5, os.cpus().length - 1));
 const imagesSeules = process.argv.indexOf("--images") >= 0;

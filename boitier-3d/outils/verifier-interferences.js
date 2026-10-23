@@ -3,8 +3,8 @@
 // ---------------------------------------------------------------------
 // Utilisation (depuis la racine du dépôt) :
 //   node boitier-3d/outils/verifier-interferences.js
-// Chemin d'OpenSCAD : variable d'environnement OPENSCAD, sinon l'endroit
-// où il est installé sur le PC de développement (version 2021.01).
+// Chemin d'OpenSCAD : variable d'environnement OPENSCAD, sinon les
+// emplacements habituels (voir trouver-openscad.js).
 //
 // Principe (à expliquer au jury) :
 //   1. chaque pièce imprimée et chaque composant « fantôme » (écran,
@@ -31,7 +31,7 @@ const fs = require("fs");
 const os = require("os");
 
 const dossier = path.join(__dirname, "..");
-const openscad = process.env.OPENSCAD || "C:/Users/utilisateur/outils/openscad-2021.01/openscad.com";
+const openscad = require("./trouver-openscad.js")();   // variable OPENSCAD, sinon emplacements habituels
 const modele = path.join(dossier, "boitier.scad").replace(/\\/g, "/");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "interf-"));
 const FN = 32;                       // finesse suffisante pour ce contrôle
