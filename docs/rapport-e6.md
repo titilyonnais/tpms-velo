@@ -104,7 +104,7 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 | Simulateur (monde physique, boîtier virtuel, interface) | `simulateur/` | Terminé, testé, en ligne |
 | Application Web Bluetooth | `app/` | Fonctionne avec le boîtier simulé ; à essayer avec le vrai boîtier |
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
-| Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé ; démo en ligne sans serveur |
+| Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
 | Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Modèle paramétré, rendu, STL prêts ; pas encore imprimé |
 | Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique |
 
@@ -158,6 +158,7 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | Robustesse | Écran lisible au soleil, rafraîchi seulement si nécessaire ; boîtier étanche IPX7 ; fixation sans outil ; recharge sans ouvrir |
 | Logiciel | Logique séparée des sources de données et portable en C++ ; tests automatiques lancés à chaque modification ; code commenté en français ; rien à installer |
 | Cybersécurité | Liste blanche des capteurs ; rejet des valeurs impossibles ; détection d'un second émetteur sans confondre une vraie crevaison ; liaison app ↔ boîtier appairée et chiffrée ; code d'appairage résistant aux essais successifs ; contrôle des réglages reçus ; données gardées sur les appareils de l'utilisateur ; journal de sécurité traçable (ENF-19) ; détection d'une inondation d'annonces (ENF-20) ; capteurs « v2 » contre le pistage, **à l'état de proposition** (ENF-21) |
+| Serveur de flotte | Lots signés et protégés contre le rejeu (ENF-23, ENF-24) ; validation et requêtes SQL paramétrées (ENF-25) ; résistance à l'envoi massif (ENF-26) ; lecture réservée aux comptes, par rôle (ENF-27) ; échanges chiffrés en HTTPS (ENF-28) ; RGPD : minimisation de la position et durée de conservation (ENF-29) ; en production, une clé par boîtier et des secrets hors du dépôt (ENF-30, non tenue par la démonstration) |
 
 Le mode flotte (§ 5.10) et le serveur qui l'accompagne sont une **extension** pour un client professionnel : ils ne remplacent pas l'exigence ENF-18 (« pas de compte, pas de serveur ») du kit vendu au particulier.
 
@@ -724,12 +725,12 @@ La liaison du boîtier vers le serveur est une **hypothèse** : le boîtier n'a 
 | Partie | Fichier | Rôle |
 |---|---|---|
 | Simulation de la flotte | `flotte/flotte.js` | 20 vélos, 6 stations à Lyon, locations tirées au hasard (reproductibles par graine), modèle de pneu du simulateur au pas de 60 s, fuites lentes et crevaisons tirées au hasard, technicien qui regonfle ou change la chambre |
-| Règles communes | `flotte/flotte-logique.js` | Validation d'un lot, contrôle d'authentification, tendance sur plusieurs jours, statut et priorité de chaque vélo, indicateurs |
-| Serveur | `serveur/serveur.js` | Node.js 24 **sans aucune dépendance** (`node:http`, `node:sqlite`, `node:crypto`) ; API REST en JSON ; sert aussi la page |
-| Base de données | `serveur/base.js` | SQLite : tables `velos`, `mesures`, `alertes`, `regonflages`, `refus` ; schéma commenté |
-| Supervision | `flotte/index.html`, `page.js` | Indicateurs, carte schématique des stations, tournée triée par priorité, détail d'un vélo (courbes AV/AR ramenées à 20 °C, seuils), journal des alertes, statistiques, refus |
+| Règles communes | `flotte/flotte-logique.js` | Validation d'un lot, contrôle d'authentification, règles RGPD (minimisation, durée de conservation), tendance sur plusieurs jours, statut et priorité de chaque vélo, indicateurs |
+| Serveur | `serveur/serveur.js` | Node.js 24 **sans aucune dépendance** (`node:http`, `node:https`, `node:sqlite`, `node:crypto`) ; API REST en JSON ; comptes de lecture ; HTTPS dès qu'un certificat est présent ; sert aussi la page |
+| Base de données | `serveur/base.js` | SQLite : tables `velos`, `mesures`, `alertes`, `regonflages`, `refus` ; schéma commenté ; purge des données trop anciennes |
+| Supervision | `flotte/index.html`, `page.js` | Écran de connexion, indicateurs, carte schématique des stations, tournée triée par priorité, détail d'un vélo (courbes AV/AR ramenées à 20 °C, seuils), journal des alertes, statistiques, refus |
 
-L'**API REST** (JSON) compte une route d'écriture, `POST /api/mesures`, qui reçoit le lot **signé** d'un vélo, et quatre routes de lecture : `GET /api/velos` (dernier état, statut, priorité et prochain regonflage de chaque vélo), `GET /api/velos/:id/historique`, `GET /api/alertes` et `GET /api/statistiques`.
+L'**API REST** (JSON) compte une route d'écriture, `POST /api/mesures`, qui reçoit le lot **signé** d'un vélo, et six routes de lecture, toutes réservées aux comptes (§ 6.13) : `GET /api/velos` (dernier état, statut, priorité et prochain regonflage de chaque vélo), `GET /api/velos/:id/historique`, `GET /api/alertes`, `GET /api/statistiques`, `GET /api/moi` (le compte connecté et ses droits) et `GET /api/refus` (journal de sécurité, pour le gestionnaire seulement).
 
 J'ai choisi **SQLite** parce que la base est un simple fichier, intégré à Node 24 : rien à installer, ce qui respecte la règle du projet. Un **lot** regroupe plusieurs heures de mesures : un boîtier ne réveille pas sa liaison pour chaque mesure. Chaque lot est enregistré dans une **transaction** : si une erreur survient au milieu, aucune mesure du lot n'est gardée.
 
@@ -785,7 +786,30 @@ La pression d'un pneu n'est pas sensible. En revanche, la vitesse, la distance e
 
 Ces règles ne suffisent pas : les **capteurs eux-mêmes** diffusent une adresse fixe qui permet de suivre le vélo dans la ville (§ 6.10).
 
-**Dans le mode flotte**, le serveur garde la position GPS de chaque vélo, y compris pendant une location. Rattachée à un contrat de location, c'est une **donnée personnelle** du client au sens du RGPD. Mon prototype ne traite pas encore ce point. Je propose (non réalisé) : n'envoyer la position qu'au dépôt du vélo en station, fixer une durée de conservation, et réserver la lecture de l'API à des comptes identifiés (§ 6.13).
+**Dans le mode flotte**, la question se pose autrement. Pendant une location, la position du vélo **est** celle du client : rattachée à un contrat, c'est une **donnée personnelle** au sens du RGPD (où il va, où il habite, à quelle heure). Dans la première version de mon serveur, le boîtier simulé envoyait sa position en permanence et le serveur la gardait sans limite de durée. Je l'avais d'abord noté comme une limite ; je l'ai traité le 23/10/2026 en appliquant deux principes de l'article 5 du RGPD.
+
+**Minimisation : ne garder que ce qui sert.** Le technicien ne passe que sur les vélos rendus en station ; il n'a pas besoin de savoir où roule un client. Pendant une location (champ `enLocation`), la position n'est donc pas conservée :
+
+- le boîtier simulé (`flotte/flotte.js`) ne l'envoie pas ;
+- le serveur met quand même `lat` et `lon` à `null` **avant** de stocker la mesure (`TPMS.flotteMinimiserPosition`, dans `flotte/flotte-logique.js`). Le registre du mode démo applique la même fonction ;
+- la page de supervision ne place plus ces vélos sur la carte ; elle les liste dessous : « En location · position non conservée (RGPD) » ;
+- une base créée par l'ancienne version est mise à jour au démarrage : les positions prises pendant une location sont effacées, le reste est gardé.
+
+*Pourquoi effacer côté serveur, alors que le boîtier n'envoie rien ?* Parce que le serveur ne doit pas faire confiance à l'émetteur. Un boîtier d'une autre version, mal programmé ou modifié pourrait envoyer la position ; c'est là où la donnée est stockée que la règle doit s'appliquer. C'est le même raisonnement que pour la validation des lots (§ 6.13) et pour les réglages que le boîtier vérifie lui-même, même s'ils viennent d'un téléphone appairé (S9, § 6.5).
+
+**Limitation de la conservation : effacer ce qui ne sert plus** (`TPMS.FLOTTE_CONSERVATION`) :
+
+| Données | Durée | Pourquoi |
+|---|---|---|
+| Mesures détaillées et alertes | **30 jours** | La tendance d'une roue regarde 14 jours en arrière et une roue est regonflée en moyenne toutes les une à deux semaines : 30 jours couvrent deux fenêtres de tendance et plusieurs regonflages |
+| Journal des refus (contient des adresses IP) | **6 mois** | Durée recommandée par la CNIL pour les journaux de sécurité : assez pour enquêter sur une attaque |
+| Statistiques agrégées, regonflages | Conservés | Ils ne décrivent plus aucun trajet |
+
+La purge est une requête `DELETE … WHERE t < ?`, paramétrée comme toutes les autres, avec un index sur la date pour rester rapide. Le registre du mode démo fait la même purge (`registrePurger`).
+
+*Pourquoi compter les 30 jours depuis l'instant des données, et pas depuis l'horloge de l'ordinateur ?* La date limite se calcule à partir de la mesure la plus récente reçue (`TPMS.flotteLimiteConservation`). Ma simulation compresse le temps : 14 jours de flotte sont envoyés en 31 s. Avec l'horloge de l'ordinateur, rejouer des données anciennes (un test, une démonstration) les ferait disparaître dès leur arrivée, et la purge ne dépendrait plus des données mais du jour où je lance le programme. En comptant depuis les données, le résultat est le même à chaque lancement, et un test le vérifie (« conservation : la purge compte à partir des DONNÉES, pas de l'horloge »). En production, où les mesures arrivent en temps réel, les deux références sont presque égales.
+
+Ce qui reste : le début, la fin et les kilomètres de chaque location restent visibles 30 jours dans les mesures ; la lecture est réservée à des comptes identifiés (§ 6.13).
 
 ---
 
@@ -809,6 +833,7 @@ Point de départ : l'étude de Rouf et al. (USENIX Security 2010) sur les TPMS a
 | Historique | **Confidentialité** (vie privée) |
 | Trajets et habitudes du cycliste, déductibles des annonces des capteurs | **Confidentialité** (donnée personnelle au sens du RGPD) |
 | Journal de sécurité du boîtier | **Intégrité** : une trace modifiée ou effacée doit se voir |
+| Données de la flotte de location (mesures, position des vélos, horaires des locations) | **Intégrité** (la tournée en dépend) ; **confidentialité** et RGPD pour ce qui concerne les clients (§ 5.11, § 6.13) |
 
 | Bien support | Faiblesse |
 |---|---|
@@ -1030,7 +1055,7 @@ Si quelqu'un modifie une ligne, son empreinte change et ne correspond plus à ce
 
 ### 6.13 La sécurité du serveur de flotte
 
-Le serveur (§ 5.10) est exposé sur un réseau : c'est un second système, avec ses propres menaces. Je les ai traitées à part de l'analyse du kit ; dans `analyse-de-risques.md`, ce sont les scénarios S16 à S22.
+Le serveur (§ 5.10) est exposé sur un réseau : c'est un second système, avec ses propres menaces. Je les ai traitées à part de l'analyse du kit ; dans `analyse-de-risques.md`, ce sont les scénarios S16 à S23.
 
 | Menace | Protection | Preuve |
 |---|---|---|
@@ -1041,17 +1066,31 @@ Le serveur (§ 5.10) est exposé sur un réseau : c'est un second système, avec
 | Injection SQL | Identifiant de forme `V` + 2 chiffres, puis requêtes **toujours paramétrées** (`?`) : la valeur n'est jamais collée dans le texte SQL | L'identifiant `V01'; DROP TABLE…` est refusé (`400`) et sans effet ; `V01' OR '1'='1` ne renvoie aucune mesure ; tables intactes |
 | Inondation de requêtes | 120 requêtes/min au plus par vélo authentifié ; adresse IP bloquée 5 min après 30 refus/min | Tests (seuils réduits) : requêtes en trop → `429` ; un vélo n'est pas pénalisé par un autre ; IP bloquée après des signatures fausses |
 | Page piégée, fuite de fichiers | En-têtes de sécurité (CSP, `nosniff`, `X-Frame-Options`) ; textes reçus échappés dans la page ; dossier `serveur/` (clés, base) et fichiers cachés jamais servis ; `../` impossible | Tests : clés de démo et `.git` non servis, sortie du dépôt par `../` impossible |
-| Traçabilité | Chaque refus est noté (heure, IP, vélo annoncé, motif) dans la table `refus`, affichée par la supervision | Journal des refus |
+| Traçabilité | Chaque refus est noté (heure, IP, vélo annoncé, motif) dans la table `refus`, affichée par la supervision ; gardé 6 mois (§ 5.11) | Journal des refus |
+| Lecture des données par n'importe qui (S20) | Toute lecture `GET /api/*` exige un **jeton** de compte (`Authorization: Bearer`). Deux **rôles** : le technicien lit la tournée, les vélos, l'historique, les alertes et les statistiques sans la partie sécurité ; le gestionnaire lit en plus le journal des refus, qui contient des adresses IP. Le serveur ne garde que l'**empreinte SHA-256** de chaque jeton et compare à temps constant | Jeton faux : `401`, journalisé, compté pour le blocage d'IP ; technicien sur `/api/refus` : `403` ; aucun jeton en clair en mémoire |
+| Écoute du réseau (S22) | **HTTPS** dès qu'un certificat est présent : port 8443, TLS 1.2 minimum, en-tête **HSTS** ; sinon HTTP sur le port 8080, avec un avertissement au démarrage et sur la page | Requête HTTPS réussie ; en-tête HSTS présent ; lot signé accepté en HTTPS |
+| Faux serveur (homme du milieu) | Le script de la flotte vérifie le certificat du serveur : il fait confiance **explicitement** au certificat de démonstration (option `ca`), sans jamais couper la vérification | Sans cette confiance, la connexion est refusée |
 
 L'essai réel avec `flotte-vers-serveur.js --attaque-rejeu --attaque-signature` donne les refus attendus. En mode démo, un « banc d'essai de sécurité » rejoue ces cas dans le navigateur : lot valide `201`, rejeu `401`, pression modifiée `401`, mauvaise clé `401`, lot vieux de 2 min `401`, pression à 12 bar `400`.
 
-**Limites, que j'assume pour une démonstration :**
+**Les comptes, en détail.** La page de supervision demande le jeton à l'ouverture et le garde dans `sessionStorage` (oublié à la fermeture de l'onglet) ; un bouton « Se déconnecter » l'efface, et la page avertit si elle parle au serveur en HTTP. Un jeton faux est une tentative d'attaque : il reçoit `401`, il est noté dans le journal et il compte pour le blocage de l'adresse IP (5 min après 30 refus par minute). En revanche, une simple visite **sans** jeton (la page ouverte avant la connexion) reçoit aussi `401`, mais n'est ni journalisée ni comptée : ce n'est pas une attaque, et le journal de sécurité ne doit pas se remplir de bruit. Les deux jetons de démonstration sont dans `serveur/cles-demo.json`, marqués comme tels ; `generer-cles-demo.js --nouveaux-jetons` en tire d'autres.
 
-- **HTTP en démo** : la signature protège l'intégrité, pas la confidentialité ; en production, HTTPS est obligatoire ;
-- **clés de démo publiques** dans le dépôt (`serveur/cles-demo.json`, marquées « DÉMONSTRATION ») : en vrai, une clé par boîtier gravée à la fabrication et un coffre à secrets côté serveur, ou une signature à clé publique (ECDSA) pour que le serveur ne détienne pas de quoi signer ;
-- **lecture de l'API sans compte** : il faudrait au moins un compte « technicien » et un compte « gestionnaire » ; c'est aussi une condition du respect du RGPD (§ 5.11) ;
+*Pourquoi SHA-256 suffit pour stocker les jetons.* Si quelqu'un volait la configuration du serveur, il ne trouverait que des empreintes. Pour retrouver un jeton à partir de son empreinte, il devrait essayer des jetons au hasard : chaque jeton est tiré sur **192 bits**, il faudrait donc en moyenne 2¹⁹¹ essais, ce qui est hors de portée même avec un calcul très rapide. Les fonctions volontairement lentes (scrypt, bcrypt) servent aux **mots de passe** choisis par des humains, qu'on retrouve en essayant un dictionnaire de mots probables ; un jeton aléatoire n'a pas ce défaut. La comparaison à temps constant (`crypto.timingSafeEqual`) évite qu'on devine l'empreinte en mesurant le temps de réponse.
+
+*Pourquoi faire confiance au certificat plutôt que couper la vérification.* Mon certificat de démonstration est **auto-signé** (`serveur/generer-certificat.js`, avec openssl) : aucune autorité ne l'a signé, donc Node.js le refuse par défaut. La solution facile serait `rejectUnauthorized: false`, qui accepte n'importe quel certificat : le trafic serait chiffré, mais vers n'importe qui, y compris un faux serveur placé au milieu. J'ai préféré donner au script **ce** certificat précis comme seule autorité de confiance (option `ca`) : il accepte mon serveur et refuse tous les autres. Un test le vérifie dans les deux sens. La clé privée est dans `serveur/certificats/`, exclu de Git : aucune clé privée dans le dépôt public. En production, on prendrait un certificat Let's Encrypt pour le vrai nom de domaine, et la vérification normale suffirait.
+
+*Pourquoi un HSTS d'un jour.* L'en-tête HSTS demande au navigateur de n'utiliser que HTTPS pour ce site pendant la durée indiquée. J'ai mis `max-age=86400` (1 jour) : c'est la durée prudente d'un premier déploiement, qu'on porte à 1 an une fois HTTPS validé ; une erreur de configuration ne bloque ainsi le site qu'un jour.
+
+**Limites qui restent, que j'assume pour une démonstration :**
+
+- **jetons fixes, sans expiration** : un jeton volé reste valable jusqu'à ce qu'on retire son empreinte de la configuration ; l'étape suivante serait des sessions à durée limitée, ou l'authentification de l'entreprise (OpenID Connect) ;
+- **déconnexion côté navigateur seulement** : « Se déconnecter » fait oublier le jeton par la page, le serveur ne l'invalide pas ;
+- **secrets de démonstration publics** dans le dépôt (`serveur/cles-demo.json`, marqués « DÉMONSTRATION ») : clés des vélos et jetons des comptes. En vrai : une clé par boîtier gravée à la fabrication, un coffre à secrets côté serveur, seulement l'empreinte des jetons dans la configuration, ou une signature à clé publique (ECDSA) pour que le serveur ne détienne pas de quoi signer ;
+- **certificat auto-signé** : le chiffrement est réel, mais l'identité du serveur n'est garantie par aucune autorité, et le navigateur affiche un avertissement ;
 - limitation de débit en mémoire : remise à zéro au redémarrage, valable pour un seul serveur ;
 - liaison boîtier → serveur supposée (passerelle ou LTE-M), non réalisée.
+
+Avec ces mesures, les trois scénarios du serveur qui restaient élevés ou moyens dans la première version passent en risque faible : lecture sans compte (S20 : 8 → 2), écoute du réseau (S22 : 4 → 2) et position des clients (S23 : 9 → 2). Le seul risque élevé du serveur est S21 (secrets de démonstration publics), qui n'existe que dans la démonstration.
 
 ### 6.14 Les risques résiduels assumés
 
@@ -1064,6 +1103,7 @@ L'essai réel avec `flotte-vers-serveur.js --attaque-rejeu --attaque-signature` 
 | **S11, S14 et S5 : déni de service** | L'information est perdue, mais le cycliste le sait. C'est préférable à une fausse valeur présentée comme vraie. |
 | **Capteur perdu signalé en 10 min sous 10 km/h** | Prix de la correction des fausses pertes en montée lente (défaut n° 10). |
 | **Un téléphone appairé peut désactiver les protections** | Utile pour la démonstration ; mais sans liste blanche, une inondation fait accepter de fausses trames. Dans un produit commercial, il faudrait une confirmation par bouton sur le boîtier. |
+| **Serveur de flotte : jetons sans expiration, certificat auto-signé, secrets de démonstration publics** | Limites d'une démonstration, listées au § 6.13 avec la mesure à prendre en production (sessions à durée limitée, Let's Encrypt, une clé par boîtier). |
 | **Hors périmètre** | Lecture de la mémoire du boîtier par accès physique ; téléphone compromis ; mise à jour du firmware (prévue par USB uniquement, donc avec accès physique). |
 
 ---
@@ -1184,7 +1224,7 @@ Les valeurs mesurées remplaceront les hypothèses de `logique/energie.js` ; le 
 
 ### 8.1 Les tests automatiques
 
-Le dépôt contient **539 tests JavaScript en 7 suites** et **109 tests C++**, tous réussis. Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
+Le dépôt contient **589 tests JavaScript en 7 suites** et **109 tests C++**, tous réussis. Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
 
 | Suite | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|---|
@@ -1194,8 +1234,8 @@ Le dépôt contient **539 tests JavaScript en 7 suites** et **109 tests C++**, t
 | Radio | `radio.tests.js` | 62 | Affaiblissement et portée, masquage par la jante, paquets sur les canaux 37/38/39, fenêtre d'écoute, collisions |
 | Électronique | `electronique.tests.js` | 80 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près |
 | Monde complet | `moteur.tests.js` | 38 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 |
-| Serveur de flotte | `serveur/serveur.tests.js` | 67 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée |
-| **Total JavaScript** | | **539** | |
+| Serveur de flotte | `serveur/serveur.tests.js` | 117 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; comptes, rôles et empreinte des jetons ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) |
+| **Total JavaScript** | | **589** | |
 
 **Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **109 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
 
@@ -1225,6 +1265,8 @@ Quelques tests représentatifs, avec ce qu'ils garantissent :
 | « pistage : capteurs v2 → aucune adresse vue sur plus d'un trajet » | La proposition v2 empêche le pistage simulé |
 | « injection SQL : tables intactes » | Les requêtes paramétrées protègent la base |
 | « statistiques : temps moyen entre regonflages identique (SQL LAG = JavaScript) » | Les deux sources de données de la flotte donnent les mêmes résultats |
+| « RGPD base : la position envoyée pendant la location n'est PAS stockée (NULL) » | Le serveur applique la minimisation même si un boîtier envoie la position |
+| « HTTPS : sans faire confiance au certificat, la connexion est refusée (vérification active) » | La vérification du certificat n'est jamais coupée |
 
 Un test qui vérifie qu'une faiblesse existe (« le pirate rapide finit par passer ») peut surprendre. Je l'ai gardé exprès : il prouve que la protection « rythme » est nécessaire, et il échouerait si quelqu'un changeait le comportement sans s'en rendre compte.
 
@@ -1268,9 +1310,12 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
 | ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné et calculé (§ 4.7) ; non vérifiables avant l'impression et l'essai |
-| ENF-08 à ENF-11 (logiciel) | Vérifiées (539 tests JavaScript, 109 tests C++, lancés à chaque envoi de code ; aucune installation) |
+| ENF-08 à ENF-11 (logiciel) | Vérifiées (589 tests JavaScript, 109 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
+| EF-20 à EF-24 (mode flotte) | Vérifiées par les tests du serveur et l'essai réel de 14 jours simulés ; liaison boîtier → serveur supposée |
+| ENF-23 à ENF-29 (serveur : signature, rejeu, validation, débit, comptes, HTTPS, RGPD) | Vérifiées par les 117 tests du serveur ; HTTPS avec un certificat auto-signé de démonstration |
+| ENF-30 (une clé par boîtier, secrets hors du dépôt) | Non tenue par la démonstration (secrets de démonstration publics) |
 
 ### 8.6 Ce qui reste à valider sur le matériel réel
 
@@ -1364,8 +1409,11 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 08:45 | `e306b30` | Cybersécurité : pistage et capteurs v2, journal chaîné, pirate synchronisé, inondation, homme du milieu ; défauts n° 9 et 10 corrigés |
 | 08:50 | `70195b7` | Mode flotte : serveur, base SQLite, API, supervision de 20 vélos ; hystérésis des alertes (défaut n° 11) |
 | 09:01 | `f088154` | Boîtier 3D paramétré (OpenSCAD) |
+| 09:04 – 09:17 | `cb9bbf5`, `22370fb`, `5795390` | Test du délai de perte en montée lente ; documentation, présentation et rapport mis à jour |
+| 11:04 | `a92b81d` | Boîtier 3D rendu (OpenSCAD 2021.01), STL prêts ; sauvegarde en flash dans le firmware |
+| 11:09 | `1e0ec90` | Mode flotte : RGPD (minimisation, durée de conservation), comptes de lecture et HTTPS ; 589 tests |
 
-À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 539 aujourd'hui, auxquels s'ajoutent 109 tests C++.
+À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 589 aujourd'hui, auxquels s'ajoutent 109 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1407,12 +1455,13 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Objectif | Résultat |
 |---|---|
 | Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique, firmware, application et boîtier 3D écrits |
-| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 539 tests JavaScript et 109 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 589 tests JavaScript et 109 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
 | Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
-| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; serveur signé et protégé contre le rejeu et l'injection ; risques résiduels identifiés et justifiés |
+| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes, HTTPS en option ; risques résiduels identifiés et justifiés |
+| Respecter le RGPD | Kit : données gardées sur le téléphone. Flotte : aucune position gardée pendant une location, mesures et alertes effacées après 30 jours, journal des refus après 6 mois |
 | Autonomie ≥ 1 semaine | 63,7 jours selon le modèle, concordance à 15 % près avec la semaine simulée |
 
-Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D n'a été ni rendu ni imprimé. Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
+Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu mais pas imprimé. Le serveur de flotte garde des limites de démonstration (jetons sans expiration, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
 
 ### 10.2 Ce que j'ai appris
 
@@ -1424,6 +1473,7 @@ Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel ré
 - **Une protection peut créer un défaut** : mon contrôle du rythme prenait une vraie crevaison pour une attaque. Il faut tester une protection contre les situations normales autant que contre les attaques.
 - **La vie privée ne se règle pas après coup** : aucun réglage du boîtier ne corrige une adresse fixe émise par le capteur. Elle se décide dans la conception des composants.
 - **La même donnée vaut plus quand on l'agrège** : une pression toutes les 10 min ne dit rien seule ; sur 14 jours et 20 vélos, elle trie la journée d'un technicien.
+- **Le RGPD se traduit en règles de code** : « ne garder que ce qui sert » devient une position mise à `null` avant stockage, « limiter la conservation » devient une requête de purge avec une durée justifiée. Ces règles se testent comme le reste.
 
 ### 10.3 Les étapes à la réception du matériel
 
@@ -1436,12 +1486,12 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 5. **Application** sur l'iPhone avec Bluefy : appairage par code, MTU, écriture des réglages.
 6. **Consommations** à l'oscilloscope (§ 7.7), report des valeurs dans `logique/energie.js`.
 7. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, et d'un joint 53 × 2 si le kit commandé n'en contient pas.
-8. **Boîtier** : rendu dans OpenSCAD, impression de `essai_joint`, puis du boîtier ; essais d'étanchéité à vide avant d'y mettre l'électronique (§ 4.7).
+8. **Boîtier** (déjà rendu dans OpenSCAD, STL prêts) : impression de `essai_joint`, puis du boîtier ; essais d'étanchéité à vide avant d'y mettre l'électronique (§ 4.7).
 
 ### 10.4 Évolutions possibles
 
 - **Capteurs v2** (§ 6.11) : c'est l'évolution la plus importante, la seule qui corrige le pistage. Elle demande de concevoir nos propres capteurs.
-- **Mode flotte en production** : HTTPS, une clé par boîtier gravée à la fabrication, comptes « technicien » et « gestionnaire », position envoyée seulement au dépôt du vélo, durée de conservation des données ; réalisation de la liaison boîtier → serveur.
+- **Mode flotte en production** : les comptes, HTTPS, la minimisation de la position et la durée de conservation sont faits. Il reste : une clé par boîtier gravée à la fabrication et un coffre à secrets, des sessions à durée limitée (ou OpenID Connect) à la place des jetons fixes, un certificat Let's Encrypt, une limitation de débit partagée entre serveurs, et la réalisation de la liaison boîtier → serveur.
 - **Mesure de l'altitude** par un baromètre dans le boîtier, pour corriger l'erreur des capteurs en montagne (0,17 bar à 1 500 m).
 - **Confirmation par bouton** sur le boîtier avant de désactiver une protection depuis l'application.
 - **Refus de la charge par grand froid** (la charge d'une LiPo sous 0 °C l'abîme), en utilisant la température mesurée.
@@ -1463,11 +1513,15 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | **E-paper** | Écran à papier électronique : il réfléchit la lumière, se lit au soleil et ne consomme rien pour garder une image |
 | **EBIOS Risk Manager** | Méthode d'analyse de risques de l'ANSSI |
 | **GATT** | Organisation des données d'un appareil BLE en services et caractéristiques |
+| **Certificat auto-signé** | Certificat HTTPS signé par sa propre clé et non par une autorité : le chiffrement est réel, mais l'identité du serveur n'est pas garantie ; le client doit lui faire confiance explicitement |
 | **HMAC-SHA256** | Signature calculée avec une clé secrète partagée et la fonction SHA-256 : sans la clé, on ne peut ni fabriquer ni modifier un message signé |
+| **HSTS** | En-tête HTTP (`Strict-Transport-Security`) qui demande au navigateur de n'utiliser que HTTPS pour un site pendant une durée donnée |
+| **HTTPS, TLS** | HTTP chiffré par le protocole TLS : personne sur le chemin ne peut lire ni modifier les échanges, et le certificat prouve l'identité du serveur |
 | **Hystérésis** | Écart minimal à franchir avant de changer d'état (affichage, alerte), pour ne pas réagir au bruit |
 | **Injection SQL** | Attaque qui glisse du code SQL dans une donnée envoyée au serveur ; empêchée par les requêtes paramétrées, où la donnée est transmise à part du texte SQL |
 | **Intégration continue** | Lancement automatique des tests à chaque envoi de code (ici GitHub Actions) |
 | **IPX7** | Indice de protection (IEC 60529) : étanche à une immersion temporaire à 1 m pendant 30 min |
+| **Jeton (Bearer)** | Longue suite de caractères aléatoires qui identifie un compte ; il est envoyé dans l'en-tête `Authorization: Bearer <jeton>` de chaque requête |
 | **Joint torique radial** | Joint écrasé entre le fond d'une gorge et une paroi cylindrique, comme celui d'un piston : son écrasement ne dépend pas du serrage des vis |
 | **Jumeau numérique** | Logiciel qui reproduit un système réel et son environnement pour le concevoir et le tester |
 | **LE Secure Connections (LESC)** | Méthode d'appairage BLE à base de courbe elliptique ; avec un code affiché (*Passkey*), elle protège de l'homme du milieu |
@@ -1475,6 +1529,7 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | **LiPo** | Batterie lithium-polymère (3,0 à 4,2 V) |
 | **Liste blanche** | Liste des seuls émetteurs acceptés (ici, les adresses des deux capteurs appairés) |
 | **Manufacturer data** | Champ libre d'une annonce BLE où le fabricant place ses données |
+| **Minimisation (RGPD)** | Principe de l'article 5 du RGPD : ne collecter et ne garder que les données nécessaires au but poursuivi |
 | **MOSFET canal N** | Transistor utilisé ici comme interrupteur commandé par une broche du microcontrôleur |
 | **MTU** | Taille maximale d'un paquet de données BLE ; 23 octets par défaut, soit 20 octets utiles |
 | **OpenSCAD** | Logiciel de CAO 3D où la pièce est décrite par un programme |
@@ -1503,12 +1558,12 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | [cahier-des-charges.md](cahier-des-charges.md) | Besoin, exigences avec critères de validation, contraintes, budget, hypothèses |
 | [architecture.md](architecture.md) | Principe logique / sources de données, rôle de chaque fichier, simulateur, portage |
 | [protocole-ble.md](protocole-ble.md) | Service GATT boîtier ↔ application (octet par octet, exemples), format des trames TPMS |
-| [analyse-de-risques.md](analyse-de-risques.md) | Analyse EBIOS RM simplifiée, scénarios S1 à S22 (S16 à S22 : serveur de flotte), mesures, capteurs v2, récit des défauts corrigés, pistage, risques résiduels |
+| [analyse-de-risques.md](analyse-de-risques.md) | Analyse EBIOS RM simplifiée, scénarios S1 à S23 (S16 à S23 : serveur de flotte), mesures, capteurs v2, récit des défauts corrigés, pistage, risques résiduels |
 | [bilan-energetique.md](bilan-energetique.md) | Consommations, journée type, influence des réglages, piles, protocole de mesure |
 | [schema-electrique.md](schema-electrique.md) | Schéma, liaisons broche par broche, nomenclature, calculs justifiés |
 | [../firmware/README.md](../firmware/README.md) | Organisation du firmware, compilation, câblage, mise en service, points à vérifier |
 | [../app/README.md](../app/README.md) | Vues et transports de l'application |
-| [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement, API, format des envois signés, sécurité, limites |
+| [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement (HTTP ou HTTPS), comptes de lecture, RGPD, API, format des envois signés, sécurité, limites |
 | [../boitier-3d/README.md](../boitier-3d/README.md) | Boîtier 3D : cotes, joint, impression, quincaillerie, montage, essais d'étanchéité |
 
 En ligne :
@@ -1525,7 +1580,9 @@ Références :
 - Bluetooth SIG, *Bluetooth Core Specification* (annonces, Security Manager).
 - Nordic Semiconductor, fiche technique du nRF52840.
 - NIST, *FIPS 180-4, Secure Hash Standard* (SHA-256) ; IETF, *RFC 2104* (HMAC) et *RFC 4231* (vecteurs de test HMAC-SHA256).
-- Règlement (UE) 2016/679 (RGPD).
+- Règlement (UE) 2016/679 (RGPD), article 5 (minimisation, limitation de la conservation).
+- CNIL, recommandation relative à la journalisation (2021), pour la durée de conservation des journaux de sécurité.
+- IETF, *RFC 6750* (jetons « Bearer ») et *RFC 6797* (HSTS).
 - WeActStudio, plan de l'écran e-paper 1,54″ (dépôt GitHub du fabricant).
 
 ## Annexe C – Commandes utiles
@@ -1533,13 +1590,17 @@ Références :
 Depuis la racine du dépôt (Node.js requis) :
 
 ```
-node simulateur/tests/tout.js              # les 539 tests JavaScript, 7 suites
+node simulateur/tests/tout.js              # les 589 tests JavaScript, 7 suites
 node simulateur/tests/tests.js             # suite « logique et boîtier » (158 tests)
 node docs/schema/genere-schema.js          # régénère docs/schema/schema-boitier.svg
-node serveur/serveur.js                    # serveur de flotte : http://localhost:8080/flotte/
+node serveur/serveur.js                    # serveur de flotte : http://localhost:8080/flotte/ (jeton demandé)
 node serveur/flotte-vers-serveur.js        # 20 vélos, 14 jours simulés et envoyés au serveur
 node serveur/flotte-vers-serveur.js --attaque-rejeu --attaque-signature
+node serveur/generer-certificat.js         # certificat auto-signé de démo : le serveur passe en HTTPS (port 8443)
+node serveur/flotte-vers-serveur.js --https
 ```
+
+Les jetons des comptes de démonstration sont donnés dans `serveur/README.md`.
 
 Tests C++ sur PC (avec g++, comme sur GitHub Actions) :
 

@@ -31,7 +31,7 @@ Le boîtier affiche la pression et la température de chaque pneu, ainsi que la 
 | `simulateur/` | La simulation : monde physique (`monde/`, `moteur.js`), boîtier simulé (`boitier/`), attaquants (`sources/` : pirate, espions), affichage (`vues/`, `app.js`) |
 | `app/`        | Application Web Bluetooth (pneus, historique, fuite lente, réglages)          |
 | `firmware/`   | Programme du boîtier (Seeed XIAO nRF52840), traduction en C++ de la logique, testée sur PC (`tests_pc/`) |
-| `serveur/`    | Serveur de flotte (Node.js 24 sans dépendance, SQLite), API REST, lots signés HMAC-SHA256 : voir [`serveur/README.md`](serveur/README.md) |
+| `serveur/`    | Serveur de flotte (Node.js 24 sans dépendance, SQLite), API REST, lots signés HMAC-SHA256, comptes de lecture, HTTPS en option, règles RGPD : voir [`serveur/README.md`](serveur/README.md) |
 | `flotte/`     | Simulation de 20 vélos de location et page de supervision (tournée du technicien, fuites lentes sur plusieurs jours) |
 | `boitier-3d/` | Boîtier de guidon modélisé avec OpenSCAD (étanche IPX7 visé, fixation quart de tour) : voir [`boitier-3d/README.md`](boitier-3d/README.md) |
 | `docs/`       | Rapport E6, cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma électrique |
@@ -41,14 +41,15 @@ Le principe : la logique (`logique/` et `simulateur/boitier/`) ne connaît ni la
 
 ## Mode flotte (entreprise de location)
 
-Une société de location équipe 20 vélos du kit ; les boîtiers envoient leurs mesures à un serveur, qui repère les fuites lentes sur plusieurs jours et trie la tournée du technicien. Chaque lot est signé (HMAC-SHA256) et protégé contre le rejeu ; les requêtes SQL sont paramétrées.
+Une société de location équipe 20 vélos du kit ; les boîtiers envoient leurs mesures à un serveur, qui repère les fuites lentes sur plusieurs jours et trie la tournée du technicien. Chaque lot est signé (HMAC-SHA256) et protégé contre le rejeu ; les requêtes SQL sont paramétrées. La lecture de l'API demande un compte (jeton, rôles « technicien » et « gestionnaire ») ; le serveur passe en HTTPS dès qu'un certificat est présent. RGPD : aucune position gardée pendant une location, mesures et alertes effacées après 30 jours, journal des refus (adresses IP) après 6 mois.
 
 ```bash
-node serveur/serveur.js                  # puis http://localhost:8080/flotte/
+node serveur/serveur.js                  # puis http://localhost:8080/flotte/ (jetons de démo : serveur/README.md)
 node serveur/flotte-vers-serveur.js      # 20 vélos, 14 jours simulés et envoyés
+node serveur/generer-certificat.js       # pour HTTPS : certificat auto-signé de démo (port 8443)
 ```
 
-Sans serveur, la page `flotte/` tourne en mode démo dans le navigateur (lien « En ligne » ci-dessus). Détails : [`serveur/README.md`](serveur/README.md). Le passage du boîtier au serveur (passerelle en station ou LTE-M) est une hypothèse, et la démonstration a des limites assumées (HTTP, clés de démo publiques, lecture sans compte).
+Sans serveur, la page `flotte/` tourne en mode démo dans le navigateur (lien « En ligne » ci-dessus). Détails : [`serveur/README.md`](serveur/README.md). Le passage du boîtier au serveur (passerelle en station ou LTE-M) est une hypothèse, et la démonstration a des limites assumées (clés et jetons de démo publics, jetons sans expiration, certificat auto-signé, limitation de débit en mémoire).
 
 ## Boîtier imprimé en 3D
 
@@ -81,7 +82,7 @@ Le temps peut être accéléré jusqu'à ×3600. Avec la **semaine type** (traje
 node simulateur/tests/tout.js
 ```
 
-7 suites, 539 tests : logique et boîtier (158), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (80), monde complet de bout en bout (38), serveur et flotte (67).
+7 suites, 589 tests : logique et boîtier (158), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (80), monde complet de bout en bout (38), serveur et flotte (117).
 
 On peut aussi ouvrir `simulateur/tests/tests.html` dans le navigateur.
 

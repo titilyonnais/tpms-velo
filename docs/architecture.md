@@ -112,7 +112,7 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 | `simulateur/sources/pirate.js` | Attaquant : usurpation d'identité (fausse pression) ou rejeu de trames enregistrées |
 | `simulateur/sources/mouchards.js` | Espion de la vie privée : 20 récepteurs BLE posés le long des rues (environ tous les 700 m), qui notent chaque passage d'une adresse (`mouchardsEcouter`) ; reconstitution des trajets, des heures et du départ habituel (`mouchardsAnalyser`) |
 | `simulateur/app.js`, `index.html`, `style.css` | Interface du simulateur : fait avancer le monde au rythme choisi, transmet les actions, affiche le résultat |
-| `simulateur/tests/` | Tests automatiques : 6 suites, plus celle du serveur (`serveur/serveur.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (539 tests) |
+| `simulateur/tests/` | Tests automatiques : 6 suites, plus celle du serveur (`serveur/serveur.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (589 tests) |
 
 ### 2.5 Portage vers le firmware et l'application
 
@@ -199,7 +199,7 @@ flowchart LR
     end
     PASS["Passerelle en station<br/>ou LTE-M (hypothèse)"]
     subgraph Serveur["serveur/serveur.js (Node.js 24)"]
-        API["API REST<br/>contrôle : signature, rejeu,<br/>validation, débit"]
+        API["API REST (HTTPS si certificat)<br/>contrôle : signature, rejeu,<br/>validation, débit, comptes, RGPD"]
         BASE[("SQLite<br/>serveur/base.js")]
         API <--> BASE
     end
@@ -208,26 +208,33 @@ flowchart LR
 
     BOI -- "lots signés HMAC-SHA256<br/>toutes les 30 min" --> PASS
     PASS -- "POST /api/mesures" --> API
-    PAGE -- "GET /api/velos, /alertes,<br/>/statistiques…" --> API
+    PAGE -- "GET /api/velos, /alertes,<br/>/statistiques… (jeton de compte)" --> API
     PAGE --> TECH
     TECH -- "regonfle, change la chambre" --> Velos
 ```
 
 Sans serveur (GitHub Pages : https://titilyonnais.github.io/tpms-velo/flotte/, ou fichier ouvert directement), la page passe en **mode démo** : la même flotte tourne dans le navigateur, et un « serveur en mémoire » (`flotte/registre.js`) donne les mêmes réponses que l'API. Un bandeau le signale. Un test envoie 10 jours de flotte au vrai serveur et vérifie que les statistiques calculées en SQL sont identiques à celles du registre JavaScript : une seule logique, deux sources de données.
 
+Les règles RGPD sont, elles aussi, écrites une seule fois dans `flotte/flotte-logique.js` et appliquées par les deux sources de données (`serveur/base.js` et `flotte/registre.js`) :
+- **minimisation** (`TPMS.flotteMinimiserPosition`) : pendant une location, la position du vélo est celle du client ; elle n'est pas envoyée par le boîtier simulé, et le serveur la met à `null` avant stockage si un boîtier l'envoie quand même. La page liste les vélos en location sous la carte (« En location · position non conservée (RGPD) ») ;
+- **durée de conservation** (`TPMS.FLOTTE_CONSERVATION`) : mesures et alertes 30 jours, journal des refus (adresses IP) 6 mois ; la limite est comptée depuis la mesure la plus récente reçue (`TPMS.flotteLimiteConservation`), car la simulation compresse le temps ; statistiques agrégées et regonflages conservés.
+
+Accès : toutes les lectures `GET /api/*` exigent le jeton d'un compte (`Authorization: Bearer`) ; rôles « technicien » et « gestionnaire » (seul le second lit le journal des refus). La page de supervision affiche un écran de connexion quand elle parle au vrai serveur ; le mode démo fonctionne sans compte. Le serveur passe en HTTPS (port 8443, TLS 1.2 minimum, HSTS) dès qu'un certificat est présent dans `serveur/certificats/`, sinon il reste en HTTP (port 8080) avec un avertissement.
+
 ### 4.3 Les fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `flotte/flotte.js` | Simulation de la flotte : 20 vélos, 6 stations à Lyon, locations tirées au hasard (reproductibles par graine), modèle de pneu du simulateur au pas de 60 s, fuites lentes et crevaisons, boîtier qui décode de vraies trames, technicien qui passe chaque matin |
-| `flotte/flotte-logique.js` | Règles pures partagées entre le serveur et la page : validation d'un lot, contrôle de la signature et du rejeu, tendance sur plusieurs jours, statut et priorité de chaque vélo, indicateurs |
-| `flotte/registre.js` | « Serveur en mémoire » du mode démo, mêmes réponses que l'API |
-| `flotte/index.html`, `page.js`, `flotte.css` | Page de supervision : indicateurs, carte schématique des stations, tournée triable par priorité, détail d'un vélo (courbe AV/AR ramenée à 20 °C, seuils), journal des alertes, statistiques, refus, banc d'essai de sécurité |
-| `serveur/serveur.js` | Serveur HTTP sans dépendance : routes de l'API, authentification des lots, limitation de débit, en-têtes de sécurité, fichiers statiques (403 sur `serveur/` et les fichiers cachés) |
-| `serveur/base.js` | Schéma SQL commenté (tables `velos`, `mesures`, `alertes`, `regonflages`, `refus`) ; requêtes toujours paramétrées ; statistiques en SQL (`GROUP BY`, jointure sur `MAX(t)`, fonction `LAG` pour le temps moyen entre regonflages) |
-| `serveur/flotte-vers-serveur.js` | Client : simule la flotte en accéléré et envoie des lots signés ; options d'attaque (`--attaque-rejeu`, `--attaque-signature`) |
-| `serveur/cles-demo.json`, `generer-cles-demo.js` | Clés HMAC des 20 vélos **de démonstration** (publiques) |
-| `serveur/serveur.tests.js` | 67 tests : sécurité de l'API, débit, simulation de la flotte, bout en bout |
+| `flotte/flotte-logique.js` | Règles pures partagées entre le serveur et la page : validation d'un lot, contrôle de la signature et du rejeu, minimisation de la position et durée de conservation (RGPD), tendance sur plusieurs jours, statut et priorité de chaque vélo, indicateurs |
+| `flotte/registre.js` | « Serveur en mémoire » du mode démo, mêmes réponses que l'API, même minimisation et même purge (`registrePurger`) |
+| `flotte/index.html`, `page.js`, `flotte.css` | Page de supervision : écran de connexion (jeton gardé en `sessionStorage`, « Se déconnecter », avertissement en HTTP), indicateurs, carte schématique des stations, vélos en location listés sans position, tournée triable par priorité, détail d'un vélo (courbe AV/AR ramenée à 20 °C, seuils), journal des alertes, statistiques, refus, banc d'essai de sécurité |
+| `serveur/serveur.js` | Serveur HTTP ou HTTPS sans dépendance : routes de l'API, authentification des lots, comptes et rôles (empreintes SHA-256 des jetons), limitation de débit, en-têtes de sécurité (HSTS en HTTPS), fichiers statiques (403 sur `serveur/` et les fichiers cachés) |
+| `serveur/base.js` | Schéma SQL commenté (tables `velos`, `mesures`, `alertes`, `regonflages`, `refus`) ; requêtes toujours paramétrées ; purge RGPD (`DELETE … WHERE t < ?`, index sur `t`) ; migration d'une ancienne base ; statistiques en SQL (`GROUP BY`, jointure sur `MAX(t)`, fonction `LAG` pour le temps moyen entre regonflages) |
+| `serveur/flotte-vers-serveur.js` | Client : simule la flotte en accéléré et envoie des lots signés, en HTTP ou en HTTPS (`--https`, confiance explicite au certificat de démo) ; options d'attaque (`--attaque-rejeu`, `--attaque-signature`) |
+| `serveur/cles-demo.json`, `generer-cles-demo.js` | Clés HMAC des 20 vélos et jetons des comptes **de démonstration** (publics) ; `--nouveaux-jetons` en tire d'autres |
+| `serveur/generer-certificat.js` | Certificat HTTPS **auto-signé** de démonstration pour `localhost` (openssl), dans `serveur/certificats/`, exclu de Git |
+| `serveur/serveur.tests.js` | 117 tests : sécurité de l'API, débit, simulation de la flotte, bout en bout, comptes et rôles, RGPD (minimisation, conservation, migration), HTTPS |
 
 Lancement, API et format des lots signés : `serveur/README.md`. Sécurité du serveur : `analyse-de-risques.md`, § 5.6 et § 6.14.
 
@@ -291,15 +298,19 @@ Ouvrir `simulateur/index.html` dans un navigateur (double-clic). Rien à install
 ### Serveur et flotte
 
 ```
-node serveur/serveur.js                  # puis http://localhost:8080/flotte/
+node serveur/serveur.js                  # puis http://localhost:8080/flotte/ (jeton demandé à l'ouverture)
 node serveur/flotte-vers-serveur.js      # 20 vélos, 14 jours simulés et envoyés (≈ 30 s)
+
+node serveur/generer-certificat.js       # en HTTPS : certificat auto-signé de démo, puis
+node serveur/serveur.js                  # https://localhost:8443/flotte/
+node serveur/flotte-vers-serveur.js --https
 ```
 
-Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/flotte/) fonctionne en mode démo. Toutes les options sont dans `serveur/README.md`.
+Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/flotte/) fonctionne en mode démo, sans compte. Les jetons des comptes de démonstration et toutes les options sont dans `serveur/README.md`.
 
 ### Tests
 
-Les tests JavaScript sont répartis en 7 suites, 539 au total, tous réussis :
+Les tests JavaScript sont répartis en 7 suites, 589 au total, tous réussis :
 
 | Suite | Fichier | Nombre |
 |---|---|---|
@@ -309,8 +320,8 @@ Les tests JavaScript sont répartis en 7 suites, 539 au total, tous réussis :
 | Radio | `radio.tests.js` | 62 |
 | Électronique | `electronique.tests.js` | 80 |
 | Monde complet, de bout en bout | `moteur.tests.js` | 38 |
-| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout) | `serveur/serveur.tests.js` | 67 |
-| **Total** | | **539** |
+| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, comptes et rôles, RGPD, HTTPS) | `serveur/serveur.tests.js` | 117 |
+| **Total** | | **589** |
 
 La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage).
 
@@ -365,7 +376,7 @@ Avant, la traduction C++ était seulement compilée (vérification de syntaxe) ;
 
 | Tâche | Ce qu'elle fait |
 |---|---|
-| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (539 tests, dont ceux du serveur) |
+| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (589 tests, dont ceux du serveur) |
 | « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (109 tests) |
 
 Si un seul test échoue, le commit est marqué d'une croix rouge sur GitHub et le badge « Tests » du README passe au rouge. L'historique des exécutions, visible sur GitHub, montre que chaque version du dépôt a passé les tests.

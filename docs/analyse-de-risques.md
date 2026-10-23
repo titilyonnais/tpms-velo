@@ -40,7 +40,8 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 | Données d'historique | Pressions dans le temps, distances, horaires d'utilisation (dans l'app) | **Confidentialité** (vie privée) |
 | Trajets et habitudes du cycliste | Heures de départ et de retour, trajets répétés, quartier du domicile : déductibles des annonces des capteurs, sans rien demander au boîtier ni à l'app | **Confidentialité** (vie privée ; donnée personnelle au sens du RGPD) |
 | Journal de sécurité | Événements notés par le boîtier : intrusions, codes d'appairage faux, réglages reçus, radio saturée | **Intégrité** (traçabilité : une trace effacée ou modifiée doit se voir) |
-| Données de la flotte | Mesures des 20 vélos (pressions, positions, kilomètres, locations), alertes, regonflages, dans la base du serveur | **Intégrité** (la tournée du technicien en dépend) et **confidentialité** (positions et horaires des locations) |
+| Données de la flotte | Mesures des 20 vélos (pressions, positions en station, kilomètres, locations), alertes, regonflages, journal des refus (adresses IP), dans la base du serveur | **Intégrité** (la tournée du technicien en dépend) et **confidentialité** (horaires des locations, adresses IP) |
+| Vie privée des clients de la location | Position du vélo pendant une location, durée et distance des locations : rattachées à un contrat, ce sont des données personnelles du client | **Confidentialité** et respect du RGPD (minimisation, durée de conservation limitée) |
 | Service de supervision | API et page de la flotte, tournée triée par priorité | **Disponibilité** |
 
 ### 1.3 Biens supports
@@ -54,8 +55,8 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 | Liaison boîtier ↔ application | Maîtrisée par nous : appairage et chiffrement possibles |
 | Téléphone et navigateur | Hors de notre contrôle (système de l'utilisateur) |
 | Serveur de flotte et base SQLite | Exposés sur le réseau : reçoivent des requêtes de n'importe qui |
-| Clés secrètes des vélos (HMAC) | En démonstration, publiques dans le dépôt (`serveur/cles-demo.json`) |
-| Liaison boîtier → serveur | Supposée (passerelle ou LTE-M) ; en HTTP dans la démonstration |
+| Clés secrètes des vélos (HMAC) et jetons des comptes | En démonstration, publics dans le dépôt (`serveur/cles-demo.json`) |
+| Liaison boîtier → serveur | Supposée (passerelle ou LTE-M) ; en HTTPS dès qu'un certificat est présent (auto-signé en démonstration), sinon en HTTP avec un avertissement |
 
 ---
 
@@ -138,7 +139,7 @@ Après une attaque, quelqu'un qui a accès à la mémoire du boîtier modifie ou
 
 ### Scénarios du mode flotte (serveur)
 
-Les scénarios S16 à S22 visent le serveur de la flotte de location (`serveur/`), pas le kit vendu au particulier. Ils sont démontrés par `serveur/flotte-vers-serveur.js` (options `--attaque-rejeu`, `--attaque-signature`), par le « banc d'essai de sécurité » de la page `flotte/` et par `serveur/serveur.tests.js`.
+Les scénarios S16 à S23 visent le serveur de la flotte de location (`serveur/`), pas le kit vendu au particulier. Ils sont démontrés par `serveur/flotte-vers-serveur.js` (options `--attaque-rejeu`, `--attaque-signature`, `--https`), par le « banc d'essai de sécurité » de la page `flotte/` et par `serveur/serveur.tests.js`.
 
 ### S16 – Usurpation d'un vélo auprès du serveur
 
@@ -146,7 +147,7 @@ L'attaquant envoie à `POST /api/mesures` des lots de mesures inventés au nom d
 
 ### S17 – Rejeu de lots
 
-L'attaquant capture un vrai lot signé (en HTTP, il circule en clair) et le renvoie plus tard, tel quel, pour réécrire un ancien état du vélo.
+L'attaquant capture un vrai lot signé (en HTTP, il circule en clair ; en HTTPS, il faudrait le prendre sur la passerelle ou dans le boîtier) et le renvoie plus tard, tel quel, pour réécrire un ancien état du vélo.
 
 ### S18 – Injection SQL
 
@@ -158,15 +159,19 @@ L'attaquant envoie un grand nombre de requêtes, des corps énormes ou des requ�
 
 ### S20 – Lecture de l'API sans compte
 
-Les adresses `GET /api/...` n'exigent aucune identification : n'importe qui peut lire la position, l'état et l'historique de chaque vélo, donc les heures et lieux des locations.
+Un tiers interroge les adresses `GET /api/...` pour lire l'état et l'historique de chaque vélo, donc les heures et lieux des locations ; ou un employé lit des données dont il n'a pas besoin (le journal des refus, qui contient des adresses IP). C'était le cas dans la première version du serveur, où aucune lecture n'exigeait d'identification. Depuis le 23/10/2026, chaque lecture exige le jeton d'un compte (§ 5.6).
 
-### S21 – Clés de démonstration publiques
+### S21 – Secrets de démonstration publics
 
-Les clés HMAC des 20 vélos de démonstration sont dans le dépôt public (`serveur/cles-demo.json`, marquées « DÉMONSTRATION ») : n'importe qui peut signer un lot valide pour un vélo de démonstration.
+Les clés HMAC des 20 vélos de démonstration et les jetons des deux comptes de démonstration sont dans le dépôt public (`serveur/cles-demo.json`, marqués « DÉMONSTRATION ») : n'importe qui peut signer un lot valide pour un vélo de démonstration, ou lire l'API d'un serveur de démonstration.
 
-### S22 – Trafic en HTTP
+### S22 – Écoute du trafic réseau
 
-La démonstration fonctionne en HTTP (`http://localhost:8080`). Une personne placée sur le chemin du réseau peut lire les lots et les réponses de l'API.
+Une personne placée sur le chemin du réseau (Wi-Fi d'une station, passerelle, opérateur) lit les lots, les réponses de l'API et les jetons des comptes, ou se fait passer pour le serveur (homme du milieu). C'était le cas dans la première version du serveur, en HTTP seulement. Depuis le 23/10/2026, le serveur fonctionne en HTTPS dès qu'un certificat est présent (§ 5.6) ; sans certificat, il reste en HTTP et affiche un avertissement.
+
+### S23 – Exploitation de la position des clients (RGPD)
+
+Pendant une location, la position du vélo est celle du client. Gardée sans limite de durée, elle permettrait de reconstituer ses trajets et ses lieux de vie, que la base soit volée, lue par un employé ou réutilisée pour autre chose que l'entretien des vélos. C'est un risque pour le client et un risque juridique pour l'entreprise : le RGPD (art. 5) impose de ne collecter que les données nécessaires (minimisation) et de fixer une durée de conservation. C'était le cas dans la première version : le boîtier simulé envoyait sa position en permanence et le serveur la gardait sans limite.
 
 ---
 
@@ -219,9 +224,10 @@ La colonne « Après » correspond au produit actuel, avec les capteurs du comme
 | S17 Rejeu de lots | Ancien état du vélo réécrit | 2 × 3 = **6 moyen** | Horodatage à ±60 s et séquence strictement croissante gardée en base | 2 × 1 = **2 faible** | = |
 | S18 Injection SQL | Base lue, modifiée ou détruite | 3 × 3 = **9 élevé** | Identifiant « V + 2 chiffres » ; requêtes SQL toujours paramétrées | 3 × 1 = **3 faible** | = |
 | S19 Déni de service par requêtes | Supervision indisponible | 2 × 3 = **6 moyen** | 120 requêtes/min par vélo ; IP bloquée 5 min après 30 refus/min ; corps ≤ 64 Kio ; délais de lecture | 2 × 2 = **4 moyen** (résiduel : limitation en mémoire, un seul serveur) | = |
-| S20 Lecture de l'API sans compte | Positions et horaires des locations exposés | 2 × 4 = **8 élevé** | Aucune dans la démonstration | 2 × 4 = **8 élevé** (démonstration ; comptes « technicien » et « gestionnaire » proposés, § 6.14) | = |
-| S21 Clés de démo publiques | N'importe qui signe un lot pour un vélo de démo | 3 × 4 = **12 élevé** | Clés marquées « DÉMONSTRATION » ; en production : une clé par boîtier, gravée à la fabrication, et coffre à secrets côté serveur | **12 élevé en démonstration** ; sans objet en production (S16) | = |
-| S22 Trafic en HTTP | Lots et réponses lus en chemin | 2 × 2 = **4 moyen** | La signature empêche de **modifier** un lot ; en production : HTTPS obligatoire | 2 × 2 = **4 moyen** (démonstration) ; 2 × 1 = **2 faible** en HTTPS | = |
+| S20 Lecture de l'API sans compte | Positions et horaires des locations exposés | 2 × 4 = **8 élevé** | Jeton par compte pour toute lecture (192 bits aléatoires) ; le serveur ne garde que son empreinte SHA-256, comparée à temps constant ; rôles « technicien » et « gestionnaire » ; 401 et 403 journalisés, IP bloquée 5 min après 30 refus/min | 2 × 1 = **2 faible** (résiduel : jeton volé valable jusqu'à sa révocation, pas d'expiration, § 6.14) | = |
+| S21 Secrets de démo publics | N'importe qui signe un lot pour un vélo de démo, ou lit l'API avec un jeton de démo | 3 × 4 = **12 élevé** | Clés et jetons marqués « DÉMONSTRATION » ; `generer-cles-demo.js --nouveaux-jetons` en tire d'autres ; en production : une clé par boîtier, gravée à la fabrication, coffre à secrets côté serveur, seulement l'empreinte des jetons dans la configuration | **12 élevé en démonstration** ; sans objet en production (S16, S20) | = |
+| S22 Écoute du trafic réseau | Lots, réponses et jetons lus en chemin ; faux serveur | 2 × 2 = **4 moyen** | La signature empêche de **modifier** un lot ; HTTPS (TLS 1.2 minimum) dès qu'un certificat est présent, en-tête HSTS ; le script de la flotte vérifie le certificat (confiance explicite, vérification jamais coupée) ; avertissement si le serveur démarre en HTTP | 2 × 1 = **2 faible** (résiduel : certificat auto-signé en démonstration, le navigateur avertit ; 4 moyen si le serveur est lancé sans certificat) | = |
+| S23 Position des clients (RGPD) | Trajets et lieux de vie des clients reconstitués à partir de la base | 3 × 3 = **9 élevé** | Minimisation : aucune position pendant une location, effacée par le serveur avant stockage même si un boîtier l'envoie ; conservation limitée (mesures et alertes 30 jours, journal des refus 6 mois) ; lecture réservée aux comptes (S20) | 1 × 2 = **2 faible** (reste : début, fin et kilomètres des locations, gardés 30 jours) | = |
 
 Pour S3 et S4, la vraisemblance « après » porte sur une attaque **réussie sans être signalée** : la tentative reste facile, mais elle déclenche l'état « SIGNAL SUSPECT » (voir § 5.2, et le § 6.4 pour une fausse valeur proche de la vraie, affichée quelques secondes avant la détection). Avec les capteurs v2, la note ne baisse pas parce que l'échelle s'arrête à 1 ; la différence est que la fausse trame est refusée dès la première, avec une preuve (la signature), au lieu d'être repérée par son comportement.
 
@@ -231,10 +237,10 @@ Pour S3 et S4, la vraisemblance « après » porte sur une attaque **réussie sa
 |---|---|---|---|---|
 | **4 – Critique** | – | – | – | – |
 | **3 – Grave** | S3, S4, S6, S7, S8, S13, S16, S18 (3, faible) | – | **S12 (9, élevé)** | *S21 (12, élevé, démonstration)* |
-| **2 – Significative** | S2, S9, S17 (2, faible) | S19, *S22* (4, moyen) | S1, S11 (6, moyen) | *S20 (8, élevé, démonstration)* |
-| **1 – Mineure** | S10, S15 (1, faible) | S5 (2, faible) | S14 (3, faible) | – |
+| **2 – Significative** | S2, S9, S17, S20, S22 (2, faible) | S19 (4, moyen) | S1, S11 (6, moyen) | – |
+| **1 – Mineure** | S10, S15 (1, faible) | S5, S23 (2, faible) | S14 (3, faible) | – |
 
-Les scénarios en italique ne concernent que la **démonstration** du serveur de flotte (§ 6.14) : ils disparaissent ou baissent avec les mesures prévues pour une mise en production (HTTPS, comptes, une clé secrète par boîtier).
+Le scénario en italique ne concerne que la **démonstration** du serveur de flotte (§ 6.14) : il disparaît en production, avec une clé secrète par boîtier et des jetons connus de leurs seuls titulaires. Dans la première version du serveur, S20 (8, élevé), S22 (4, moyen) et S23 (9, élevé) restaient à leur niveau « avant » : lecture sans compte, HTTP seulement, position des clients gardée sans limite. Les mesures du 23/10/2026 (§ 5.6) les font passer en « faible ».
 
 Pour le kit vendu au particulier, le seul risque élevé restant est le **pistage (S12)**. Il ne vient pas d'une erreur de conception du boîtier mais des capteurs du commerce, qui émettent une adresse fixe en clair ; aucune mesure côté boîtier ou application ne peut le réduire (§ 6.9). C'est ce qui justifie la proposition de capteurs v2 (§ 5.5).
 
@@ -351,7 +357,7 @@ Limites de la proposition :
 
 ### 5.6 Mode flotte : sécurité du serveur
 
-**Contexte.** Une entreprise de location équipe 20 vélos du kit. Les boîtiers envoient leurs mesures par lots à un serveur (`serveur/serveur.js`, Node.js 24 sans aucune dépendance : `node:http`, `node:sqlite`, `node:crypto`), qui les range dans une base SQLite (`serveur/base.js`). Le serveur calcule ce que le boîtier seul ne voit pas (fuites lentes sur plusieurs jours) et trie la tournée du technicien par priorité ; la page `flotte/` l'affiche. Le passage du boîtier au serveur (passerelle en station ou module LTE-M) est une **hypothèse**. Le format des lots et l'API sont décrits dans `serveur/README.md`.
+**Contexte.** Une entreprise de location équipe 20 vélos du kit. Les boîtiers envoient leurs mesures par lots à un serveur (`serveur/serveur.js`, Node.js 24 sans aucune dépendance : `node:http`, `node:https`, `node:sqlite`, `node:crypto`), qui les range dans une base SQLite (`serveur/base.js`). Le serveur calcule ce que le boîtier seul ne voit pas (fuites lentes sur plusieurs jours) et trie la tournée du technicien par priorité ; la page `flotte/` l'affiche. Le passage du boîtier au serveur (passerelle en station ou module LTE-M) est une **hypothèse**. Le format des lots et l'API sont décrits dans `serveur/README.md`.
 
 | Mesure | Contre | Implémentation | Paramètres | Tests (`serveur/serveur.tests.js`) |
 |---|---|---|---|---|
@@ -362,13 +368,22 @@ Limites de la proposition :
 | **Limitation de débit et de taille** | S19 | `serveur/serveur.js` | 120 requêtes/min par vélo authentifié ; adresse IP bloquée 5 min après 30 refus/min ; corps ≤ 64 Kio ; délais de lecture (contre « slowloris ») | « limitation de débit : 5 requêtes acceptées, puis 429 », « limitation par vélo : V07 n'est pas pénalisé par V06 », « après 4 signatures fausses, l'adresse IP est bloquée (429) », « corps de plus de 64 Kio : refusé (413) » |
 | **En-têtes de sécurité, fichiers protégés** | Page de supervision (XSS, clickjacking), fuite des clés | `serveur/serveur.js`, `flotte/page.js` | CSP, `nosniff`, `X-Frame-Options`, `no-referrer` ; la page échappe tout texte reçu ; `serveur/` et fichiers cachés jamais servis ; `../` impossible | « en-têtes de sécurité présents », « les clés de démo ne sont pas servies », « sortie du dépôt par ../ impossible », « fichiers cachés (.git) non servis » |
 | **Journal des refus** | Traçabilité | Table `refus` et console | Heure, IP, vélo annoncé, motif ; l'identifiant piégé est gardé comme simple texte | « journal des refus : l'identifiant piégé est gardé comme simple texte », « statistiques : refus comptés par motif » |
+| **Comptes de lecture et rôles** | S20 | `authentifier`, `DROITS`, `empreinteJeton` (`serveur/serveur.js`) ; écran de connexion de `flotte/page.js` | Toute route `GET /api/*` exige `Authorization: Bearer <jeton>` ; jeton aléatoire de 192 bits ; le serveur ne garde que son empreinte SHA-256 et compare à temps constant (`crypto.timingSafeEqual`) ; rôle « technicien » (tournée, vélos, historique, alertes, statistiques sans la partie sécurité), rôle « gestionnaire » (en plus le journal des refus) ; 401 si le jeton est faux (journalisé, compté pour le blocage d'IP), 403 hors des droits ; une visite **sans** jeton reçoit 401 sans être journalisée ; jeton gardé par la page en `sessionStorage`, bouton « Se déconnecter » | « compte : jeton faux (bien formé) → 401 », « rôle technicien : journal de sécurité /api/refus → 403 », « rôle gestionnaire : /api/refus → 200 », « comptes en mémoire : aucun jeton en clair, seulement l'empreinte », « journal : les jetons faux sont tracés, pas les visites sans jeton » |
+| **HTTPS en option** | S22 | `serveur/serveur.js`, `serveur/generer-certificat.js`, `requeteJson` (`serveur/flotte-vers-serveur.js`) | Si `serveur/certificats/cert.pem` et `cle.pem` existent (ou option `--https`) : HTTPS sur le port 8443, TLS 1.2 minimum, en-tête `Strict-Transport-Security: max-age=86400` ; sinon HTTP sur le port 8080 avec avertissement. Certificat de démonstration **auto-signé** pour `localhost`, fabriqué par openssl ; `serveur/certificats/` exclu de Git. Le script de la flotte fait confiance à ce certificat précis (option `ca`), sans jamais couper la vérification | « HTTPS : requête réussie en faisant confiance au certificat de démo (option ca) », « HTTPS : sans faire confiance au certificat, la connexion est refusée (vérification active) », « HTTPS : en-tête Strict-Transport-Security présent », « HTTPS : un lot signé passe aussi par HTTPS (201) » |
+| **Minimisation de la position** (RGPD, art. 5) | S23 | `TPMS.flotteMinimiserPosition` (`flotte/flotte-logique.js`), appliquée par `serveur/base.js` et par le registre du mode démo (`flotte/registre.js`) ; le boîtier simulé (`flotte/flotte.js`) n'envoie pas la position en location | Pendant une location, `lat` et `lon` sont mis à `null` **avant** stockage, même si un boîtier les envoie ; la page affiche « En location · position non conservée (RGPD) » ; une ancienne base est migrée au démarrage (positions de location effacées) | « RGPD base : la position envoyée pendant la location n'est PAS stockée (NULL) », « RGPD API : /api/velos ne donne aucune position pour un vélo en location », « RGPD démo : le registre efface aussi la position en location », « ancienne base : lat devient facultative, positions de location effacées, le reste gardé » |
+| **Durée de conservation** | S23 | `TPMS.FLOTTE_CONSERVATION`, `TPMS.flotteLimiteConservation` ; `DELETE … WHERE t < ?` paramétré (index sur `t`) dans `serveur/base.js` ; `registrePurger` pour le mode démo | Mesures et alertes : 30 jours (plus que la fenêtre de tendance de 14 jours, plusieurs cycles de regonflage) ; journal des refus (adresses IP) : 6 mois ; limite comptée depuis la mesure la plus récente reçue ; statistiques agrégées et regonflages conservés | « conservation : la purge compte à partir des DONNÉES, pas de l'horloge (rien d'effacé) », « conservation : une mesure récente fait effacer celles de plus de 30 jours », « conservation : refus de plus de 6 mois effacés (adresses IP) », « conservation démo : le registre efface les mêmes mesures et alertes » |
+
+Pourquoi l'empreinte SHA-256 suffit pour les jetons : un jeton est tiré au hasard sur 192 bits. Quelqu'un qui volerait la base des empreintes devrait essayer en moyenne 2¹⁹¹ jetons pour en retrouver un : c'est hors de portée, même avec un calcul très rapide. Une fonction lente (scrypt, bcrypt) n'est utile que pour les **mots de passe** choisis par des humains, qui sont devinables avec un dictionnaire.
+
+Pourquoi effacer la position côté serveur alors que le boîtier ne l'envoie pas : le serveur ne doit pas faire confiance à l'émetteur. Un boîtier d'une autre version, mal réglé ou modifié pourrait envoyer la position ; la règle est appliquée là où les données sont stockées.
 
 **Résultats mesurés.**
 - Essai réel avec `serveur/flotte-vers-serveur.js` : 14 jours de flotte simulés en 31 s, **1 120 lots acceptés sur 1 120** (40 356 mesures). Lot rejoué : refusé (401 rejeu) ; lot modifié : refusé (401 signature) ; lot signé avec la clé d'un autre vélo : refusé.
 - L'identifiant `V01'; DROP TABLE…` est refusé et sans effet sur la base.
 - Sans serveur (GitHub Pages), la page `flotte/` tourne en mode démo et propose un **banc d'essai de sécurité**, qui applique les mêmes règles avec le HMAC de `logique/sha256.js` : lot valide → 201 ; rejeu → 401 ; pression modifiée → 401 ; mauvaise clé → 401 ; lot vieux de 2 min → 401 ; pression à 12 bar → 400.
+- 589 tests JavaScript, dont 117 pour le serveur (`serveur/serveur.tests.js`) : 67 tests d'origine (signature, rejeu, injection, débit, simulation de la flotte) et 50 ajoutés le 23/10/2026 pour les comptes, les rôles, l'empreinte des jetons, la minimisation de la position (base, API, historique, registre du mode démo), la purge, la migration d'une ancienne base et HTTPS (avec un certificat temporaire fabriqué par le test).
 
-Les limites de la démonstration (HTTP, clés publiques, lecture sans compte, limitation de débit en mémoire) sont au § 6.14.
+Les limites qui restent (jetons sans expiration, déconnexion côté navigateur, secrets de démonstration publics, certificat auto-signé, limitation de débit en mémoire, liaison supposée) sont au § 6.14.
 
 ---
 
@@ -558,15 +573,16 @@ Un pirate peut maintenir le boîtier en « SIGNAL SUSPECT » ou le priver de mes
 
 L'octet 12 de la caractéristique REGLAGES permet d'activer ou de désactiver chaque protection, pour la démonstration devant le jury. `TPMS.verifierReglages` ne contrôle ni ce champ ni les adresses des capteurs : c'est un choix assumé, le propriétaire appairé reste maître de ses réglages. En contrepartie, un téléphone appairé, volé et déverrouillé, pourrait affaiblir le boîtier ; par exemple, sans liste blanche, une inondation fait accepter de fausses trames (§ 6.11). Dans un produit commercial, on pourrait imposer les protections, ou demander une confirmation par appui sur un bouton du boîtier pour ce type de changement.
 
-### 6.14 Limites du serveur de flotte de démonstration (S19 à S22)
+### 6.14 Limites du serveur de flotte de démonstration (S19 à S23)
 
-Le serveur de flotte est une démonstration. Ses limites sont connues et assumées ; pour chacune, la mesure à prendre en production est indiquée.
+Le serveur de flotte est une démonstration. Trois limites de la première version sont **levées depuis le 23/10/2026** (§ 5.6) : la lecture de l'API sans compte (S20), le trafic en HTTP seulement (S22) et la position des clients gardée sans limite de durée (S23). Les limites qui restent sont connues et assumées ; pour chacune, la mesure à prendre en production est indiquée.
 
 | Limite | Risque | En production |
 |---|---|---|
-| Démonstration en **HTTP** (S22) | Lots et réponses lisibles sur le réseau. La signature protège l'intégrité (un lot modifié est refusé), pas la confidentialité | HTTPS obligatoire |
-| **Clés de démonstration publiques** dans le dépôt (S21) | N'importe qui peut signer un lot valide pour un vélo de démonstration | Une clé par boîtier, gravée à la fabrication ; coffre à secrets côté serveur. On pourrait aussi remplacer la clé partagée (HMAC) par une signature à clé publique (ECDSA) : le serveur ne garderait alors aucun secret capable de signer |
-| **Lecture de l'API sans compte** (S20) | Positions, états et historiques des vélos lisibles par tous | Comptes « technicien » et « gestionnaire », chacun limité à ce dont il a besoin |
+| **Jetons fixes, sans expiration** (S20) | Un jeton volé reste valable jusqu'à ce qu'on retire son empreinte de la configuration ; pas de vrai mot de passe | Sessions à durée limitée, ou authentification de l'entreprise (OpenID Connect) |
+| **Déconnexion côté navigateur seulement** (S20) | « Se déconnecter » fait oublier le jeton par la page (`sessionStorage`), mais le serveur ne l'invalide pas | Sessions côté serveur, qu'on peut fermer |
+| **Secrets de démonstration publics** dans le dépôt (S21) | N'importe qui peut signer un lot pour un vélo de démonstration, ou lire l'API avec un jeton de démonstration | Une clé par boîtier, gravée à la fabrication ; coffre à secrets côté serveur ; seulement l'empreinte des jetons dans la configuration. On pourrait aussi remplacer la clé partagée (HMAC) par une signature à clé publique (ECDSA) : le serveur ne garderait alors aucun secret capable de signer |
+| **Certificat auto-signé** (S22) | Le chiffrement est réel, mais aucune autorité ne garantit l'identité du serveur : le navigateur affiche un avertissement, et un utilisateur qui passe outre pourrait accepter un faux serveur. Sans certificat, le serveur démarre en HTTP (avertissement affiché) | Certificat Let's Encrypt pour le vrai nom de domaine ; HSTS porté à 1 an une fois HTTPS validé |
 | **Limitation de débit en mémoire** (S19) | Remise à zéro à chaque redémarrage ; ne vaut que pour un seul serveur ; n'arrête pas une attaque venant de milliers d'adresses | Limitation partagée entre serveurs, protection anti-DDoS de l'hébergeur |
 | **Liaison boîtier → serveur supposée** | Le boîtier réel n'a pas de modem | Passerelle dans chaque station ou module LTE-M ; le format des lots ne dépend pas de ce choix |
 
@@ -601,6 +617,8 @@ Le serveur de flotte est une démonstration. Ses limites sont connues et assumé
 - I. Rouf et al., « Security and Privacy Vulnerabilities of In-Car Wireless Networks: A Tire Pressure Monitoring System Case Study », *19th USENIX Security Symposium*, 2010.
 - Bluetooth SIG, *Bluetooth Core Specification*, partie Security Manager (appairage LE Secure Connections) et adresses privées résolubles (idée reprise pour l'adresse privée des capteurs v2).
 - NIST, *FIPS 180-4, Secure Hash Standard* (SHA-256) ; IETF, *RFC 2104* (HMAC) et *RFC 4231* (vecteurs de test HMAC-SHA256).
-- Règlement (UE) 2016/679 (RGPD) : des trajets et horaires rattachés à un vélo sont des données personnelles.
-- OWASP, *Top 10* et *API Security Top 10* (injection, authentification, limitation de débit) : liste de référence pour les scénarios S16 à S22 du serveur.
+- Règlement (UE) 2016/679 (RGPD) : des trajets et horaires rattachés à un vélo sont des données personnelles ; article 5 (minimisation des données, limitation de la conservation).
+- CNIL, recommandation relative à la journalisation (2021) : conservation des journaux de sécurité de six mois à un an.
+- OWASP, *Top 10* et *API Security Top 10* (injection, authentification, limitation de débit) : liste de référence pour les scénarios S16 à S23 du serveur.
+- IETF, *RFC 6750* (jetons « Bearer ») et *RFC 6797* (HSTS).
 - Format de trame supposé des capteurs : github.com/schlumpf2009/TPMS.

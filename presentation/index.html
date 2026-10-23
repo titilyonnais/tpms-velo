@@ -734,20 +734,20 @@
 </section>
 
 <!-- ================================================================ 21 -->
-<section class="diapo" data-notes="Chaque vélo a sa clé. Un lot n'est accepté que s'il est signé, récent et jamais vu : le numéro de séquence est gardé en base, donc l'anti-rejeu tient après un redémarrage. Toutes les requêtes SQL sont paramétrées. Le banc d'essai de la page de démonstration rejoue ces six cas. Limites : HTTP en démo, clés de démo publiques.">
+<section class="diapo" data-notes="Chaque vélo a sa clé. Un lot n'est accepté que s'il est signé, récent et jamais vu : le numéro de séquence est gardé en base, donc l'anti-rejeu tient après un redémarrage. Toutes les requêtes SQL sont paramétrées. Le banc d'essai de la page de démonstration rejoue ces six cas. Pour la lecture : chaque requête exige le jeton d'un compte, technicien ou gestionnaire ; le serveur ne garde que l'empreinte SHA-256 du jeton, ce qui suffit pour un jeton aléatoire de 192 bits. HTTPS dès qu'un certificat est présent : le script fait confiance à ce certificat précis au lieu de couper la vérification. RGPD : aucune position pendant une location, effacée par le serveur même si un boîtier l'envoie ; mesures gardées 30 jours, journal des IP 6 mois. Limites : jetons sans expiration, certificat auto-signé, secrets de démo publics.">
   <p class="repere">Mode flotte · sécurité de l'API</p>
-  <h2>Le serveur n'accepte que des lots <em>signés, récents et jamais vus</em></h2>
+  <h2>Le serveur n'accepte que des lots <em>signés, récents et jamais vus</em>, et ne répond qu'aux <em>comptes autorisés</em></h2>
   <div class="corps grille" style="grid-template-columns: 1fr 1fr; gap: 48px; align-items:start;">
     <div class="filtres">
-      <div class="filtre"><b>1 · Signature HMAC-SHA256</b>identifiant + horodatage + n° de séquence + corps, clé propre à chaque vélo ; comparaison à temps constant</div>
-      <div class="filtre"><b>2 · Anti-rejeu en deux couches</b>horodatage à ±60 s ; séquence strictement croissante gardée en base, même après redémarrage</div>
-      <div class="filtre"><b>3 · Validation par liste blanche</b>champs, types, plages physiques, dates croissantes ; corps ≤ 64 Kio</div>
-      <div class="filtre"><b>4 · SQL toujours paramétré</b>l'identifiant <code>V01'; DROP TABLE…</code> est refusé, sans effet</div>
-      <div class="filtre"><b>5 · Débit limité</b>par vélo authentifié ; adresse IP bloquée 5 min après 30 refus par minute</div>
+      <div class="filtre"><b>1 · Signature HMAC-SHA256</b>clé propre à chaque vélo ; comparaison à temps constant</div>
+      <div class="filtre"><b>2 · Anti-rejeu en deux couches</b>horodatage à ±60 s ; séquence croissante gardée en base</div>
+      <div class="filtre"><b>3 · Validation par liste blanche</b>champs, types, plages physiques, dates ; corps ≤ 64 Kio</div>
+      <div class="filtre"><b>4 · SQL toujours paramétré</b><code>V01'; DROP TABLE…</code> est refusé, sans effet</div>
+      <div class="filtre"><b>5 · Débit limité</b>par vélo ; IP bloquée 5 min après 30 refus par minute</div>
     </div>
     <div>
       <div class="defile">
-        <table style="font-size:19px">
+        <table class="serre" style="font-size:18px">
           <thead><tr><th>Banc d'essai · lot envoyé</th><th class="n">Réponse</th></tr></thead>
           <tbody>
             <tr class="retenu"><td>Lot valide</td><td class="n vert">201</td></tr>
@@ -759,10 +759,15 @@
           </tbody>
         </table>
       </div>
-      <p class="discret petit" style="margin:20px 0 0"><b class="orange">Limites assumées :</b> HTTP en démonstration (HTTPS obligatoire en production), clés de démo publiques, API lisible sans compte.</p>
+      <div class="carte carte-accent cartes-serrees" style="margin-top:18px; padding:16px 24px">
+        <span class="etiquette">Lecture et données personnelles</span>
+        <p class="discret petit"><b class="violet">Comptes</b> : jeton exigé (401) ; rôles technicien / gestionnaire (403)</p>
+        <p class="discret petit"><b class="violet">HTTPS</b> : TLS 1.2 minimum, HSTS ; certificat vérifié, jamais ignoré</p>
+        <p class="discret petit"><b class="vert">RGPD</b> : pas de position en location ; mesures 30 j, journal 6 mois</p>
+      </div>
     </div>
   </div>
-  <p class="note-bas">67 tests du serveur ; un test vérifie que les statistiques SQL sont identiques à celles calculées en JavaScript pour 10 jours de flotte.</p>
+  <p class="note-bas"><b class="orange">Limites :</b> jetons sans expiration, certificat auto-signé, secrets de démo publics, débit limité en mémoire. 117 tests du serveur.</p>
 </section>
 
 <!-- ================================================================ 22 -->
@@ -868,15 +873,15 @@
 </section>
 
 <!-- ================================================================ 25 -->
-<section class="diapo" data-notes="539 tests JavaScript en 7 suites et 109 tests C++. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
+<section class="diapo" data-notes="589 tests JavaScript en 7 suites et 109 tests C++. Le serveur en a 117, dont 50 ajoutés pour les comptes, le RGPD et HTTPS (avec un certificat temporaire fabriqué par le test). GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
   <p class="repere">Vérification</p>
-  <h2><em>539 tests JavaScript et 109 tests C++</em>, relancés par GitHub à chaque push</h2>
+  <h2><em>589 tests JavaScript et 109 tests C++</em>, relancés par GitHub à chaque push</h2>
   <div class="corps grille" style="grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:start;">
     <div class="barres tests-barres" style="gap:16px">
       <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">158</span></div>
+      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:74.1%"></div></div><span class="total">117</span></div>
       <div class="barre-ligne"><span class="nom">Électronique</span><div class="piste"><div class="barre" style="width:50.6%"></div></div><span class="total">80</span></div>
       <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:45.6%"></div></div><span class="total">72</span></div>
-      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:42.4%"></div></div><span class="total">67</span></div>
       <div class="barre-ligne"><span class="nom">Vélo et parcours</span><div class="piste"><div class="barre" style="width:39.2%"></div></div><span class="total">62</span></div>
       <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:39.2%"></div></div><span class="total">62</span></div>
       <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:24.1%"></div></div><span class="total">38</span></div>
@@ -886,7 +891,7 @@
     <div class="grille" style="gap:16px">
       <div class="carte carte-accent"><h3>GitHub Actions, à chaque push</h3><p class="discret petit">Une tâche JavaScript (Node 24) et une tâche C++ : la logique du firmware est compilée avec g++ puis exécutée.</p></div>
       <div class="carte"><h3>Vecteurs officiels</h3><p class="discret petit">SHA-256 (FIPS 180-4) et HMAC (RFC 4231), en JavaScript et en C++.</p></div>
-      <div class="carte"><h3>De bout en bout</h3><p class="discret petit">Crevaison, pirate, semaine type, pistage v1 / v2, flotte envoyée au serveur ; rejeu identique d'un scénario.</p></div>
+      <div class="carte"><h3>De bout en bout</h3><p class="discret petit">Crevaison, pirate, semaine type, pistage v1 / v2, flotte envoyée au serveur, lot signé en HTTPS ; rejeu identique d'un scénario.</p></div>
     </div>
   </div>
 </section>
@@ -931,7 +936,7 @@
         <tr><td>Boîtier 3D</td><td>rendu OpenSCAD, STL prêts ; joint radial calculé</td><td>Impression, pièce d'essai du joint (20 min), immersion 30 min à 1 m</td></tr>
         <tr><td>Seuil d'inondation</td><td>50 annonces inconnues par seconde</td><td>Compter les annonces BLE dans une rue fréquentée</td></tr>
         <tr><td>Capteurs v2</td><td>proposition simulée</td><td>Demande des capteurs dont on écrit le programme</td></tr>
-        <tr><td>Mode flotte</td><td>liaison boîtier → serveur supposée ; HTTP en démo</td><td>Choix passerelle ou LTE-M ; HTTPS et vraies clés en production</td></tr>
+        <tr><td>Mode flotte</td><td>liaison supposée ; certificat auto-signé</td><td>Passerelle ou LTE-M ; Let's Encrypt en production</td></tr>
       </tbody>
     </table>
   </div>
@@ -944,7 +949,7 @@
   <div class="grille g3" style="gap:22px">
     <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression compensée, une prévision de regonflage, des statistiques, et la tournée d'une flotte de 20 vélos.</p></div>
     <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">15 scénarios</div><p class="discret">analysés ; 0 fausse crevaison acceptée sur 300 ; seul le pistage reste élevé, d'où la proposition de capteurs v2.</p></div>
-    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés ; 539 tests JS et 109 tests C++ relancés à chaque push.</p></div>
+    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés ; 589 tests JS et 109 tests C++ relancés à chaque push.</p></div>
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>
