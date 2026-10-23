@@ -20,7 +20,7 @@ Différenciation : afficheur dédié lisible au soleil, très basse consommation
 ### Cahier des charges retenu
 - Tous types de vélos ; vélo de test : valves **Schrader**, chambre à air.
 - Capteurs de roue : **TPMS BLE du commerce** (bouchon de valve), trames diffusées en annonce BLE (manufacturer data), décodées par nous. Vérifier la plage max (souvent ~3,5 bar → OK VTT/ville, pas route).
-- Boîtier guidon : Seeed XIAO nRF52840, e-paper 1,54″ 200×200 SPI (WeAct, SSD1681), LiPo 500 mAh, recharge par connecteur magnétique, IPX7, fixation quart de tour.
+- Boîtier guidon : Seeed XIAO nRF52840, e-paper 1,54″ 200×200 SPI (WeAct, SSD1681), LiPo 500 mAh, recharge par connecteur magnétique, IPX7, collier de cintre (vis M3) + glissière à cran (boîtier amovible sans outil).
 - Écran : pression AV/AR, température, niveau des piles/batterie, **vitesse et distance** (aimant de rayon + interrupteur reed filaire, circonférence de roue réglable).
 - Alertes : **bip + LED**. Éclairage de nuit : 2 LED blanches latérales (pas de vrai front-light, trop cher).
 - Autonomie boîtier : **≥ 1 semaine** (viser plusieurs) : écoute BLE par fenêtres, rafraîchissement écran seulement si changement, veille quand la roue ne tourne plus.
@@ -54,6 +54,7 @@ Décision de Thibault : en attendant le matériel, le projet est un **logiciel d
 - Principe d'architecture : la **logique** (`logique/`, pure, temps passé en paramètre) est séparée des **sources de données** ; elle est traduite telle quelle en C++ dans `firmware/tpms_boitier/src/logique/` et réutilisée par l'app.
 - Réglages clés du boîtier : écoute radio 3 s toutes les 5 s à position variable + écoute renforcée 15 s après une trame douteuse ; capteur perdu après 60 s au-dessus de 10 km/h, 10 min sinon ; historique de pression compensé en température ; hystérésis de 0,05 bar sur les alertes basse/haute ; contrôle du rythme qui tolère la rafale d'une vraie crevaison ; prévision du prochain regonflage ; journal de sécurité chaîné (SHA-256) ; détection d'inondation radio.
 - Ajouts du 23/10/2026 : statistiques et pression conseillée, page « Vie privée » (pistage par récepteurs espions), capteurs « v2 » en proposition (adresse privée, compteur, signature HMAC), attaques synchronisée / inondation / homme du milieu, mode flotte (serveur Node + SQLite + supervision de 20 vélos), boîtier 3D OpenSCAD (rendu avec OpenSCAD 2021.01, STL prêts dans boitier-3d/stl/, pas encore imprimé).
+- Boîtier 3D version 2 (23/10/2026, détails dans boitier-3d/README.md) : 46 × 64 × 28 mm, forme type compteur GPS, PETG sans support ; joint torique radial 53 × 1,8 NBR 70 (écrasement 21,3 %, remplissage 66 %), 4 vis M2 fraisées dans des inserts laiton ; collier fendu + bride serrés par une vis M3 sur le cintre (cales 22,2 / 23,8 / 25,4 / 31,8 mm ; 22,2 par défaut, près des poignées) ; boîtier enclenché sur le collier par une glissière en queue d'aronde à cran, retiré sans outil ; tolérances en paramètres réglées avec la pièce `test_jeux`, joint avec `essai_joint` ; 10 pièces ; contrôle d'interférences et de parois par `outils/verifier-interferences.js`. Imprimante encore inconnue. L'ancienne fixation de la version 1 et l'ancien aperçu SVG sont supprimés.
 - Mode flotte (commit 1e0ec90) : lecture de l'API réservée aux comptes (jetons, rôles technicien / gestionnaire, empreintes SHA-256), HTTPS en option (certificat auto-signé de démo, HSTS), RGPD (aucune position pendant une location, mesures et alertes 30 jours, journal des refus 6 mois) ; détails dans `serveur/README.md`.
 - Tests : `node simulateur/tests/tout.js` (589 tests JS en 7 suites : 158, 72, 62, 62, 80, 38, 117 pour le serveur) + 109 tests C++ (`firmware/tests_pc`), lancés par GitHub Actions à chaque push.
 - Chiffres à jour et défauts révélés par la simulation : voir `docs/` (analyse de risques, bilan énergétique) et `docs/rapport-e6.md`.
@@ -68,7 +69,7 @@ docs/         cahier des charges, analyse de risques, bilan énergétique, proto
 presentation/ diaporama de soutenance (page web, publiée sur GitHub Pages)
 serveur/      serveur Node.js + SQLite du mode flotte (API REST signée HMAC)
 flotte/       simulation de 20 vélos de location et page de supervision (mode démo sans serveur)
-boitier-3d/   modèle OpenSCAD du boîtier, aperçu coté, outils de vérification
+boitier-3d/   modèle OpenSCAD du boîtier, STL, rendus, outils d'export et de contrôle d'interférences
 ```
 Le simulateur est l'outil de travail de Thibault (pas de « mode jury »). Style visuel : tableau de bord sombre, fond noir, cartes arrondies, accent violet #A78BFA, barre latérale.
 En ligne (GitHub Pages, dépôt public titilyonnais/tpms-velo) : https://titilyonnais.github.io/tpms-velo/simulateur/ , /app/ et /presentation/. Commits avec l'adresse noreply 107395514+titilyonnais@users.noreply.github.com.

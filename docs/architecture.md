@@ -242,7 +242,14 @@ Lancement, API et format des lots signés : `serveur/README.md`. Sécurité du s
 
 ## 5. Le boîtier imprimé en 3D
 
-`boitier-3d/boitier.scad` est un modèle OpenSCAD paramétré du boîtier de guidon : coque, couvercle, fixation au cintre, vue éclatée et pièce d'essai du joint. Les dimensions sont calculées à partir des composants (extérieur 46,0 × 64,4 × 28,0 mm, hauteur imposée par les écrous des boutons) ; chaque cote indique sa source ([FICHE], [DESSIN WeAct], [HYPOTHÈSE] ou [CHOIX]), et des `assert` arrêtent le calcul si une règle de conception n'est plus respectée. Étanchéité visée IPX7 par un joint torique radial. Le modèle est rendu avec OpenSCAD 2021.01 : `boitier-3d/outils/exporter.js` fait le rendu complet de chaque pièce, exporte les STL (`boitier-3d/stl/`) et les images (`boitier-3d/rendus/`), et vérifie que chaque pièce est fermée et d'un seul tenant. D'autres scripts de `boitier-3d/outils/` vérifient la syntaxe, contrôlent 42 règles de cotes et dessinent l'aperçu coté (`apercu.svg`). Détails, impression, montage et essais : `boitier-3d/README.md`.
+`boitier-3d/boitier.scad` est un modèle OpenSCAD paramétré du boîtier de guidon (version 2 du 23/10/2026). Il produit 10 pièces : la coque et la façade du boîtier, le collier de cintre et sa bride, 4 demi-cales (cintres de 22,2 / 23,8 / 25,4 / 31,8 mm), la pièce de réglage des tolérances `test_jeux` et la pièce d'essai du joint `essai_joint` ; ainsi que des vues (ensemble, éclatée, coupe).
+
+- **Dimensions** calculées à partir des composants : boîtier de 46,0 × 64,0 × 28,0 mm sans le collier, hauteur imposée par les écrous des boutons. Chaque cote indique sa source ([FICHE], [MESURÉ AU PLAN], [HYPOTHÈSE] ou [CHOIX]), et des `assert` arrêtent le calcul si une règle de conception n'est plus respectée.
+- **Étanchéité** visée IPX7 : joint torique radial 53 × 1,8 NBR 70 dans une gorge de la jupe de la façade, 4 vis M2 dans des inserts laiton, hors du joint.
+- **Fixation** : collier fendu et bride serrés par une vis M3 ; le boîtier glisse sur le collier par une queue d'aronde et se verrouille par une languette à cran ; il s'enlève sans outil.
+- **Tolérances d'impression** en paramètres (`jeu_trou`, `jeu_glissant`, `jeu_joint`…), à régler avec `test_jeux` une fois l'imprimante connue.
+
+Le modèle est rendu avec OpenSCAD 2021.01. `boitier-3d/outils/exporter.js` fait le rendu complet de chaque pièce, exporte les STL (`boitier-3d/stl/`) et les images (`boitier-3d/rendus/`), et vérifie que chaque pièce est fermée et d'un seul tenant (avec `outils/composantes-stl.js`). `boitier-3d/outils/verifier-interferences.js` place chaque pièce et chaque composant « fantôme » à sa position de montage et calcule leurs intersections (elles doivent être vides), puis vérifie que les parois de la coque font au moins 2 mm. Détails, impression, montage et essais : `boitier-3d/README.md`.
 
 ---
 
@@ -277,7 +284,7 @@ projet-tpms-velo/
 │   └── tests_pc/          main.cpp : lance les tests de la logique C++ sur un PC
 ├── serveur/               serveur de flotte (Node.js 24, SQLite), API REST, tests
 ├── flotte/                simulation de 20 vélos de location et page de supervision
-├── boitier-3d/            boîtier imprimé en 3D (OpenSCAD), aperçu coté, outils de vérification
+├── boitier-3d/            boîtier imprimé en 3D (OpenSCAD), STL, rendus, outils d'export et de contrôle
 ├── presentation/          présentation pour la soutenance (page web)
 └── docs/                  ce dossier (dont le rapport E6)
 ```

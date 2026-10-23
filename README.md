@@ -33,7 +33,7 @@ Le boîtier affiche la pression et la température de chaque pneu, ainsi que la 
 | `firmware/`   | Programme du boîtier (Seeed XIAO nRF52840), traduction en C++ de la logique, testée sur PC (`tests_pc/`) |
 | `serveur/`    | Serveur de flotte (Node.js 24 sans dépendance, SQLite), API REST, lots signés HMAC-SHA256, comptes de lecture, HTTPS en option, règles RGPD : voir [`serveur/README.md`](serveur/README.md) |
 | `flotte/`     | Simulation de 20 vélos de location et page de supervision (tournée du technicien, fuites lentes sur plusieurs jours) |
-| `boitier-3d/` | Boîtier de guidon modélisé avec OpenSCAD (étanche IPX7 visé, fixation quart de tour) : voir [`boitier-3d/README.md`](boitier-3d/README.md) |
+| `boitier-3d/` | Boîtier de guidon modélisé avec OpenSCAD (étanche IPX7 visé, collier de cintre et glissière à cran) : voir [`boitier-3d/README.md`](boitier-3d/README.md) |
 | `docs/`       | Rapport E6, cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma électrique |
 | `presentation/` | Présentation pour la soutenance (page web)                                 |
 
@@ -53,7 +53,11 @@ Sans serveur, la page `flotte/` tourne en mode démo dans le navigateur (lien «
 
 ## Boîtier imprimé en 3D
 
-`boitier-3d/boitier.scad` : modèle OpenSCAD paramétré, 46,0 × 64,4 × 28,0 mm, joint torique radial, fixation quart de tour. Rendu avec OpenSCAD 2021.01 : les quatre pièces sont fermées et d'un seul tenant, les STL sont prêts dans `boitier-3d/stl/` ; reste à imprimer et à essayer le joint. Détails : [`boitier-3d/README.md`](boitier-3d/README.md).
+`boitier-3d/boitier.scad` : modèle OpenSCAD paramétré (version 2 du 23/10/2026), boîtier de 46,0 × 64,0 × 28,0 mm en forme de compteur GPS, en PETG, imprimé sans support. Étanchéité IPX7 visée par un joint torique radial 53 × 1,8 NBR 70 (écrasement calculé 21,3 %). Fixation : collier fendu serré sur le cintre par une vis M3 (cales pour 22,2 / 23,8 / 25,4 / 31,8 mm) ; le boîtier s'y enclenche par une glissière en queue d'aronde à cran et s'enlève sans outil. Les tolérances d'impression sont des paramètres, réglés avec la pièce `test_jeux`.
+
+Rendu avec OpenSCAD 2021.01 : 10 pièces fermées et d'un seul tenant, STL prêts dans `boitier-3d/stl/` ; un script vérifie qu'aucune pièce ne touche un composant ni une autre pièce, et que les parois font au moins 2 mm. Reste à imprimer, à régler les jeux et à essayer le joint. Détails : [`boitier-3d/README.md`](boitier-3d/README.md).
+
+![Boîtier monté sur son collier de cintre (rendu OpenSCAD)](boitier-3d/rendus/tout.png)
 
 ## Lancer le simulateur
 

@@ -105,7 +105,7 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 | Application Web Bluetooth | `app/` | Fonctionne avec le boîtier simulé ; à essayer avec le vrai boîtier |
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
 | Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
-| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Modèle paramétré, rendu, STL prêts ; pas encore imprimé |
+| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Version 2 : modèle paramétré de 10 pièces, rendu, contrôlé (aucune interférence aux cotes nominales), STL prêts ; pas encore imprimé |
 | Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique |
 
 ---
@@ -126,7 +126,7 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | Vitesse | Aimant de rayon + interrupteur reed filaire | Solution simple et classique des compteurs de vélo |
 | Alertes | Buzzer + LED rouge | Le cycliste entend l'alerte sans regarder l'écran |
 | Éclairage | 2 LED blanches latérales | Être vu de côté la nuit ; un vrai éclairage avant coûterait trop cher |
-| Boîtier | Imprimé en 3D en PETG, visé IPX7, joint torique, fixation quart de tour (§ 4.7) | Imprimante 3D disponible au lycée |
+| Boîtier | Imprimé en 3D en PETG, visé IPX7, joint torique radial ; collier de cintre serré par vis, boîtier enclenché par une glissière à cran (§ 4.7) | Imprimante 3D disponible au lycée ; boîtier amovible sans outil pour la recharge |
 | Application | Page web Web Bluetooth | Rien à installer. Mon téléphone est un iPhone : Safari ne gère pas Web Bluetooth, j'utilise donc le navigateur **Bluefy**. J'ai écarté Flutter parce que compiler une application iOS exige un Mac. |
 
 ### 2.2 Exigences fonctionnelles (synthèse)
@@ -155,7 +155,7 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | Domaine | Exigences |
 |---|---|
 | Énergie | Autonomie du boîtier **≥ 1 semaine** (ENF-01), en visant plusieurs semaines ; piles des capteurs ≥ 1 an (ENF-02) |
-| Robustesse | Écran lisible au soleil, rafraîchi seulement si nécessaire ; boîtier étanche IPX7 ; fixation sans outil ; recharge sans ouvrir |
+| Robustesse | Écran lisible au soleil, rafraîchi seulement si nécessaire ; boîtier étanche IPX7 ; boîtier amovible de son collier sans outil ; recharge sans ouvrir |
 | Logiciel | Logique séparée des sources de données et portable en C++ ; tests automatiques lancés à chaque modification ; code commenté en français ; rien à installer |
 | Cybersécurité | Liste blanche des capteurs ; rejet des valeurs impossibles ; détection d'un second émetteur sans confondre une vraie crevaison ; liaison app ↔ boîtier appairée et chiffrée ; code d'appairage résistant aux essais successifs ; contrôle des réglages reçus ; données gardées sur les appareils de l'utilisateur ; journal de sécurité traçable (ENF-19) ; détection d'une inondation d'annonces (ENF-20) ; capteurs « v2 » contre le pistage, **à l'état de proposition** (ENF-21) |
 | Serveur de flotte | Lots signés et protégés contre le rejeu (ENF-23, ENF-24) ; validation et requêtes SQL paramétrées (ENF-25) ; résistance à l'envoi massif (ENF-26) ; lecture réservée aux comptes, par rôle (ENF-27) ; échanges chiffrés en HTTPS (ENF-28) ; RGPD : minimisation de la position et durée de conservation (ENF-29) ; en production, une clé par boîtier et des secrets hors du dépôt (ENF-30, non tenue par la démonstration) |
@@ -508,42 +508,114 @@ Choix principaux :
 
 ### 4.7 Le boîtier imprimé en 3D
 
-Le boîtier est décrit dans [../boitier-3d/README.md](../boitier-3d/README.md). Je l'ai dessiné avec **OpenSCAD**, un logiciel de CAO où la pièce est écrite comme un programme (`boitier-3d/boitier.scad`). J'ai choisi cet outil pour trois raisons : chaque cote est une variable commentée, donc justifiable ; les dimensions extérieures sont **calculées** à partir de celles des composants ; et le fichier se suit avec git comme le reste du code.
+Le boîtier est décrit en détail dans [../boitier-3d/README.md](../boitier-3d/README.md). Je l'ai dessiné avec **OpenSCAD**, un logiciel de CAO où la pièce est écrite comme un programme (`boitier-3d/boitier.scad`). J'ai choisi cet outil pour trois raisons : chaque cote est une variable commentée, donc justifiable ; les dimensions extérieures sont **calculées** à partir de celles des composants ; et le fichier se suit avec git comme le reste du code.
 
-Chaque cote est marquée de sa source : **[FICHE]** (fiche du composant), **[DESSIN WeAct]** (plan officiel de l'écran), **[HYPOTHÈSE]** (à mesurer) ou **[CHOIX]**. Des `assert` arrêtent le calcul si une règle est violée (épaisseur de paroi, matière autour des inserts…). Le fichier produit cinq pièces : coque, couvercle, fixation au vélo, vue éclatée, et `essai_joint`, les 9 mm du haut de la coque, pour tester le joint en 20 min d'impression au lieu d'imprimer tout le boîtier.
+**Deux versions.** La première version (commits `f088154` et `a92b81d`) était une boîte rectangulaire. Je l'ai jugée trop carrée et peu réaliste, et j'ai demandé une **version 2** (23/10/2026) : un vrai boîtier fonctionnel, aux bonnes cotes et avec des tolérances d'impression. Mes choix de départ : une forme de compteur GPS, l'étanchéité IPX7 par un joint torique, une fixation par collier fendu et vis, le PETG comme matière, et un montage sur le cintre près des poignées (cintre plat : 22,2 mm). L'imprimante n'est pas encore connue : les jeux d'impression sont donc des paramètres.
+
+Chaque cote est marquée de sa source : **[FICHE]** (fiche du composant), **[MESURÉ AU PLAN]** (relevé sur un plan du fabricant), **[HYPOTHÈSE]** (à mesurer à la réception) ou **[CHOIX]**. Pour l'écran, j'ai relevé les cotes sur le plan officiel (dépôt GitHub WeActStudio.EpaperModule), en calant l'échelle du PDF sur le pas de 0,5 mm du connecteur 24 broches : circuit 50,03 × 32,6 mm, trous à 44,44 × 26,94 mm, dalle 31,8 × 37,32 mm centrée. Certains sites donnent 48 × 33 mm, ce qui aurait été faux. Des `assert` arrêtent le calcul si une règle est violée (paroi trop fine, joint mal écrasé, écran qui touche la jupe…).
+
+![Rendu OpenSCAD du boîtier monté sur son collier, côté cycliste : façade avec l'écran, deux boutons et la LED rouge à l'arrière, collier sur un cintre](../boitier-3d/rendus/tout.png)
+
+#### Le boîtier en bref
 
 | Caractéristique | Valeur | Justification |
 |---|---|---|
-| Dimensions extérieures | **46,0 × 64,4 × 28,0 mm** (33,2 mm avec les tenons quart de tour) | La hauteur est imposée par les écrous des boutons de 12 mm |
-| Écran | Circuit 50,0 × 32,6 mm, trous à 44,4 × 27,0 mm | Relevé sur le plan officiel (dépôt GitHub WeActStudio) ; certains sites donnent 48 × 33 mm, ce qui aurait été faux |
-| Étanchéité coque / couvercle | Joint torique NBR 53 × 2 **radial**, dans une gorge de la jupe du couvercle | Voir ci-dessous |
-| Fermeture | 4 vis M2,5 dans des inserts laiton posés à chaud, hors du joint | Un filetage dans le plastique s'userait aux ouvertures |
-| Vitre | PMMA 1 mm collé **sous** le couvercle | La pression de l'eau plaque la vitre contre sa colle au lieu de la décoller |
-| Buzzer, LED, recharge | Paroi amincie à 1,2 mm devant le buzzer ; LED collées à l'époxy ; connecteur magnétique noyé dans l'époxy ; passe-fil serré pour le reed | Aucun trou ouvert vers l'extérieur |
-| Évent | Aucun | Calcul : +0,11 bar à la fermeture, environ −0,08 bar au refroidissement ; une membrane ePTFE (environ 1 €) est prévue si l'essai échoue |
-| Fixation | Quart de tour (butées, crans de 0,35 mm) + collier de cintre 31,8 ou 25,4 mm | Démontable sans outil |
-| Matière | **PETG** (ou ASA), remplissage 100 % | Le PLA se déforme vers 55–60 °C : un boîtier sombre au soleil dépasse cette température, le logement du joint se déformerait |
+| Dimensions | **46,0 × 64,0 × 28,0 mm** sans le collier ; avec le collier, le haut de l'écran est à 40 mm au-dessus d'un cintre de 22,2 mm | Calculées à partir des composants (ci-dessous) |
+| Forme | Façade plate, fenêtre biseautée à 45°, coins arrondis R 5,5 vus de dessus, flancs légèrement bombés (R 150), dessous très arrondi sur les côtés ; rainure en V au plan de joint, deux tons, « TPMS » gravé, 3 alvéoles devant le buzzer | Aspect d'un compteur GPS. Chaque arrondi finit par un chanfrein à 45° pour s'imprimer **sans support**. R 5,5 est le plus grand arrondi qui laisse assez de matière autour des inserts |
+| Étanchéité | Joint torique **53 × 1,8 NBR 70** (ISO 3601-1, équivalent AS568-032), **radial**, dans une gorge de la jupe de la façade | Voir le calcul ci-dessous |
+| Fermeture | 4 vis M2 × 6 à tête fraisée (DIN 965) dans des inserts laiton M2 × 4 posés à chaud (trou de 3,2 mm), **hors du joint** | Un filetage dans le plastique s'userait aux ouvertures ; l'eau qui suivrait une vis bute sur le joint |
+| Vitre | PMMA 1 mm collé **sous** la façade, tenu par l'écran | La pression de l'eau plaque la vitre contre sa colle au lieu de la décoller |
+| Boutons, buzzer, LED, reed | Lamages plats pour les joints des boutons ; membrane de 1,2 mm devant le buzzer ; LED collées à l'époxy ; passe-fil serré (trou de 2,2 mm pour un câble de 2,5 mm) + cône de silicone pour le reed | Aucun trou ouvert vers l'extérieur |
+| Recharge | Connecteur magnétique dans le fond, noyé dans l'époxy | À l'abri de la pluie quand le boîtier est sur le vélo ; on recharge le boîtier retiré |
+| Montage | Détrompeur : la façade ne peut pas être montée à l'envers | L'écran reste dans le bon sens, le nom « TPMS » côté cycliste |
+| Évent | Aucun | Calcul : +0,09 bar à la fermeture, environ −0,08 bar au refroidissement (40 → 15 °C) ; une membrane ePTFE (environ 1 €) est prévue si l'essai échoue |
+| Matière | **PETG**, buse 0,4 mm, coque et façade remplies à 100 % | Le PLA se déforme vers 55–60 °C : un boîtier sombre au soleil dépasse cette température. L'ASA tient mieux mais demande une imprimante fermée |
+| Masse (pièces pleines) | Coque 25 g, façade 8 g, collier 10 g, bride 6 g | Volumes des STL × 1,27 g/cm³ |
 
-**Pourquoi un joint radial et pas un joint plat.** Avec un joint plat écrasé entre la coque et le couvercle, l'écrasement dépend du serrage et de la raideur du couvercle. Entre deux vis distantes de 58 mm, un couvercle en PETG de 3 mm fléchirait d'environ **1,4 mm** pour un écrasement voulu de 0,45 mm : le joint ne serait plus serré au milieu des côtés. Un joint radial, comme celui d'un piston de seringue, est écrasé entre le fond de sa gorge et la paroi intérieure de la coque : son écrasement ne dépend que des dimensions des pièces, pas du serrage.
+#### Les dimensions sont calculées
 
-**Calcul de la gorge** (règles usuelles des fabricants de joints, joint statique, section *d* = 2,0 mm) :
+Vu de dessus, tout part du circuit de l'écran (50,0 × 32,6 mm). Par côté : 0,5 mm de jeu de pose + 2,6 mm de jupe (gorge de 1,2 + 1,4 de matière) + 0,2 mm de jeu radial jupe ↔ coque + 3,4 mm de paroi (3,7 à l'avant et à l'arrière). On obtient 32,6 + 2 × 6,7 = **46,0 mm** et 50,0 + 2 × 7,0 = **64,0 mm**. Les parois dépassent les 2 mm minimum parce que les inserts des vis doivent tenir dans les coins, hors du joint : placés sur la diagonale du coin, ils gardent **1,28 mm** de matière de chaque côté (règle : au moins 1,2 mm, soit 3 cordons).
 
-| Grandeur | Calcul | Résultat |
+En hauteur, ce sont les **écrous des boutons** (Ø 16,5 mm sur les angles, hypothèse) qui imposent la cote :
+
+```
+fond 2,0 + chanfrein 1,0 + garde 0,3 + écrou 16,5 + garde 0,3 + jupe 5,2 + façade 2,4 = 27,7 → 28,0 mm
+```
+
+#### Pourquoi un joint radial et le calcul de la gorge
+
+Avec un joint plat (axial) écrasé entre la coque et la façade, l'écrasement dépend du serrage des vis et de la raideur de la façade. Entre deux vis distantes de 57 mm, une façade en PETG de 2,4 mm fléchit davantage que l'écrasement voulu : le joint ne serait plus serré au milieu des côtés. Un joint **radial**, comme celui d'un piston de seringue, est posé dans une gorge autour de la jupe de la façade et écrasé contre la paroi intérieure de la coque (l'alésage). Son écrasement ne dépend que des **dimensions**, pas du serrage ; les vis ne font que retenir la façade.
+
+Règles usuelles des fabricants de joints, montage statique :
+
+| Grandeur | Règle | Calcul | Résultat |
+|---|---|---|---|
+| Étirement du joint posé | 1 à 5 % (le joint tient dans sa gorge sans rouler) | fond de gorge de 170,3 mm : 170,3 / (π × 53) − 1 | **2,3 %** |
+| Section réelle | un joint étiré s'amincit | 1,8 / √1,023 | 1,78 mm |
+| Écart fond de gorge ↔ alésage | | profondeur de gorge 1,2 + jeu radial 0,2 | 1,40 mm |
+| **Écrasement** | 15 à 25 % en statique | (1,78 − 1,40) / 1,78 | **21,3 %** |
+| Avec ±0,1 mm d'erreur d'impression | | | 15,7 à 27 % |
+| Remplissage de la gorge | < 85 % (le caoutchouc doit pouvoir se déformer et gonfler) | | **66 %** |
+| Rayon au fond de gorge | ≥ 3 × la section | 5,9 ≥ 3 × 1,8 = 5,4 | respecté |
+
+La gorge est imprimable façade retournée : flanc bas à 45° (sans support) ; l'alésage de la coque a un chanfrein d'entrée de 0,5 mm à 30° pour que le joint ne soit pas coupé en fermant.
+
+![Coupe du boîtier monté sur son collier : joint, façade, vitre, écran, batterie, XIAO, glissière à cran, cale, cintre, collier et bride](../boitier-3d/rendus/coupe.png)
+
+#### La fixation : collier, bride, cales et glissière à cran
+
+- **Le collier et la bride** sont imprimés à plat (l'anneau est dans le plan des couches, le sens le plus solide en impression FDM). La bride glisse de côté sur le bossage avant du collier, passe sous le cintre et se serre à l'arrière par une **vis M3 × 14** (DIN 912) et un **écrou M3 noyé**. Pas de charnière à imprimer, et on pose le collier sans démonter les poignées. Le collier se pose avec une clé et reste sur le vélo.
+- **Les cales** : le collier est imprimé pour le plus gros cintre (31,8 mm) ; deux demi-cales l'adaptent aux autres (6,0 / 5,2 / 4,4 / 1,2 mm d'épaisseur pour 22,2 / 23,8 / 25,4 / 31,8 mm), avec une bande de chambre à air de 1 mm contre la rotation. Un même collier va donc sur tous les vélos, ce qui correspond au produit vendu. Pour un seul vélo à cintre de 22,2 mm, le paramètre `collier_pour = 22.2` donne un collier plus petit et un boîtier 5,5 mm plus bas.
+- **La liaison boîtier ↔ collier** est une **glissière en queue d'aronde** sous le boîtier, avec une butée en bout et une **languette élastique pleine largeur à cran** (rampe d'un côté, face raide de l'autre). On pousse le boîtier vers l'avant jusqu'au clic ; pour l'enlever, on appuie sur la languette à l'avant et on tire. Les appuis sur les boutons poussent le boîtier vers l'avant : ils sont repris par la **butée**, pas par le cran. La languette (1,8 mm d'épaisseur) fléchit de 0,8 mm sur 16 mm, soit environ 1 % de déformation (le PETG cède vers 4 %), pour environ 5 N à l'enclenchement.
+
+Ainsi le **boîtier s'enlève sans outil** (recharge, et le retirer quand on gare le vélo), tandis que le collier, qui doit tenir sur les pavés, est serré par une vis. Je n'ai pas cherché la compatibilité avec un support du commerce.
+
+#### Les tolérances d'impression et la pièce `test_jeux`
+
+Une pièce imprimée en FDM ne sort pas exactement à la cote : un trou sort plus petit (le cordon déborde vers l'intérieur), un trou horizontal s'affaisse sur le dessus. Comme je ne connais pas encore l'imprimante, chaque jeu est un **paramètre** groupé en tête du fichier :
+
+| Paramètre | Valeur | Où |
 |---|---|---|
-| Écart fond de gorge ↔ paroi | *h* = *d* × (1 − 0,24) | 1,52 mm |
-| Largeur de gorge | environ 1,3 × *d* | 2,6 mm |
-| Remplissage (< 85 % pour que le caoutchouc puisse se déformer) | π × 2² / 4 ÷ (2,6 × 1,52) | 79 % |
-| Étirement du joint 53 × 2 sur un fond de gorge de 172,8 mm (1 à 5 % conseillé) | 172,8 / (π × 53) − 1 | 3,8 % |
-| Écrasement réel (l'étirement amincit le joint : 1,96 mm) | (1,96 − 1,52) / 1,96 | **22,5 %** |
-| Avec ±0,1 mm d'erreur d'impression sur *h* | | 17,5 % à 27,6 % |
+| `jeu_trou` | +0,25 mm sur le diamètre | trous verticaux |
+| `jeu_trou_h` | +0,35 mm | trous horizontaux (boutons, LED), dessinés en goutte tronquée pour s'imprimer sans support |
+| `jeu_glissant` | 0,3 mm par côté | pièces qui coulissent : glissière, bride sur le collier |
+| `jeu_serre` | 0,1 mm par côté | ajustement serré sans colle (cales) |
+| `jeu_pose` | 0,5 mm par côté | autour des composants achetés (cotes variables d'un lot à l'autre) |
+| `jeu_joint` | 0,2 mm par côté | jupe ↔ alésage : c'est lui qui fixe l'écrasement du joint |
+| Inserts | trou de 3,2 mm, non compensé | cote du fabricant : l'insert chaud fait fondre la matière |
+| Passe-fil du reed | 2,2 mm pour un câble de 2,5 mm | serrage voulu |
 
-Le jeu radial entre la jupe et la paroi est de 0,2 mm, pour que le joint ne file pas dans l'interstice.
+La pièce **`test_jeux`** (environ 20 min, 8 g) essaie trois valeurs de chaque : trous de bouton Ø 12, trous de LED, perçages d'insert M2, trous de vis M3, logements d'écrou M3, rainures de queue d'aronde, plus un échantillon de rail à détacher pour essayer le cran. Je garderai la valeur qui convient et je la reporterai dans le fichier. La pièce **`essai_joint`** (les 8 mm du haut de la coque) sert à régler `jeu_joint` avec la vraie façade avant d'imprimer la coque entière.
 
-**Vérifications.** Avant d'avoir OpenSCAD sur le PC, j'ai vérifié le modèle par trois scripts Node.js (`boitier-3d/outils/`) : syntaxe du fichier (0 problème), 42 règles de cotes (aucun chevauchement entre composants, 1,2 mm de matière au moins autour des inserts : toutes respectées) et aperçu coté (`apercu.svg`). J'ai ensuite installé OpenSCAD 2021.01 (archive officielle, empreinte SHA-256 vérifiée) et fait le **rendu complet** de chaque pièce : sans avertissement, pièces fermées (« Simple: yes »). Un script compte les morceaux de chaque STL : la coque sortait en **deux morceaux**, car les tenons du quart de tour ne touchaient le col que par une face. Ils le chevauchent maintenant de 0,01 mm, et les quatre pièces sont d'un seul tenant. `exporter.js` refait tout cela d'une commande et produit les STL (`boitier-3d/stl/`) et les images de rendu (`boitier-3d/rendus/`).
+![Pièce test_jeux : trois trous de bouton, trois perçages d'insert, trois logements d'écrou, trois trous de LED, rainures de glissière et échantillon de rail](../boitier-3d/rendus/test_jeux.png)
 
-![Rendu OpenSCAD du boîtier, vue éclatée](../boitier-3d/rendus/eclate.png)
+#### Les contrôles et les défauts trouvés
 
-**Ce qui reste à vérifier :** l'impression ; l'essai du joint (pièce `essai_joint`) ; l'étanchéité réelle (bulles, puis immersion 1 m pendant 30 min, d'abord à vide avec un papier absorbant) ; le volume du buzzer à travers 1,2 mm ; la portée BLE dans le boîtier fermé ; la compatibilité de la fixation avec un vrai support de type Garmin, dont je n'ai pas trouvé les cotes officielles.
+**Rendu complet** (OpenSCAD 2021.01, `$fn = 96`, moteur CGAL) des **10 pièces** : coque, façade, collier, bride, 4 demi-cales, `test_jeux` et `essai_joint`. Aucun avertissement ; chaque pièce est fermée (« Simple: yes ») et d'un seul tenant (compté par `outils/composantes-stl.js`). Temps de rendu : coque 301 s, façade 320 s, collier 14 s, bride 15 s, chaque cale 29 s, `test_jeux` 79 s ; l'export complet avec les images prend environ 14 min (`outils/exporter.js`). Les STL sont déjà orientés pour l'impression dans `boitier-3d/stl/`.
+
+**Contrôle d'interférences** (`outils/verifier-interferences.js`, `$fn = 32`, environ 6 min). Chaque composant est dessiné en volume « fantôme » à ses cotes nominales : écran, vitre, XIAO, batterie, buzzer, boutons, LED, connecteur, plaquette des MOSFET, câble du reed, joint écrasé, vis, inserts, cintre, chambre à air, vis et écrou M3. En position montée, le script calcule l'intersection de chaque pièce avec chaque composant, puis des pièces entre elles. Toutes les intersections sont **vides**, ou de volume nul là où les pièces se touchent volontairement (façade posée sur la coque, boîtier posé sur le collier). Un dernier contrôle grossit la cavité de la coque de 2 mm : elle doit rester dans la coque, ce qui prouve qu'aucune paroi ne fait moins de 2 mm. Résultat : conforme.
+
+Ces contrôles ont trouvé **7 défauts** pendant la conception, tous corrigés :
+
+| Défaut trouvé | Correction |
+|---|---|
+| Gorge du joint mal construite : le joint écrasé débordait de 95 mm³ dans la façade | Gorge refaite en deux volumes (fond droit + flanc à 45°) |
+| Écrous des boutons dans les arrondis des coins de l'alésage | Logements creusés dans la paroi épaisse des coins (elle garde plus de 2 mm) |
+| Collerettes des LED blanches dans les parois d'angle | LED déplacées sous la batterie |
+| Berceau du buzzer qui touchait la XIAO | Berceau raccourci |
+| Languette du verrou contre le bout de la queue d'aronde | Queue d'aronde de la coque raccourcie de 1 mm |
+| Bride contre l'âme du collier | Dégagement de 0,3 mm |
+| Parois de 1,4 à 1,8 mm au bas des flancs | Arrondi extérieur réduit, chanfrein intérieur agrandi |
+
+Dans la version 1, j'avais d'abord vérifié le modèle par des scripts Node.js (syntaxe, règles de cotes), faute d'OpenSCAD sur le PC ; le premier rendu avait trouvé une coque en deux morceaux, deux volumes ne se touchant que par une face. Le contrôle d'interférences de la version 2 va plus loin : il travaille sur les formes réelles et non sur une liste de cotes. Sans lui, la gorge du joint défectueuse serait passée inaperçue jusqu'à l'impression.
+
+#### Ce qui reste hypothétique
+
+- Les cotes marquées [HYPOTHÈSE] : épaisseurs et hauteurs des composants de l'écran et de la XIAO, débord de la prise USB-C, écrous et têtes des boutons (l'écrou fixe la hauteur du boîtier), connecteur magnétique, collerette des LED, câble du reed, plaquette des MOSFET, perçage des inserts réellement achetés, présence d'un joint 53 × 1,8 dans le kit commandé. Le contrôle d'interférences ne vaut que pour ces cotes nominales : je le relancerai après les avoir mesurées.
+- La précision de l'imprimante (d'où `test_jeux` et `essai_joint`).
+- L'étanchéité réelle, collages compris : bulles dans l'eau tiède, puis immersion à 1 m pendant 30 min, d'abord à vide avec un papier absorbant à l'intérieur.
+- Le son du buzzer à travers 1,2 mm de PETG, la portée BLE dans le boîtier fermé.
+- La tenue du cran dans le temps (fluage du PETG), la force de déverrouillage, et la tenue du collier sur un vrai cintre.
 
 ---
 
@@ -1309,7 +1381,7 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | EF-18, EF-19 (statistiques, pression conseillée) | Réalisées dans le simulateur ; la pression conseillée reste un ordre de grandeur |
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
-| ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné et calculé (§ 4.7) ; non vérifiables avant l'impression et l'essai |
+| ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7) ; non vérifiables avant l'impression et l'essai |
 | ENF-08 à ENF-11 (logiciel) | Vérifiées (589 tests JavaScript, 109 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
@@ -1332,7 +1404,7 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | **Vitesse de détection de la rotation** des capteurs | Si elle dépasse 10 km/h, les fausses pertes en montée reviennent (défaut n° 10) | Rouler de plus en plus vite et noter quand l'intervalle passe de 60 s à 3 s |
 | **Nombre d'annonces BLE inconnues en ville** | Le seuil d'inondation (50/s) pourrait donner de fausses détections | Compter les annonces reçues dans une rue fréquentée |
 | **Journal chaîné** | En RAM, il serait effacé à chaque veille | Sauvegarde en flash à la mise en veille écrite dans `stockage.cpp` : à essayer sur la carte |
-| **Boîtier imprimé** | Étanchéité, son du buzzer, portée radio (§ 4.7) | Pièce `essai_joint`, bulles puis immersion 1 m 30 min, mesure du RSSI boîtier fermé |
+| **Boîtier imprimé** | Jeux d'impression, étanchéité, son du buzzer, portée radio, tenue du cran et du collier (§ 4.7) | Pièces `test_jeux` et `essai_joint`, mesure des composants puis nouveau contrôle d'interférences, bulles puis immersion 1 m 30 min, mesure du RSSI boîtier fermé |
 
 ---
 
@@ -1413,7 +1485,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 11:04 | `a92b81d` | Boîtier 3D rendu (OpenSCAD 2021.01), STL prêts ; sauvegarde en flash dans le firmware |
 | 11:09 | `1e0ec90` | Mode flotte : RGPD (minimisation, durée de conservation), comptes de lecture et HTTPS ; 589 tests |
 
-À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 589 aujourd'hui, auxquels s'ajoutent 109 tests C++.
+Après ces commits, le boîtier 3D a été refait (version 2, § 4.7 : forme, joint, collier et glissière, tolérances, contrôle d'interférences) : commit `36982a9`. À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 589 aujourd'hui, auxquels s'ajoutent 109 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1425,7 +1497,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Bluefy (iPhone) | Application Web Bluetooth sur mon téléphone |
 | git, GitHub, GitHub Pages | Historique, sauvegarde, publication en HTTPS |
 | GitHub Actions | Tests JavaScript et C++ lancés à chaque envoi de code, sur une machine Linux avec g++ |
-| OpenSCAD 2021.01 | Modèle 3D paramétré du boîtier, rendu complet et export STL |
+| OpenSCAD 2021.01 | Modèle 3D paramétré du boîtier, rendu complet, export STL ; contrôle d'interférences piloté par un script Node.js |
 | Arduino IDE 2 (ou PlatformIO) | Compilation et téléversement du firmware, à la réception de la carte |
 | Assistant de programmation (Claude Code, Anthropic) | Écriture d'une grande partie du code et des documents à partir de mes décisions ; les commits concernés portent la mention « Co-Authored-By » |
 | Oscilloscope, multimètre, fer à souder, imprimante 3D | Mesures, montage et boîtier (à la réception du matériel) |
@@ -1443,7 +1515,9 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Défauts invisibles aux tests unitaires | Simulation d'une semaine complète et campagnes de décalages |
 | Composants oubliés dans la commande | Identifiés en dessinant le schéma électrique ; liste prête pour une commande complémentaire |
 | Pas de compilateur C++ capable de lancer les tests sur mon PC | Tests C++ exécutés par GitHub Actions |
-| OpenSCAD absent du PC au début | Scripts Node.js de vérification de la syntaxe et des cotes, aperçu coté en SVG ; puis installation d'OpenSCAD, rendu (un défaut corrigé) et export STL. Impression à faire |
+| OpenSCAD absent du PC au début | Scripts Node.js de vérification de la syntaxe et des cotes ; puis installation d'OpenSCAD, rendu et export STL. Impression à faire |
+| Première version du boîtier trop carrée, peu réaliste | Version 2 refaite aux cotes des composants : forme de compteur GPS, joint radial calculé, collier de cintre et glissière à cran ; contrôle d'interférences qui a trouvé 7 défauts avant impression |
+| Imprimante encore inconnue | Jeux d'impression en paramètres ; pièce `test_jeux` (20 min) pour les régler, `essai_joint` pour le joint |
 | Cotes de l'écran différentes selon les sites | Relevé sur le plan officiel du fabricant (WeActStudio) |
 
 ---
@@ -1461,7 +1535,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Respecter le RGPD | Kit : données gardées sur le téléphone. Flotte : aucune position gardée pendant une location, mesures et alertes effacées après 30 jours, journal des refus après 6 mois |
 | Autonomie ≥ 1 semaine | 63,7 jours selon le modèle, concordance à 15 % près avec la semaine simulée |
 
-Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu mais pas imprimé. Le serveur de flotte garde des limites de démonstration (jetons sans expiration, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
+Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu et contrôlé mais pas imprimé. Le serveur de flotte garde des limites de démonstration (jetons sans expiration, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
 
 ### 10.2 Ce que j'ai appris
 
@@ -1485,8 +1559,8 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 4. **Reed, boutons, LED, buzzer**, puis la veille et le réveil.
 5. **Application** sur l'iPhone avec Bluefy : appairage par code, MTU, écriture des réglages.
 6. **Consommations** à l'oscilloscope (§ 7.7), report des valeurs dans `logique/energie.js`.
-7. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, et d'un joint 53 × 2 si le kit commandé n'en contient pas.
-8. **Boîtier** (déjà rendu dans OpenSCAD, STL prêts) : impression de `essai_joint`, puis du boîtier ; essais d'étanchéité à vide avant d'y mettre l'électronique (§ 4.7).
+7. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, et d'un joint 53 × 1,8 NBR 70 si le kit commandé n'en contient pas ; quincaillerie du boîtier (inserts M2, vis M2 et M3, écrou M3).
+8. **Boîtier** (déjà rendu et contrôlé dans OpenSCAD, STL prêts) : mesure des composants et nouveau contrôle d'interférences ; impression de `test_jeux` puis de `essai_joint` pour régler les jeux, puis du boîtier et du collier ; essais d'étanchéité à vide avant d'y mettre l'électronique (§ 4.7).
 
 ### 10.4 Évolutions possibles
 

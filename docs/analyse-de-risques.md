@@ -588,10 +588,10 @@ Le serveur de flotte est une démonstration. Trois limites de la première versi
 
 ### 6.15 Hors périmètre
 
-- **Accès physique au boîtier** : lecture de la mémoire du microcontrôleur pour en extraire les clés d'appairage. Non traité.
+- **Accès physique au boîtier** : lecture de la mémoire du microcontrôleur pour en extraire les clés d'appairage. Non traité. Cet accès est facile : le boîtier s'enlève **sans outil** de son collier de cintre (glissière à cran, `boitier-3d/README.md`), comme un compteur GPS, pour être rechargé ; un voleur peut donc l'emporter en quelques secondes (seul le collier reste vissé sur le vélo). La notice conseillera de retirer le boîtier quand le vélo est garé dans un lieu public. Un boîtier perdu ou volé doit être supprimé des appareils appairés du téléphone.
 - **Téléphone compromis** : hors de notre contrôle.
 - **Hébergement de l'application** : Web Bluetooth impose une page servie en HTTPS ; une page modifiée chez l'hébergeur ne pourrait cependant pas s'appairer sans le code affiché sur le boîtier.
-- **Mise à jour du firmware par radio** : recommandation pour le firmware, ne pas exposer de service de mise à jour BLE ; la mise à jour se fera par USB, ce qui demande un accès physique.
+- **Mise à jour du firmware par radio** : recommandation pour le firmware, ne pas exposer de service de mise à jour BLE ; la mise à jour se fera par USB, ce qui demande un accès physique et l'ouverture du boîtier (la prise USB-C de la XIAO est à l'intérieur, sous la façade vissée).
 
 ---
 

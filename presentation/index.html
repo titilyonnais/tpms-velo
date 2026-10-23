@@ -186,29 +186,30 @@
 </section>
 
 <!-- ================================================================ 6 -->
-<section class="diapo" data-notes="Modèle OpenSCAD paramétré : les cotes sont calculées à partir des composants, chacune est marquée fiche, dessin, hypothèse ou choix. Joint radial plutôt que plat : un couvercle de 3 mm fléchirait trop entre les vis. Rendu OpenSCAD 2021.01 : quatre pièces fermées et d'un seul tenant, STL prêts ; le premier rendu a révélé des tenons qui ne touchaient le col que par une face, corrigé. Reste à imprimer.">
+<section class="diapo" data-notes="Version 2 du boîtier : la première était trop carrée. Forme de compteur GPS, PETG, aucune pièce n'a besoin de support. Les cotes sont calculées à partir des composants, chacune marquée fiche, mesurée au plan, hypothèse ou choix. Joint radial plutôt que plat : son écrasement ne dépend que des dimensions, pas du serrage ; une façade de 2,4 mm fléchirait entre deux vis distantes de 57 mm. Fixation : collier fendu et bride serrés par une vis M3, cales pour 4 diamètres de cintre ; le boîtier glisse en queue d'aronde et se verrouille par un cran, la butée reprend les appuis sur les boutons. Imprimante inconnue : les jeux sont des paramètres, réglés avec la pièce test_jeux. Contrôle d'interférences : chaque pièce contre chaque composant et contre les autres pièces, intersections vides, parois d'au moins 2 mm ; 7 défauts trouvés et corrigés, par exemple la gorge où le joint écrasé débordait de 95 mm³ dans la façade. Reste à imprimer.">
   <p class="repere">Boîtier mécanique · OpenSCAD</p>
-  <h2>Un boîtier de 46 × 64,4 × 28 mm, <em>dimensionné à partir des composants</em></h2>
+  <h2>Un boîtier de 46 × 64 × 28 mm, <em>dimensionné à partir des composants</em></h2>
   <div class="corps grille g-apercu">
     <figure class="apercu-3d">
-      <img src="../boitier-3d/rendus/eclate.png" alt="Rendu OpenSCAD du boîtier en vue éclatée : couvercle à fenêtre, coque, fixation de cintre">
+      <img src="../boitier-3d/rendus/eclate.png" alt="Rendu OpenSCAD du boîtier en vue éclatée : vis M2, façade avec l'écran et le joint torique, coque avec boutons et LED, collier, demi-cales, bride et vis M3 autour d'un cintre">
     </figure>
     <div class="grille cartes-serrees" style="gap:12px; align-content:start">
       <div class="carte carte-accent">
-        <div class="chiffre">46 × 64,4 × 28<small>mm</small></div>
-        <p class="discret petit">33,2 mm avec les tenons quart de tour ; hauteur imposée par les écrous des boutons de 12 mm.</p>
+        <div class="chiffre">46 × 64 × 28<small>mm</small></div>
+        <p class="discret petit">Forme de compteur GPS, en PETG, imprimé sans support ; hauteur imposée par les écrous des boutons de 12 mm.</p>
       </div>
       <div class="carte">
-        <h3>Joint torique radial, écrasé ≈ 22,5 %</h3>
-        <p class="discret petit">17,5 à 27,6 % avec ±0,1 mm d'erreur d'impression. Un joint plat ferait fléchir le couvercle de 3 mm de ≈ 1,4 mm, pour 0,45 mm d'écrasement voulu.</p>
+        <h3>Joint torique radial 53 × 1,8, écrasé 21,3 %</h3>
+        <p class="discret petit">15,7 à 27 % avec ±0,1 mm d'erreur d'impression ; gorge remplie à 66 %. Un joint plat dépendrait du serrage des vis.</p>
       </div>
       <div class="carte">
-        <h3>42 règles de cotes vérifiées</h3>
-        <p class="discret petit">Chaque cote marquée [FICHE], [DESSIN], [HYPOTHÈSE] ou [CHOIX]. PETG ou ASA : le PLA flue vers 60 °C au soleil.</p>
+        <h3>Collier vissé, boîtier amovible sans outil</h3>
+        <p class="discret petit">Collier et bride serrés par une vis M3, cales de 22,2 à 31,8 mm ; le boîtier s'enclenche par une glissière à cran.</p>
       </div>
       <div class="carte">
         <span class="etiquette rouge">Pas encore imprimé</span>
-        <p class="discret petit">Rendu OpenSCAD fait : 4 pièces fermées, d'un seul tenant, STL prêts (un défaut corrigé : tenons qui ne touchaient le col que par une face). Restent l'impression, l'étanchéité réelle, la portée BLE et le son du buzzer.</p>
+        <h3>Aucune interférence, parois ≥ 2 mm</h3>
+        <p class="discret petit">10 pièces contrôlées contre chaque composant et entre elles : 7 défauts corrigés. Restent les jeux (test_jeux) et l'étanchéité.</p>
       </div>
     </div>
   </div>
@@ -924,7 +925,7 @@
   <p class="repere">Limites</p>
   <h2>Ce qui reste à valider, <em>surtout avec le matériel</em></h2>
   <div class="corps defile">
-    <table style="font-size:20px">
+    <table style="font-size:18.5px">
       <thead><tr><th>Hypothèse</th><th>Valeur dans le code</th><th>Vérification prévue</th></tr></thead>
       <tbody>
         <tr><td>Format des trames</td><td>18 octets, fabricant 00 01, pression en Pa</td><td>Capture avec une application de scan BLE, comparaison à un manomètre</td></tr>
@@ -933,7 +934,7 @@
         <tr><td>Consommations</td><td>valeurs de fiches techniques (63,7 j)</td><td>Résistance shunt et oscilloscope</td></tr>
         <tr><td>Appairage sur iPhone</td><td>Bluefy, code à 6 chiffres</td><td>Essai avec l'iPhone et le boîtier réel</td></tr>
         <tr><td>Firmware</td><td>109 tests C++ exécutés sur PC, jamais sur la carte</td><td>Compilation Arduino, tests de la logique sur le XIAO</td></tr>
-        <tr><td>Boîtier 3D</td><td>rendu OpenSCAD, STL prêts ; joint radial calculé</td><td>Impression, pièce d'essai du joint (20 min), immersion 30 min à 1 m</td></tr>
+        <tr><td>Boîtier 3D</td><td>10 pièces rendues, sans interférence ; jeux en paramètres</td><td>Pièces test_jeux et essai_joint, impression, immersion 30 min à 1 m</td></tr>
         <tr><td>Seuil d'inondation</td><td>50 annonces inconnues par seconde</td><td>Compter les annonces BLE dans une rue fréquentée</td></tr>
         <tr><td>Capteurs v2</td><td>proposition simulée</td><td>Demande des capteurs dont on écrit le programme</td></tr>
         <tr><td>Mode flotte</td><td>liaison supposée ; certificat auto-signé</td><td>Passerelle ou LTE-M ; Let's Encrypt en production</td></tr>
@@ -953,7 +954,7 @@
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>
-    <p class="discret">Réception du matériel → capture des vraies trames → mesure des consommations → impression du boîtier, essai du joint → essais sur le vélo.</p>
+    <p class="discret">Réception du matériel → capture des vraies trames → mesure des consommations → réglage des jeux et essai du joint → impression du boîtier → essais sur le vélo.</p>
   </div>
   <p class="note-bas" style="font-size:34px; color:var(--texte); font-weight:600">Merci. Questions ?</p>
 </section>

@@ -15,7 +15,7 @@ Kit de surveillance de la pression des pneus de vélo : 2 capteurs TPMS BLE, un 
 | [Schéma électrique](schema-electrique.md) | Schéma du boîtier (SVG), liaisons broche par broche, nomenclature, calculs justifiés |
 | [Bilan énergétique](bilan-energetique.md) | Consommation par état, journée type, autonomie du boîtier, influence des réglages, durée de vie des piles CR1632, piège du reed resté fermé, protocole de mesure sans PPK2 |
 | [Serveur de flotte](../serveur/README.md) | Mode « location de vélos » : lancement du serveur (HTTP ou HTTPS), comptes de lecture et rôles, RGPD (minimisation, durée de conservation), API REST, format des lots signés, sécurité et limites. Page de supervision en ligne (mode démo) : https://titilyonnais.github.io/tpms-velo/flotte/ |
-| [Boîtier imprimé en 3D](../boitier-3d/README.md) | Modèle OpenSCAD paramétré : choix de conception (joint radial, fixation quart de tour), impression, quincaillerie, montage, essais d'étanchéité, cotes à vérifier |
+| [Boîtier imprimé en 3D](../boitier-3d/README.md) | Modèle OpenSCAD paramétré : choix de conception (forme, joint radial, collier de cintre et glissière à cran), tolérances d'impression et pièce `test_jeux`, contrôles d'interférences, impression, quincaillerie, montage, essais d'étanchéité, cotes à vérifier |
 
 ## Ordre de lecture conseillé
 
@@ -34,9 +34,9 @@ Kit de surveillance de la pression des pneus de vélo : 2 capteurs TPMS BLE, un 
 - Les capteurs « version 2 » (adresse privée, compteur, signature) décrits dans le protocole BLE et l'analyse de risques sont une **proposition** pour une future version du produit, simulée seulement.
 - La présentation pour la soutenance est dans `presentation/index.html` (en ligne : https://titilyonnais.github.io/tpms-velo/presentation/).
 
-- Le boîtier imprimé en 3D est conçu et rendu (OpenSCAD 2021.01, STL prêts dans `boitier-3d/stl/`), pas encore imprimé ; la liaison boîtier → serveur du mode flotte est une hypothèse.
+- Le boîtier imprimé en 3D (version 2 : 46 × 64 × 28 mm, collier de cintre et glissière à cran) est conçu, rendu et contrôlé (OpenSCAD 2021.01, 10 pièces, STL prêts dans `boitier-3d/stl/`, aucune interférence entre pièces et composants à leurs cotes nominales), pas encore imprimé ; plusieurs cotes de composants restent des hypothèses ; la liaison boîtier → serveur du mode flotte est une hypothèse.
 
 ## À venir
 
-- Impression et essais d'étanchéité du boîtier (pièce d'essai du joint d'abord).
+- Impression et essais du boîtier : pièce `test_jeux` (réglage des tolérances), puis `essai_joint`, puis le boîtier et les essais d'étanchéité.
 - Résultats des mesures sur le matériel réel (trames, consommations).
