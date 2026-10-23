@@ -50,7 +50,7 @@ section[id] { scroll-margin-top: 90px; }
 .velo.ok, .pastille.ok { fill: var(--ok); background: var(--ok); }
 .velo.surveiller, .pastille.surveiller { fill: var(--info); background: var(--info); }
 .velo.regonfler, .pastille.regonfler { fill: var(--attention); background: var(--attention); }
-.velo.urgent, .velo.immobilise, .pastille.urgent { fill: var(--alerte); background: var(--alerte); }
+.velo.urgent, .velo.immobilise, .pastille.urgent, .pastille.immobilise { fill: var(--alerte); background: var(--alerte); }
 .velo.muet, .pastille.muet { fill: var(--texte-3); background: var(--texte-3); }
 .pastille.roule { background: transparent; border: 2px solid var(--accent); }
 .carte-flotte .velo.roule { stroke: var(--accent); stroke-width: 2.5; }
@@ -91,6 +91,49 @@ section[id] { scroll-margin-top: 90px; }
 .fil-evenements li .verdict-ok { color: var(--ok); font-weight: 600; }
 .fil-evenements li .verdict-refus { color: var(--alerte); font-weight: 600; }
 #secuRefus td:last-child { color: var(--alerte); }
+
+/* ---------- Carte : vélos sans position (en location, RGPD) ---------- */
+.hors-carte {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--rayon-petit);
+  background: var(--tuile-2); border: 1px dashed var(--bord-fort);
+}
+.hors-carte-titre { font-size: 12px; color: var(--texte-2); margin-right: 6px; flex-basis: 100%; }
+.puce-velo {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 4px 10px 4px 7px; border-radius: 999px; border: 1px solid var(--bord-fort);
+  background: var(--tuile-3); color: var(--texte); font: 500 12px var(--mono);
+}
+.puce-velo:hover { border-color: var(--accent); }
+.puce-velo.choisi { border-color: #fff; }
+.puce-velo .pastille { margin: 0; width: 12px; height: 12px; }
+.puce-velo .pastille.anneau { box-shadow: 0 0 0 2px var(--tuile-3), 0 0 0 4px var(--accent); }
+
+/* ---------- Compte connecté (barre du haut) ---------- */
+.zone-compte { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--texte-2); }
+.petit-bouton { padding: 5px 10px; font-size: 12px; }
+
+/* ---------- Écran de connexion (mode serveur) ---------- */
+.ecran-connexion {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(0, 0, 0, .78); backdrop-filter: blur(8px);
+}
+.carte-connexion { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; }
+.carte-connexion > header { margin-bottom: 0; }
+.carte-connexion > header svg { stroke: var(--accent); }
+.carte-connexion label { font-size: 12px; color: var(--texte-2); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.champ-jeton {
+  width: 100%; padding: 11px 12px; border-radius: var(--rayon-petit);
+  background: var(--tuile-2); border: 1px solid var(--bord-fort); color: var(--texte);
+  font-family: var(--mono); font-size: 14px; outline: none;
+}
+.champ-jeton:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-doux); }
+.erreur-connexion { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--alerte-doux); color: var(--alerte); font-size: 13px; }
+.avert-http { margin: 0; font-size: 12px; color: var(--attention); }
+.carte-connexion .bouton.grand { margin-top: 4px; }
+.carte-connexion .bouton:disabled { opacity: .6; cursor: wait; }
+.petit-texte { font-size: 12px; }
 
 /* ---------- Écrans plus petits ---------- */
 @media (max-width: 1250px) {

@@ -453,8 +453,13 @@ function mesureBoitier(v, t) {
     m[TPMS.flotteChamp("pile", roue)] = mes ? mes.batteriePct : null;
   });
   m.batterie = Math.round(b.batteriePct);
-  m.lat = arrondir(v.lat, 5);
-  m.lon = arrondir(v.lon, 5);
+  // RGPD (flotte-logique.js, flotteMinimiserPosition) : pendant une
+  // location, la position est celle du client. Le boîtier ne l'envoie
+  // pas : les champs lat et lon sont tout simplement absents du lot.
+  if (!v.trajet) {
+    m.lat = arrondir(v.lat, 5);
+    m.lon = arrondir(v.lon, 5);
+  }
   m.km = arrondir(b.km, 2);
   m.etatAv = b.roues.AV.etat;
   m.etatAr = b.roues.AR.etat;

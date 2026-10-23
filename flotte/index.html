@@ -26,6 +26,7 @@
   <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z"/></symbol>
+  <symbol id="i-cle" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l2.5 2.5M18.5 4.5 21 7"/></symbol>
 </svg>
 
 <div class="appli">
@@ -66,6 +67,10 @@
           <button type="button" class="bouton" id="btnJour">+1 jour</button>
         </div>
         <div class="actualise" id="txtActualise" hidden></div>
+        <div class="zone-compte" id="zoneCompte" hidden>
+          <span id="txtCompte"></span>
+          <button type="button" class="bouton petit-bouton" id="btnDeconnexion">Se déconnecter</button>
+        </div>
       </div>
     </header>
 
@@ -103,13 +108,14 @@
         <section class="tuile large-7" id="zoneCarte">
           <header><svg><use href="#i-carte"/></svg><h3>Stations de Lyon</h3><span class="discret">Plan schématique</span></header>
           <svg class="carte carte-flotte" id="carte" viewBox="0 0 640 480" role="img" aria-label="Carte des stations et des vélos"></svg>
+          <div class="hors-carte" id="horsCarte" hidden></div>
           <div class="legende" id="legendeCarte">
             <span><i class="pastille ok"></i>OK</span>
             <span><i class="pastille surveiller"></i>À surveiller</span>
             <span><i class="pastille regonfler"></i>À regonfler</span>
             <span><i class="pastille urgent"></i>Urgent / immobilisé</span>
             <span><i class="pastille muet"></i>Muet</span>
-            <span><i class="pastille roule"></i>En location</span>
+            <span><i class="pastille roule"></i>En location (listé sous la carte)</span>
           </div>
         </section>
 
@@ -172,6 +178,8 @@
                 <tbody id="secuRefus"></tbody></table>
             </div>
           </div>
+          <p class="discret" id="secuReserve" hidden>Le journal de sécurité (requêtes refusées, adresses IP) est réservé
+            au compte <b>gestionnaire</b>. Le compte technicien voit la tournée, les vélos et les alertes.</p>
           <div id="secuDemo" hidden>
             <p class="discret">Banc d'essai : la même vérification que le serveur
               (<code>TPMS.flotteControlerRequete</code>, HMAC-SHA256 de <code>logique/sha256.js</code>),
@@ -190,6 +198,24 @@
       </div>
     </main>
   </div>
+</div>
+
+<!-- ================= CONNEXION (mode serveur) ================= -->
+<div class="ecran-connexion" id="ecranConnexion" hidden>
+  <form class="tuile carte-connexion" id="formConnexion" autocomplete="off">
+    <header><svg><use href="#i-cle"/></svg><h3>Connexion à la supervision</h3></header>
+    <p class="discret">Le serveur de flotte réserve ses données aux comptes identifiés
+      (technicien, gestionnaire). Saisir le jeton d'accès du compte.</p>
+    <label for="champJeton">Jeton d'accès</label>
+    <input type="password" id="champJeton" class="champ-jeton" required minlength="16" maxlength="128"
+           spellcheck="false" autocapitalize="off" autocomplete="off">
+    <p class="erreur-connexion" id="erreurConnexion" role="alert" hidden></p>
+    <p class="avert-http" id="avertHttp" hidden>Connexion HTTP non chiffrée : le jeton circule en clair sur le réseau.
+      Pour une démo sur ce PC seulement.</p>
+    <button type="submit" class="bouton principal grand" id="btnConnexion">Se connecter</button>
+    <p class="discret petit-texte">Jetons de démonstration : <code>serveur/cles-demo.json</code>. Le jeton est gardé
+      pour cet onglet seulement et oublié à sa fermeture.</p>
+  </form>
 </div>
 
 <!-- Logique partagée (mêmes fichiers que le serveur Node, voir flotte/node.js) -->

@@ -1,5 +1,5 @@
 {
-  "_avertissement": "CLÉS DE DÉMONSTRATION, PUBLIQUES : ne jamais les utiliser en production.",
+  "_avertissement": "SECRETS DE DÉMONSTRATION, PUBLICS : ne jamais les utiliser en production.",
   "_format": "identifiant du vélo → clé HMAC-SHA256 de 32 octets en hexadécimal",
   "velos": {
     "V01": "8a5f653c60611b023921191e15070e784b6ece26ffda55a76b28b023f147da87",
@@ -22,5 +22,16 @@
     "V18": "ee7f45c5fdaa72e65f9e3c25afee117c48fa7fca049169d3bb7e8d474bded1f8",
     "V19": "a3fa0a2a0ca0ce798e9d2e0c92c618b970c0294516c1a0533751ec72a0dcea06",
     "V20": "83b17c05c422591b1325886586d851877c1e19d0637d2e32332bc587d2eb89be"
+  },
+  "_comptes": "Comptes de LECTURE de l'API (en-tête « Authorization: Bearer <jeton> »). Jetons de démo en clair pour que la démo marche tout de suite ; le serveur n'en garde que l'empreinte SHA-256. En production, le fichier ne contiendrait que « empreinte » (SHA-256 du jeton, en hexadécimal), jamais le jeton.",
+  "comptes": {
+    "technicien": {
+      "role": "technicien",
+      "jeton": "fbI2sv3BKPhVMHtRpWiGc66cpZRegZwq"
+    },
+    "gestionnaire": {
+      "role": "gestionnaire",
+      "jeton": "L0mwayAUqAnU7c2is1vCv_SiU2R15Bpj"
+    }
   }
 }

@@ -7,21 +7,68 @@
 //   node serveur/flotte-vers-serveur.js --attaque-rejeu       rejoue une requête capturée
 //   node serveur/flotte-vers-serveur.js --attaque-signature   modifie un lot signé
 //   node serveur/flotte-vers-serveur.js --continu             puis continue en temps réel
+//   node serveur/flotte-vers-serveur.js --https               serveur en HTTPS (https://localhost:8443)
 // Autres options : --url http://localhost:8080 --lot-heures 6 --pause-ms 550
+//   --jeton <jeton>  compte utilisé pour LIRE les statistiques (par défaut,
+//                    le compte « technicien » de serveur/cles-demo.json)
+//   --ca <fichier>   certificat à qui faire confiance en HTTPS (par défaut
+//                    serveur/certificats/cert.pem, le certificat de démo)
 //
 // La simulation (flotte/flotte.js) rejoue les N derniers jours jusqu'à
 // maintenant : les dates des mesures sont donc réalistes pour le serveur.
 // Chaque lot est signé comme le ferait le boîtier (HMAC-SHA256 avec la
 // clé du vélo, horodatage, numéro de séquence).
 // =====================================================================
+var fs = require("node:fs");
+var http = require("node:http");
+var https = require("node:https");
 var path = require("node:path");
 var TPMS = require("../flotte/node.js");
 var outils = require("./serveur.js");
 
 // ---------------------------------------------------------------------
+// Requête HTTP ou HTTPS, réponse JSON
+// ---------------------------------------------------------------------
+// On n'utilise pas fetch() ici : il ne permet pas de choisir à quel
+// certificat faire confiance. Avec node:https, l'option « ca » dit :
+// « fais confiance à CE certificat (auto-signé, de démo) ». La
+// vérification reste ACTIVE : un autre certificat (celui d'un pirate qui
+// s'interposerait) serait refusé. On ne met JAMAIS
+// rejectUnauthorized: false, qui accepterait n'importe quel serveur.
+// options = { methode, enTetes, corps, ca (contenu du certificat) }
+// Retourne une promesse de { statut, json, enTetes }.
+function requeteJson(adresse, options) {
+  var o = options || {};
+  var url = new URL(adresse);
+  var bibliotheque = url.protocol === "https:" ? https : http;
+  return new Promise(function (ok, echec) {
+    var req = bibliotheque.request(url, {
+      method: o.methode || "GET",
+      headers: Object.assign({}, o.enTetes || {}, o.corps !== undefined ? { "Content-Length": Buffer.byteLength(o.corps) } : {}),
+      ca: url.protocol === "https:" && o.ca ? o.ca : undefined,
+      timeout: 15000
+    }, function (res) {
+      var morceaux = [];
+      res.on("data", function (m) { morceaux.push(m); });
+      res.on("end", function () {
+        var json = null;
+        try { json = JSON.parse(Buffer.concat(morceaux).toString("utf8")); } catch (e) { /* corps vide ou non JSON */ }
+        ok({ statut: res.statusCode, json: json, enTetes: res.headers });
+      });
+    });
+    req.on("timeout", function () { req.destroy(new Error("délai dépassé")); });
+    req.on("error", echec);
+    if (o.corps !== undefined) req.write(o.corps);
+    req.end();
+  });
+}
+
+// ---------------------------------------------------------------------
 // Client : prépare et envoie des requêtes signées
 // ---------------------------------------------------------------------
-function creerClient(urlServeur, cles) {
+// options = { ca } pour un serveur HTTPS à certificat auto-signé.
+function creerClient(urlServeur, cles, options) {
+  var ca = options && options.ca;
   var sequences = new Map();
   return {
     // Prépare une requête signée. options.cleDe : signer avec la clé d'un
@@ -48,10 +95,12 @@ function creerClient(urlServeur, cles) {
       };
     },
     envoyer: async function (requete) {
-      var reponse = await fetch(requete.url, { method: "POST", headers: requete.enTetes, body: requete.corps });
-      var json = null;
-      try { json = await reponse.json(); } catch (e) { /* corps vide */ }
-      return { statut: reponse.status, json: json };
+      var r = await requeteJson(requete.url, { methode: "POST", enTetes: requete.enTetes, corps: requete.corps, ca: ca });
+      return { statut: r.statut, json: r.json };
+    },
+    // Lecture de l'API avec un compte (jeton « Bearer »).
+    lire: function (chemin, jeton) {
+      return requeteJson(urlServeur + chemin, { enTetes: jeton ? { Authorization: "Bearer " + jeton } : {}, ca: ca });
     }
   };
 }
@@ -74,8 +123,11 @@ function options(argv) {
     var i = argv.indexOf(nom);
     return i >= 0 && i + 1 < argv.length ? argv[i + 1] : defaut;
   }
+  var enHttps = argv.indexOf("--https") >= 0;
   return {
-    url: valeur("--url", "http://localhost:8080").replace(/\/$/, ""),
+    url: valeur("--url", enHttps ? "https://localhost:8443" : "http://localhost:8080").replace(/\/$/, ""),
+    jeton: valeur("--jeton", null),
+    ca: valeur("--ca", path.join(__dirname, "certificats", "cert.pem")),
     jours: Number(valeur("--jours", 14)),
     graine: Number(valeur("--graine", 42)),
     lotHeures: Number(valeur("--lot-heures", 6)),
@@ -117,14 +169,39 @@ async function attaqueSignature(client, lot) {
 // ---------------------------------------------------------------------
 async function principal() {
   var o = options(process.argv);
-  var cles = outils.chargerCles(path.join(__dirname, "cles-demo.json"));
-  var client = creerClient(o.url, cles);
+  var fichierCles = path.join(__dirname, "cles-demo.json");
+  var cles = outils.chargerCles(fichierCles);
+  // Jeton de lecture : celui donné en option, sinon le compte « technicien » de démo.
+  var jeton = o.jeton;
+  if (!jeton) {
+    var comptes = JSON.parse(fs.readFileSync(fichierCles, "utf8")).comptes || {};
+    jeton = comptes.technicien ? comptes.technicien.jeton : null;
+  }
+  // HTTPS : on fait confiance au certificat de démo (et à lui seul).
+  var ca = null;
+  if (o.url.indexOf("https://") === 0) {
+    if (fs.existsSync(o.ca)) {
+      ca = fs.readFileSync(o.ca);
+      console.log("HTTPS : confiance accordée au certificat " + o.ca);
+    } else {
+      console.log("HTTPS : pas de certificat " + o.ca + " ; seules les autorités reconnues du système seront acceptées.");
+    }
+  }
+  var client = creerClient(o.url, cles, { ca: ca });
 
   try {
-    var essai = await fetch(o.url + "/api/velos");
-    if (!essai.ok) throw new Error("HTTP " + essai.status);
+    var essai = await client.lire("/api/velos", jeton);
+    if (essai.statut === 401) throw new Error("jeton refusé (401) : vérifier --jeton");
+    if (essai.statut !== 200) throw new Error("HTTP " + essai.statut);
   } catch (e) {
-    console.error("Serveur injoignable sur " + o.url + " (" + e.message + "). Lancer d'abord : node serveur/serveur.js");
+    if (/CERT|certificate/i.test(String(e.code) + " " + e.message)) {
+      console.error("Certificat du serveur NON RECONNU (" + e.message + ") : connexion refusée, c'est voulu.");
+      console.error("Pour le certificat de démo : --ca serveur/certificats/cert.pem (valeur par défaut).");
+      process.exitCode = 1;
+      return;
+    }
+    console.error("Serveur injoignable sur " + o.url + " (" + e.message + "). Lancer d'abord : node serveur/serveur.js" +
+      (o.url.indexOf("https://") === 0 ? "" : " (ou --https si le serveur est en HTTPS)"));
     process.exitCode = 1;
     return;
   }
@@ -179,14 +256,14 @@ async function principal() {
   if (o.attaqueRejeu && capturee) await attaqueRejeu(client, capturee);
   if (o.attaqueSignature && lotPourAttaque) await attaqueSignature(client, lotPourAttaque);
 
-  var stats = await (await fetch(o.url + "/api/statistiques")).json();
+  var stats = (await client.lire("/api/statistiques", jeton)).json;
   var I = stats.indicateurs;
   console.log("\nIndicateurs du serveur : " + I.aRegonfler + " vélo(s) à regonfler (dont " + I.urgents + " urgent(s)), " +
     I.immobilises + " immobilisé(s), " + I.fuitesLentes + " fuite(s) lente(s), " + I.boitiersARecharger + " boîtier(s) à recharger.");
   if (stats.regonflages.tempsMoyenEntreJ !== null) {
     console.log("Temps moyen entre deux regonflages : " + stats.regonflages.tempsMoyenEntreJ.toFixed(1).replace(".", ",") + " jours.");
   }
-  if (stats.securite.refusParMotif.length > 0) {
+  if (stats.securite && stats.securite.refusParMotif.length > 0) {
     console.log("Refus enregistrés : " + stats.securite.refusParMotif.map(function (m) { return m.motif + " × " + m.n; }).join(", "));
   }
   console.log("Supervision : " + o.url + "/flotte/");
@@ -208,7 +285,7 @@ async function principal() {
   }
 }
 
-module.exports = { creerClient: creerClient, envoyerLot: envoyerLot };
+module.exports = { creerClient: creerClient, envoyerLot: envoyerLot, requeteJson: requeteJson };
 
 if (require.main === module) {
   principal().catch(function (e) { console.error(e); process.exitCode = 1; });

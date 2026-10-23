@@ -2,3 +2,7 @@
 flotte.db
 flotte.db-*
 *.db-journal
+
+# Certificat HTTPS et surtout sa CLÉ PRIVÉE : jamais dans Git
+# (fabriqués sur chaque poste par generer-certificat.js).
+certificats/

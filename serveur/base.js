@@ -15,6 +15,12 @@
 // Les règles métier (regonflage, alertes, tendances) ne sont pas
 // écrites ici : elles viennent de flotte/flotte-logique.js, partagé avec
 // le mode démo de la page. La base ne fait que stocker et agréger.
+//
+// RGPD (règles dans flotte-logique.js) :
+//   - minimisation : la position d'un vélo en location n'est jamais
+//     stockée (lat/lon à NULL) ;
+//   - conservation limitée : mesures et alertes effacées après 30 jours,
+//     journal des refus (adresses IP) après 6 mois.
 // =====================================================================
 var DatabaseSync = require("node:sqlite").DatabaseSync;
 var TPMS = require("../flotte/node.js");
@@ -43,12 +49,14 @@ CREATE TABLE IF NOT EXISTS mesures (
   temp_av REAL, temp_ar REAL,                   -- température des capteurs (°C)
   pile_av INTEGER, pile_ar INTEGER,             -- pile des capteurs (%)
   batterie    INTEGER NOT NULL,                 -- batterie du boîtier (%)
-  lat REAL NOT NULL, lon REAL NOT NULL,
+  lat REAL, lon REAL,                           -- position en station ; NULL pendant une location (RGPD)
   km          REAL NOT NULL,                    -- compteur du boîtier
   etat_av TEXT NOT NULL, etat_ar TEXT NOT NULL, -- état calculé par le boîtier (logique/alertes.js)
   en_location INTEGER NOT NULL,                 -- 0 ou 1
   UNIQUE (velo_id, t)                           -- crée aussi l'index (velo_id, t)
 );
+-- Index sur la date seule : la purge RGPD (DELETE ... WHERE t < ?) reste rapide.
+CREATE INDEX IF NOT EXISTS mesures_t ON mesures (t);
 
 -- Alertes : celles du boîtier (crevaison, pression basse...) et celles
 -- que seul le serveur peut voir (fuite lente sur plusieurs jours).
@@ -81,7 +89,37 @@ CREATE TABLE IF NOT EXISTS refus (
   motif  TEXT NOT NULL,
   detail TEXT
 );
+CREATE INDEX IF NOT EXISTS refus_t ON refus (t);
 `;
+
+// ---------------------------------------------------------------------
+// Mise à jour d'une ancienne base (créée avant la règle RGPD)
+// ---------------------------------------------------------------------
+// Dans les premières versions, lat et lon étaient « NOT NULL » : la base
+// gardait la position des vélos pendant les locations. SQLite ne sait
+// pas retirer une contrainte d'une colonne : on reconstruit la table
+// (renommer l'ancienne, créer la nouvelle, recopier, supprimer
+// l'ancienne), en effaçant au passage les positions prises en location.
+function migrerPositionFacultative(db) {
+  var colonnes = db.prepare("PRAGMA table_info(mesures)").all();
+  var lat = colonnes.filter(function (c) { return c.name === "lat"; })[0];
+  if (!lat || lat.notnull === 0) return false;        // base neuve ou déjà à jour
+  var liste = "velo_id, t, p_av, p_ar, temp_av, temp_ar, pile_av, pile_ar, batterie, km, etat_av, etat_ar, en_location";
+  db.exec("BEGIN");
+  try {
+    db.exec("ALTER TABLE mesures RENAME TO mesures_ancienne");
+    db.exec(SCHEMA);                                   // recrée « mesures » avec lat/lon facultatifs
+    db.exec("INSERT INTO mesures (id, " + liste + ", lat, lon) SELECT id, " + liste + ", " +
+      "CASE WHEN en_location = 1 THEN NULL ELSE lat END, CASE WHEN en_location = 1 THEN NULL ELSE lon END " +
+      "FROM mesures_ancienne");
+    db.exec("DROP TABLE mesures_ancienne");
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  return true;
+}
 
 // ---------------------------------------------------------------------
 // Ouverture : chemin du fichier, ou ":memory:" pour les tests.
@@ -91,6 +129,7 @@ function ouvrirBase(chemin, velos) {
   var db = new DatabaseSync(chemin);
   db.exec("PRAGMA foreign_keys = ON");
   if (chemin !== ":memory:") db.exec("PRAGMA journal_mode = WAL");   // lectures pendant les écritures
+  migrerPositionFacultative(db);
   db.exec(SCHEMA);
 
   var ajouterVelo = db.prepare("INSERT OR IGNORE INTO velos (id, nom) VALUES (?, ?)");
@@ -121,6 +160,11 @@ function ouvrirBase(chemin, velos) {
     alertes: db.prepare("SELECT * FROM alertes ORDER BY t DESC, id DESC LIMIT ?"),
     noterRefus: db.prepare("INSERT INTO refus (t, ip, velo, motif, detail) VALUES (?, ?, ?, ?, ?)"),
     refus: db.prepare("SELECT * FROM refus ORDER BY id DESC LIMIT ?"),
+    // --- RGPD : durée de conservation (requêtes paramétrées, elles aussi) ---
+    plusRecente: db.prepare("SELECT MAX(t) AS t FROM mesures"),
+    purgerMesures: db.prepare("DELETE FROM mesures WHERE t < ?"),
+    purgerAlertes: db.prepare("DELETE FROM alertes WHERE t < ?"),
+    purgerRefus: db.prepare("DELETE FROM refus WHERE t < ?"),
     // --- Statistiques (agrégats SQL) ---
     nbMesures: db.prepare("SELECT COUNT(*) AS n FROM mesures"),
     nbMesuresDepuis: db.prepare("SELECT COUNT(*) AS n FROM mesures WHERE t >= ?"),
@@ -182,6 +226,14 @@ function ouvrirBase(chemin, velos) {
     }
   }
 
+  function purger() {
+    var plusRecente = R.plusRecente.get().t;
+    if (plusRecente === null) return 0;
+    var limite = TPMS.flotteLimiteConservation(plusRecente);
+    R.purgerAlertes.run(limite);
+    return Number(R.purgerMesures.run(limite).changes);
+  }
+
   return {
     db: db,
 
@@ -191,10 +243,12 @@ function ouvrirBase(chemin, velos) {
     // registre en mémoire de la démo (flotte/registre.js).
     enregistrerLot: function (id, mesures, sequence) {
       return transaction(function () {
-        var bilan = { acceptees: 0, ignorees: 0, alertes: 0, regonflages: 0 };
+        var bilan = { acceptees: 0, ignorees: 0, alertes: 0, regonflages: 0, purgees: 0 };
         var ligne = R.derniereMesure.get(id);
         var precedente = ligne ? ligneEnMesure(ligne) : null;
-        mesures.forEach(function (m) {
+        mesures.forEach(function (recue) {
+          // RGPD : pas de position pendant une location (flotte-logique.js).
+          var m = TPMS.flotteMinimiserPosition(recue);
           // Seules les mesures plus récentes que la dernière reçue comptent.
           if (precedente && m.t <= precedente.t) { bilan.ignorees++; return; }
           var r = R.insererMesure.run(id, m.t, m.pAv, m.pAr, m.tAv, m.tAr, m.pileAv, m.pileAr,
@@ -232,6 +286,9 @@ function ouvrirBase(chemin, velos) {
           R.majTendance.run(
             champ(apres.AV, "penteBarJour"), champ(apres.AV, "fuiteLente"), champ(apres.AV, "seuilMs"),
             champ(apres.AR, "penteBarJour"), champ(apres.AR, "fuiteLente"), champ(apres.AR, "seuilMs"), id);
+          // RGPD : on efface ce qui a dépassé la durée de conservation,
+          // en comptant à partir de la mesure la plus récente de la base.
+          bilan.purgees = purger();
         }
         R.majSequence.run(sequence, id);
         return bilan;
@@ -239,6 +296,11 @@ function ouvrirBase(chemin, velos) {
     },
 
     // Fiches de tous les vélos (pour flotteResume).
+    // Efface les mesures et les alertes plus anciennes que la durée de
+    // conservation. Retourne le nombre de mesures effacées. Les
+    // regonflages et les tendances (données agrégées) sont gardés.
+    purger: function () { return purger(); },
+
     fiches: function () {
       var dernieres = {};
       R.dernieresMesures.all().forEach(function (l) { dernieres[l.velo_id] = l; });
@@ -267,6 +329,8 @@ function ouvrirBase(chemin, velos) {
 
     noterRefus: function (t, ip, velo, motif, detail) {
       R.noterRefus.run(t, ip, velo, motif, detail);
+      // Le journal contient des adresses IP : lui aussi a une durée de conservation.
+      R.purgerRefus.run(TPMS.flotteLimiteConservation(t, TPMS.FLOTTE_CONSERVATION.refusMs));
     },
 
     refus: function (limite) { return R.refus.all(limite); },

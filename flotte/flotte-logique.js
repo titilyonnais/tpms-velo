@@ -10,6 +10,7 @@
 //
 // Ce fichier répond à trois questions :
 //   1. Un lot de mesures reçu est-il VALIDE ? (types, plages, ordre)
+//      Que peut-on en garder, et combien de temps ? (RGPD)
 //   2. Que s'est-il passé entre deux mesures ? (regonflage, alerte)
 //   3. Quel est l'état d'un vélo pour l'entreprise ? (tendance sur
 //      plusieurs jours, fuite lente, date du prochain regonflage,
@@ -88,9 +89,11 @@ TPMS.flotteDistanceKm = function (lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 };
 
-// Station la plus proche (et distance en km).
+// Station la plus proche (et distance en km). Position inconnue (null,
+// par exemple pendant une location) : { station: null, distanceKm: Infinity }.
 TPMS.flotteStationProche = function (lat, lon) {
   var meilleure = null, dMin = Infinity;
+  if (typeof lat !== "number" || typeof lon !== "number") return { station: null, distanceKm: Infinity };
   TPMS.FLOTTE_STATIONS.forEach(function (s) {
     var d = TPMS.flotteDistanceKm(lat, lon, s.lat, s.lon);
     if (d < dMin) { dMin = d; meilleure = s; }
@@ -134,6 +137,8 @@ TPMS.flotteHeureLocale = function (tMs) {
 // p : pression en bar ; t... : température en °C ; pile, batterie en % ;
 // km : compteur du boîtier ; etat : un état de logique/alertes.js.
 // Les champs d'un capteur peuvent valoir null (capteur perdu).
+// lat et lon sont FACULTATIFS (absents ou null) : pendant une location,
+// le boîtier n'envoie pas sa position (RGPD, voir plus bas).
 TPMS.FLOTTE_LIMITES = {
   mesuresParLotMax: 250,               // 250 mesures = 41 h à raison d'une toutes les 10 min
   futurToleranceMs: 5 * 60000,         // horloge du boîtier un peu en avance : toléré
@@ -151,8 +156,8 @@ TPMS.FLOTTE_CHAMPS = {
   pileAv:     { type: "entier", min: 0, max: 100, nul: true },
   pileAr:     { type: "entier", min: 0, max: 100, nul: true },
   batterie:   { type: "entier", min: 0, max: 100 },
-  lat:        { type: "nombre", min: -90, max: 90 },
-  lon:        { type: "nombre", min: -180, max: 180 },
+  lat:        { type: "nombre", min: -90, max: 90, nul: true, facultatif: true },
+  lon:        { type: "nombre", min: -180, max: 180, nul: true, facultatif: true },
   km:         { type: "nombre", min: 0, max: TPMS.FLOTTE_LIMITES.kmMax },
   etatAv:     { type: "etat" },
   etatAr:     { type: "etat" },
@@ -196,7 +201,11 @@ TPMS.flotteValiderLot = function (corps, maintenantMs) {
     }
     var propre = {};
     for (var nom in TPMS.FLOTTE_CHAMPS) {
-      if (!Object.prototype.hasOwnProperty.call(m, nom)) return { ok: false, erreur: "mesure " + i + " : champ « " + nom + " » manquant" };
+      if (!Object.prototype.hasOwnProperty.call(m, nom)) {
+        // Champ facultatif absent (position) : on le note null.
+        if (TPMS.FLOTTE_CHAMPS[nom].facultatif) { propre[nom] = null; continue; }
+        return { ok: false, erreur: "mesure " + i + " : champ « " + nom + " » manquant" };
+      }
       var erreur = verifierChamp(nom, TPMS.FLOTTE_CHAMPS[nom], m[nom]);
       if (erreur) return { ok: false, erreur: "mesure " + i + " : " + erreur };
       propre[nom] = m[nom];
@@ -283,6 +292,53 @@ TPMS.flotteControlerRequete = function (r) {
 // boîtier garderait un compteur dans sa mémoire flash).
 TPMS.flotteProchaineSequence = function (derniere, maintenantMs) {
   return Math.max(Math.floor(maintenantMs), derniere + 1);
+};
+
+// ---------------------------------------------------------------------
+// 1 bis. RGPD : minimisation et durée de conservation
+// ---------------------------------------------------------------------
+// Pendant une location, la position du vélo EST celle du client : c'est
+// une donnée personnelle (où il va, où il habite, à quelle heure...).
+// Le métier (regonfler, réparer) n'en a pas besoin : le technicien ne
+// passe que sur les vélos rendus en station. Principe de MINIMISATION
+// (RGPD, article 5) : on ne garde que ce qui sert.
+// Même règle partout, avant tout stockage : base SQLite du serveur
+// (serveur/base.js) et registre du mode démo (flotte/registre.js). Le
+// boîtier simulé (flotte/flotte.js) n'envoie même pas sa position
+// pendant une location ; le serveur l'efface quand même si un boîtier
+// mal programmé l'envoie (on ne fait pas confiance à l'émetteur).
+TPMS.flotteMinimiserPosition = function (mesure) {
+  var m = Object.assign({}, mesure);                 // copie : on ne modifie pas l'original
+  var positionValide = typeof m.lat === "number" && typeof m.lon === "number";
+  if (m.enLocation || !positionValide) {
+    m.lat = null;
+    m.lon = null;
+  }
+  return m;
+};
+
+// Durées de conservation (RGPD, article 5 : « limitation de la conservation »).
+TPMS.FLOTTE_CONSERVATION = {
+  // Mesures détaillées (une toutes les 10 min) et alertes : 30 jours.
+  // Pourquoi 30 ? La tendance d'une roue regarde 14 jours en arrière
+  // (tendanceFenetreMs) et l'historique d'un vélo en montre 30 au plus ;
+  // une roue est regonflée en moyenne toutes les une à deux semaines :
+  // 30 jours couvrent deux fenêtres de tendance et plusieurs regonflages.
+  // Au-delà, seules restent des données agrégées (nombre et dates des
+  // regonflages, tendances), qui ne décrivent plus aucun trajet.
+  mesuresMs: 30 * 86400000,
+  // Journal des refus : il contient des adresses IP (donnée personnelle).
+  // 6 mois, durée recommandée par la CNIL pour les journaux de sécurité.
+  refusMs: 183 * 86400000
+};
+
+// Date limite : tout ce qui est plus ancien est effacé. Elle se calcule
+// à partir de la mesure la PLUS RÉCENTE reçue (l'instant des données),
+// pas de l'horloge de l'ordinateur : la simulation compresse le temps
+// (14 jours en 30 s), et rejouer d'anciennes données ne doit pas les
+// faire disparaître aussitôt.
+TPMS.flotteLimiteConservation = function (plusRecenteMs, dureeMs) {
+  return plusRecenteMs - (dureeMs === undefined ? TPMS.FLOTTE_CONSERVATION.mesuresMs : dureeMs);
 };
 
 // ---------------------------------------------------------------------
@@ -423,8 +479,11 @@ TPMS.flotteResume = function (fiche, maintenantMs) {
 
   ["t", "lat", "lon", "enLocation", "pAv", "pAr", "tAv", "tAr", "pileAv", "pileAr", "batterie", "km", "etatAv", "etatAr"]
     .forEach(function (c) { r[c] = d[c]; });
+  // Station : seulement si la position est connue (pas pendant une location).
   var proche = TPMS.flotteStationProche(d.lat, d.lon);
-  r.station = proche.distanceKm < 0.15 ? proche.station.nom : null;
+  r.station = proche.station && proche.distanceKm < 0.15 ? proche.station.nom : null;
+  if (r.lat === undefined) r.lat = null;
+  if (r.lon === undefined) r.lon = null;
 
   var statut = "ok", priorite = 0, raison = "Pneus correctement gonflés";
   function monter(nouveau, prio, texte) {

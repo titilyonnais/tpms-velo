@@ -7,10 +7,14 @@
 // MÉMOIRE (rien n'est écrit sur le disque), puis l'arrête.
 // =====================================================================
 var path = require("node:path");
+var fs = require("node:fs");
+var os = require("node:os");
 var crypto = require("node:crypto");
 var TPMS = require("../flotte/node.js");
 var outils = require("./serveur.js");
 var client = require("./flotte-vers-serveur.js");
+var certificat = require("./generer-certificat.js");
+var ouvrirBase = require("./base.js").ouvrirBase;
 
 var resultats = { reussis: 0, rates: 0, lignes: [] };
 
@@ -27,6 +31,10 @@ function verifier(nom, condition, detail) {
 function proche(a, b, tolerance) { return Math.abs(a - b) <= tolerance; }
 
 var CLES = outils.chargerCles(path.join(__dirname, "cles-demo.json"));
+// Jetons des comptes de démo (en clair dans le fichier de démo).
+var COMPTES_DEMO = JSON.parse(fs.readFileSync(path.join(__dirname, "cles-demo.json"), "utf8")).comptes;
+var JETON_TECHNICIEN = COMPTES_DEMO.technicien.jeton;
+var JETON_GESTIONNAIRE = COMPTES_DEMO.gestionnaire.jeton;
 
 // Démarre un serveur de test ; renvoie { url, serveur, client }.
 function demarrer(options) {
@@ -34,16 +42,21 @@ function demarrer(options) {
   var serveur = outils.creerServeur(o);
   return new Promise(function (ok) {
     serveur.listen(0, "127.0.0.1", function () {
-      var url = "http://127.0.0.1:" + serveur.address().port;
-      ok({ url: url, serveur: serveur, client: client.creerClient(url, CLES) });
+      var url = (o.tls ? "https" : "http") + "://127.0.0.1:" + serveur.address().port;
+      ok({ url: url, serveur: serveur, client: client.creerClient(url, CLES, { ca: o.ca }) });
     });
   });
 }
 function arreter(s) {
   return new Promise(function (ok) { s.serveur.closeAllConnections(); s.serveur.close(ok); });
 }
-async function lire(s, chemin) {
-  var r = await fetch(s.url + chemin);
+// Lecture de l'API. Par défaut avec le compte « gestionnaire » (tous les
+// droits) ; jeton = null : sans en-tête Authorization ; ou un autre jeton.
+async function lire(s, chemin, jeton) {
+  var enTetes = {};
+  var j = jeton === undefined ? JETON_GESTIONNAIRE : jeton;
+  if (j !== null) enTetes.Authorization = j.indexOf(" ") >= 0 ? j : "Bearer " + j;
+  var r = await fetch(s.url + chemin, { headers: enTetes });
   var json = null;
   try { json = await r.json(); } catch (e) { /* pas de JSON */ }
   return { statut: r.status, json: json, enTetes: r.headers };
@@ -352,6 +365,237 @@ async function testsFuiteRepere() {
 }
 
 // ---------------------------------------------------------------------
+// 5. Lecture de l'API réservée aux comptes (jeton « Bearer », rôles)
+// ---------------------------------------------------------------------
+async function testsComptes() {
+  var s = await demarrer();
+  await s.client.envoyer(s.client.preparer("V01", [mesure(60000)]));
+
+  var r = await lire(s, "/api/velos", null);
+  verifier("compte : GET /api/velos sans jeton → 401", r.statut === 401 && r.json.motif === "authentification", r.statut);
+  verifier("compte : la réponse 401 annonce le schéma Bearer (WWW-Authenticate)", /^Bearer/.test(r.enTetes.get("www-authenticate") || ""));
+  verifier("compte : aucune donnée de vélo dans la réponse 401", !r.json.velos);
+  r = await lire(s, "/api/velos", "Bearer " + "A".repeat(32));
+  verifier("compte : jeton faux (bien formé) → 401", r.statut === 401 && r.json.erreur === "jeton invalide", r.statut + " " + (r.json && r.json.erreur));
+  r = await lire(s, "/api/statistiques", "Basic dGVjaG5pY2llbjpzZWNyZXQ=");
+  verifier("compte : en-tête Authorization d'un autre type → 401", r.statut === 401, r.statut);
+  r = await lire(s, "/api/route-qui-n-existe-pas", null);
+  verifier("compte : route inconnue sans jeton → 401 (on ne dévoile pas les routes)", r.statut === 401, r.statut);
+
+  r = await lire(s, "/api/velos", JETON_TECHNICIEN);
+  verifier("compte : bon jeton (technicien) → 200 et 20 vélos", r.statut === 200 && r.json.velos.length === 20, r.statut);
+  r = await lire(s, "/api/moi", JETON_TECHNICIEN);
+  verifier("compte : /api/moi donne le compte et son rôle", r.statut === 200 && r.json.compte === "technicien" && r.json.role === "technicien", JSON.stringify(r.json));
+  r = await lire(s, "/api/velos/V01/historique?jours=1", JETON_TECHNICIEN);
+  verifier("rôle technicien : historique d'un vélo → 200", r.statut === 200 && r.json.mesures.length === 1, r.statut);
+  r = await lire(s, "/api/refus", JETON_TECHNICIEN);
+  verifier("rôle technicien : journal de sécurité /api/refus → 403", r.statut === 403 && r.json.motif === "droits", r.statut);
+  r = await lire(s, "/api/statistiques", JETON_TECHNICIEN);
+  verifier("rôle technicien : statistiques sans les chiffres de sécurité", r.statut === 200 && r.json.securite === null && r.json.indicateurs.nbVelos === 20);
+
+  r = await lire(s, "/api/refus?limite=50", JETON_GESTIONNAIRE);
+  verifier("rôle gestionnaire : /api/refus → 200", r.statut === 200 && Array.isArray(r.json.refus), r.statut);
+  var motifs = r.json.refus.map(function (x) { return x.motif; });
+  // Les lectures au jeton faux (ou mal formé) sont tracées ; une simple
+  // visite sans jeton (page ouverte avant la connexion) ne l'est pas.
+  verifier("journal : les jetons faux sont tracés, pas les visites sans jeton (motif authentification)",
+    motifs.filter(function (m) { return m === "authentification"; }).length === 2, motifs.join(","));
+  verifier("journal : l'accès refusé au technicien est tracé (motif droits)", motifs.indexOf("droits") >= 0);
+  verifier("journal : le jeton essayé n'est pas recopié dans le journal",
+    JSON.stringify(r.json.refus).indexOf("AAAAAAAAAAAAAAAA") < 0 && JSON.stringify(r.json.refus).indexOf(JETON_TECHNICIEN) < 0);
+  r = await lire(s, "/api/statistiques", JETON_GESTIONNAIRE);
+  verifier("rôle gestionnaire : statistiques avec les refus par motif", r.json.securite && r.json.securite.refusParMotif.length > 0);
+
+  // Le serveur ne garde que l'empreinte SHA-256 des jetons.
+  var memoire = JSON.stringify(s.serveur.comptes.map(function (c) { return { nom: c.nom, role: c.role, e: c.empreinte.toString("hex") }; }));
+  verifier("comptes en mémoire : aucun jeton en clair, seulement l'empreinte",
+    memoire.indexOf(JETON_TECHNICIEN) < 0 && memoire.indexOf(JETON_GESTIONNAIRE) < 0 &&
+    s.serveur.comptes[0].empreinte.equals(crypto.createHash("sha256").update(COMPTES_DEMO[s.serveur.comptes[0].nom].jeton).digest()));
+  // Configuration « production » : seulement l'empreinte dans le fichier.
+  var fichier = path.join(os.tmpdir(), "tpms-comptes-" + process.pid + ".json");
+  fs.writeFileSync(fichier, JSON.stringify({ velos: {}, comptes: {
+    chef: { role: "gestionnaire", empreinte: crypto.createHash("sha256").update("jeton-de-test-0123456789").digest("hex") } } }));
+  var comptes = outils.chargerComptes(fichier);
+  fs.unlinkSync(fichier);
+  verifier("comptes : un fichier qui ne contient que l'empreinte suffit", comptes.length === 1 && comptes[0].role === "gestionnaire" &&
+    comptes[0].empreinte.equals(outils.empreinteJeton("jeton-de-test-0123456789")));
+
+  var page = await fetch(s.url + "/flotte/");
+  verifier("compte : la page /flotte/ (fichier statique) reste publique", page.status === 200, page.status);
+  await arreter(s);
+
+  // Force brute sur les jetons : comptée dans le blocage d'adresse existant.
+  s = await demarrer({ refusParMinuteMax: 3 });
+  for (var k = 0; k < 4; k++) await lire(s, "/api/velos", "Bearer essai-de-jeton-" + k + "-xxxxxxxx");
+  r = await lire(s, "/api/velos", JETON_GESTIONNAIRE);
+  verifier("4 jetons faux : l'adresse IP est bloquée, même avec ensuite le bon jeton (429)", r.statut === 429 && r.json.motif === "ip-bloquee", r.statut);
+  await arreter(s);
+}
+
+// ---------------------------------------------------------------------
+// 6. RGPD : minimisation de la position, durée de conservation
+// ---------------------------------------------------------------------
+async function testsRgpd() {
+  var s = await demarrer();
+  var c = s.client;
+  // V01 rendu en station (position gardée), V02 en location (position envoyée par erreur), V03 sans position.
+  await c.envoyer(c.preparer("V01", [mesure(60000)]));
+  var r = await c.envoyer(c.preparer("V02", [mesure(60000, { enLocation: true, lat: 45.7601, lon: 4.8402 })]));
+  verifier("RGPD : un lot en location AVEC position est accepté (201)", r.statut === 201, r.statut);
+  var sansPosition = mesure(50000, { enLocation: true });
+  delete sansPosition.lat;
+  delete sansPosition.lon;
+  r = await c.envoyer(c.preparer("V03", [sansPosition]));
+  verifier("RGPD : un lot en location SANS lat/lon est accepté (201)", r.statut === 201, r.statut + " " + JSON.stringify(r.json));
+  r = await c.envoyer(c.preparer("V04", [mesure(50000, { lat: null, lon: null })]));
+  verifier("validation : lat/lon à null acceptés", r.statut === 201, r.statut);
+  r = await c.envoyer(c.preparer("V05", [mesure(50000, { lat: "45.76" })]));
+  verifier("validation : lat présente mais en texte → refusée (400)", r.statut === 400 && r.json.motif === "validation", r.statut);
+  r = await c.envoyer(c.preparer("V05", [mesure(50000, { lon: 200 })]));
+  verifier("validation : longitude hors plage → refusée (400)", r.statut === 400, r.statut);
+
+  var lignes = s.serveur.base.db.prepare("SELECT velo_id, lat, lon, en_location FROM mesures ORDER BY velo_id").all();
+  var parVelo = {};
+  lignes.forEach(function (l) { parVelo[l.velo_id] = l; });
+  verifier("RGPD base : la position envoyée pendant la location n'est PAS stockée (NULL)",
+    parVelo.V02 && parVelo.V02.lat === null && parVelo.V02.lon === null && parVelo.V02.en_location === 1, JSON.stringify(parVelo.V02));
+  verifier("RGPD base : la position en station est gardée", parVelo.V01 && parVelo.V01.lat === 45.7578, JSON.stringify(parVelo.V01));
+  var velos = (await lire(s, "/api/velos")).json.velos;
+  var v = {};
+  velos.forEach(function (x) { v[x.id] = x; });
+  verifier("RGPD API : /api/velos ne donne aucune position pour un vélo en location",
+    v.V02.lat === null && v.V02.lon === null && v.V02.enLocation === true && v.V02.station === null, JSON.stringify([v.V02.lat, v.V02.station]));
+  verifier("RGPD API : le vélo rendu en station garde sa station", v.V01.station === "Bellecour", v.V01.station);
+  verifier("RGPD API : un vélo sans position n'a pas de station (pas d'erreur)", v.V04.station === null && v.V04.statut === "ok", v.V04.statut);
+  var h = (await lire(s, "/api/velos/V02/historique?jours=1")).json;
+  verifier("RGPD API : l'historique ne contient pas la position de la location",
+    h.mesures.length === 1 && h.mesures[0].lat === null && h.mesures[0].lon === null);
+  await arreter(s);
+
+  // Même règle dans le registre du mode démo
+  var reg = TPMS.creerRegistre([{ id: "V01", nom: "Vélo 01" }]);
+  TPMS.registreAjouterLot(reg, "V01", [mesure(60000, { enLocation: true, lat: 45.76, lon: 4.84 })]);
+  verifier("RGPD démo : le registre efface aussi la position en location",
+    reg.mesures.V01[0].lat === null && TPMS.registreVelos(reg, Date.now()).velos[0].lat === null);
+
+  // Et le boîtier simulé ne l'envoie même pas
+  var f = TPMS.creerFlotte({ graine: 42, garderLots: true });
+  TPMS.flotteAvancer(f, 86400);
+  var enLocation = 0, fuite = 0, enStation = 0;
+  TPMS.flotteLotsAEnvoyer(f).forEach(function (lot) {
+    lot.mesures.forEach(function (m) {
+      if (m.enLocation) { enLocation++; if ("lat" in m || "lon" in m) fuite++; }
+      else if (typeof m.lat === "number") enStation++;
+    });
+  });
+  verifier("RGPD simulation : le boîtier n'envoie pas sa position pendant les locations",
+    enLocation > 20 && fuite === 0 && enStation > 1000, enLocation + " mesures en location, " + fuite + " avec position");
+}
+
+async function testsConservation() {
+  var J = 86400000;
+  var C = TPMS.FLOTTE_CONSERVATION;
+  verifier("conservation : 30 jours de mesures, plus que la fenêtre de tendance (14 j)",
+    C.mesuresMs === 30 * J && C.mesuresMs > TPMS.FLOTTE.tendanceFenetreMs);
+
+  var s = await demarrer();
+  var c = s.client;
+  // Vieilles données (40 jours) de V02 : un regonflage et une alerte « pression basse ».
+  var vieilles = [
+    mesure(42 * J, { pAv: 1.9, etatAv: "BASSE" }),
+    mesure(41 * J, { pAv: 2.45 }),
+    mesure(40 * J)
+  ];
+  var r = await c.envoyer(c.preparer("V02", vieilles));
+  verifier("conservation : un lot de vieilles mesures (40 j) est accepté", r.statut === 201 && r.json.acceptees === 3 && r.json.regonflages === 1,
+    JSON.stringify(r.json));
+  verifier("conservation : la purge compte à partir des DONNÉES, pas de l'horloge (rien d'effacé)",
+    (await nbMesuresEnBase(s)) === 3 && r.json.purgees === 0, await nbMesuresEnBase(s));
+  r = await c.envoyer(c.preparer("V03", [mesure(60000)]));
+  verifier("conservation : une mesure récente fait effacer celles de plus de 30 jours", r.statut === 201 && r.json.purgees === 3,
+    JSON.stringify(r.json));
+  var db = s.serveur.base.db;
+  verifier("conservation : plus aucune mesure de V02 en base",
+    db.prepare("SELECT COUNT(*) AS n FROM mesures WHERE velo_id = ?").get("V02").n === 0);
+  verifier("conservation : les vieilles alertes sont effacées aussi",
+    db.prepare("SELECT COUNT(*) AS n FROM alertes WHERE t < ?").get(Date.now() - 30 * J).n === 0);
+  var stats = (await lire(s, "/api/statistiques")).json;
+  verifier("conservation : les statistiques agrégées restent (regonflage compté)", stats.regonflages.total === 1 && stats.mesures.total === 1,
+    JSON.stringify([stats.regonflages.total, stats.mesures.total]));
+  var v02 = (await lire(s, "/api/velos")).json.velos.filter(function (x) { return x.id === "V02"; })[0];
+  verifier("conservation : V02 n'a plus de dernière mesure (muet, « Aucune donnée »)", v02.t === null && v02.statut === "muet", v02.statut);
+
+  // Journal des refus : 6 mois
+  s.serveur.base.noterRefus(Date.now() - 200 * J, "10.0.0.1", null, "test", "vieux refus");
+  s.serveur.base.noterRefus(Date.now(), "10.0.0.2", null, "test", "refus récent");
+  var ips = db.prepare("SELECT ip FROM refus WHERE motif = 'test'").all().map(function (l) { return l.ip; });
+  verifier("conservation : refus de plus de 6 mois effacés (adresses IP)", ips.length === 1 && ips[0] === "10.0.0.2", ips.join(","));
+  await arreter(s);
+
+  // Même règle dans le registre du mode démo
+  var reg = TPMS.creerRegistre([{ id: "V02", nom: "Vélo 02" }, { id: "V03", nom: "Vélo 03" }]);
+  TPMS.registreAjouterLot(reg, "V02", vieilles);
+  var avant = reg.nbMesures;
+  var bilan = TPMS.registreAjouterLot(reg, "V03", [mesure(60000)]);
+  var sm = TPMS.registreStatistiques(reg, Date.now());
+  verifier("conservation démo : le registre efface les mêmes mesures et alertes",
+    avant === 3 && bilan.purgees === 3 && reg.mesures.V02.length === 0 && reg.alertes.length === 0 && sm.mesures.total === 1 && sm.regonflages.total === 1,
+    JSON.stringify([avant, bilan.purgees, reg.mesures.V02.length, reg.alertes.length]));
+
+  // Ancienne base (lat/lon « NOT NULL ») : mise à jour au démarrage.
+  var fichier = path.join(os.tmpdir(), "tpms-ancienne-" + process.pid + ".db");
+  var DatabaseSync = require("node:sqlite").DatabaseSync;
+  var ancienne = new DatabaseSync(fichier);
+  ancienne.exec("CREATE TABLE velos (id TEXT PRIMARY KEY, nom TEXT NOT NULL, derniere_sequence INTEGER NOT NULL DEFAULT 0, " +
+    "pente_av REAL, fuite_av INTEGER NOT NULL DEFAULT 0, seuil_av_ms INTEGER, pente_ar REAL, fuite_ar INTEGER NOT NULL DEFAULT 0, seuil_ar_ms INTEGER);" +
+    "CREATE TABLE mesures (id INTEGER PRIMARY KEY, velo_id TEXT NOT NULL REFERENCES velos(id), t INTEGER NOT NULL, p_av REAL, p_ar REAL, " +
+    "temp_av REAL, temp_ar REAL, pile_av INTEGER, pile_ar INTEGER, batterie INTEGER NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL, " +
+    "km REAL NOT NULL, etat_av TEXT NOT NULL, etat_ar TEXT NOT NULL, en_location INTEGER NOT NULL, UNIQUE (velo_id, t));" +
+    "INSERT INTO velos (id, nom) VALUES ('V01', 'Vélo 01');" +
+    "INSERT INTO mesures (velo_id, t, batterie, lat, lon, km, etat_av, etat_ar, en_location) VALUES " +
+    "('V01', 1, 80, 45.76, 4.84, 10, 'OK', 'OK', 1), ('V01', 2, 80, 45.7578, 4.832, 11, 'OK', 'OK', 0);");
+  ancienne.close();
+  var base = ouvrirBase(fichier, [{ id: "V01", nom: "Vélo 01" }]);
+  var colonneLat = base.db.prepare("PRAGMA table_info(mesures)").all().filter(function (col) { return col.name === "lat"; })[0];
+  var rangees = base.db.prepare("SELECT t, lat FROM mesures ORDER BY t").all();
+  base.fermer();
+  ["", "-wal", "-shm"].forEach(function (x) { try { fs.unlinkSync(fichier + x); } catch (e) { /* absent */ } });
+  verifier("ancienne base : lat devient facultative, positions de location effacées, le reste gardé",
+    colonneLat.notnull === 0 && rangees.length === 2 && rangees[0].lat === null && rangees[1].lat === 45.7578, JSON.stringify(rangees));
+}
+
+// ---------------------------------------------------------------------
+// 7. HTTPS (certificat auto-signé temporaire, si openssl est présent)
+// ---------------------------------------------------------------------
+async function testsHttps() {
+  var dossier = fs.mkdtempSync(path.join(os.tmpdir(), "tpms-https-"));
+  try {
+    var fichiers = certificat.genererCertificat(dossier, { jours: 1 });
+    if (!fichiers) {
+      resultats.lignes.push("SAUTÉ  HTTPS : openssl introuvable, tests HTTPS non exécutés");
+      return;
+    }
+    var ca = fs.readFileSync(fichiers.cert);
+    var s = await demarrer({ tls: { cert: ca, key: fs.readFileSync(fichiers.cle) }, ca: ca });
+    verifier("HTTPS : le serveur démarre en HTTPS avec le certificat", s.serveur.https && s.url.indexOf("https://") === 0);
+    var r = await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + JETON_TECHNICIEN }, ca: ca });
+    verifier("HTTPS : requête réussie en faisant confiance au certificat de démo (option ca)", r.statut === 200 && r.json.velos.length === 20, r.statut);
+    verifier("HTTPS : en-tête Strict-Transport-Security présent", r.enTetes["strict-transport-security"] === outils.HSTS, r.enTetes["strict-transport-security"]);
+    var erreur = null;
+    try { await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + JETON_TECHNICIEN } }); } catch (e) { erreur = e; }
+    verifier("HTTPS : sans faire confiance au certificat, la connexion est refusée (vérification active)",
+      erreur !== null && /SELF_SIGNED|self.signed|unable to verify/i.test(erreur.code + " " + erreur.message), erreur && erreur.code);
+    var envoi = await s.client.envoyer(s.client.preparer("V01", [mesure(60000)]));
+    verifier("HTTPS : un lot signé passe aussi par HTTPS (201)", envoi.statut === 201, envoi.statut);
+    r = await client.requeteJson(s.url + "/api/velos", { ca: ca });
+    verifier("HTTPS : le jeton reste exigé (401 sans jeton)", r.statut === 401, r.statut);
+    await arreter(s);
+  } finally {
+    fs.rmSync(dossier, { recursive: true, force: true });     // pas de clé privée qui traîne
+  }
+}
+
+// ---------------------------------------------------------------------
 // Lancement et bilan
 // ---------------------------------------------------------------------
 (async function () {
@@ -361,6 +605,10 @@ async function testsFuiteRepere() {
     testsSimulation();
     await testsBoutEnBout();
     await testsFuiteRepere();
+    await testsComptes();
+    await testsRgpd();
+    await testsConservation();
+    await testsHttps();
   } catch (e) {
     verifier("exécution sans exception", false, e.stack);
   }

@@ -8,6 +8,11 @@
 //     registre en mémoire (flotte/registre.js) joue le rôle du serveur.
 // Toute la logique (statuts, priorités, tendances) est dans
 // flotte-logique.js ; ce fichier ne fait que dessiner.
+//
+// Mode « api » : le serveur réserve ses données aux comptes identifiés.
+// La page demande le JETON du compte (technicien ou gestionnaire), le
+// garde dans sessionStorage (oublié à la fermeture de l'onglet, jamais
+// dans l'adresse) et l'envoie dans l'en-tête « Authorization: Bearer ».
 // =====================================================================
 (function () {
   "use strict";
@@ -22,8 +27,29 @@
     tri: { cle: "priorite", inverse: false },
     filtre: "traiter",
     velos: [], stats: null, alertes: [], refus: [], maintenantMs: 0,
-    occupe: false
+    occupe: false,
+    jeton: null,                // jeton du compte (mode api)
+    compte: null,               // { compte, role, droits } renvoyé par /api/moi
+    minuteur: null
   };
+
+  // -------------------------------------------------------------------
+  // Jeton du compte : sessionStorage (cet onglet seulement)
+  // -------------------------------------------------------------------
+  var CLE_JETON = "tpms-flotte-jeton";
+  function jetonGarde() {
+    try { return sessionStorage.getItem(CLE_JETON); } catch (e) { return null; }
+  }
+  function garderJeton(jeton) {
+    try {
+      if (jeton) sessionStorage.setItem(CLE_JETON, jeton);
+      else sessionStorage.removeItem(CLE_JETON);
+    } catch (e) { /* stockage indisponible : le jeton reste en mémoire */ }
+  }
+  function enTetes(jeton) {
+    var j = jeton === undefined ? etat.jeton : jeton;
+    return j ? { Authorization: "Bearer " + j } : {};
+  }
 
   // -------------------------------------------------------------------
   // Mise en forme
@@ -72,7 +98,13 @@
   // Sources de données
   // -------------------------------------------------------------------
   function lireJson(adresse) {
-    return fetch(adresse, { cache: "no-store" }).then(function (r) {
+    return fetch(adresse, { cache: "no-store", headers: enTetes() }).then(function (r) {
+      if (r.status === 401) {
+        // Jeton refusé (retiré du serveur, serveur relancé avec d'autres comptes...)
+        var e = new Error("jeton refusé par le serveur");
+        e.deconnecte = true;
+        throw e;
+      }
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
@@ -96,17 +128,32 @@
 
   function source() { return etat.mode === "api" ? sourceApi : sourceDemo; }
 
-  // Le serveur répond-il ? (2 s au plus)
+  // Le serveur répond-il ? (2 s au plus). On demande « qui suis-je ? »
+  // avec le jeton gardé, s'il y en a un. Résultat :
+  //   { mode: "api", compte }   serveur présent, jeton accepté ;
+  //   { mode: "connexion", message } serveur présent, il faut un jeton ;
+  //   { mode: "demo" }          pas de serveur (GitHub Pages, fichier local...).
   function detecterServeur() {
-    if (location.protocol === "file:") return Promise.resolve(false);
+    if (location.protocol === "file:") return Promise.resolve({ mode: "demo" });
     var controle = new AbortController();
     var minuteur = setTimeout(function () { controle.abort(); }, 2000);
-    return fetch("../api/velos", { cache: "no-store", signal: controle.signal })
+    var jeton = jetonGarde();
+    return fetch("../api/moi", { cache: "no-store", signal: controle.signal, headers: enTetes(jeton) })
       .then(function (r) {
         clearTimeout(minuteur);
-        return r.ok && (r.headers.get("content-type") || "").indexOf("application/json") === 0;
+        // Seul NOTRE serveur répond en JSON sur /api/ ; un simple serveur de fichiers répond 404.
+        if ((r.headers.get("content-type") || "").indexOf("application/json") !== 0) return { mode: "demo" };
+        return r.json().then(function (json) {
+          if (r.ok) return { mode: "api", jeton: jeton, compte: json };
+          if (r.status === 401) {
+            if (jeton) garderJeton(null);           // jeton périmé : on l'oublie
+            return { mode: "connexion", message: jeton ? "Le jeton gardé n'est plus accepté : se reconnecter." : "" };
+          }
+          if (r.status === 429) return { mode: "connexion", message: "Adresse bloquée par le serveur après trop d'essais : réessayer dans quelques minutes." };
+          return { mode: "demo" };
+        });
       })
-      .catch(function () { clearTimeout(minuteur); return false; });
+      .catch(function () { clearTimeout(minuteur); return { mode: "demo" }; });
   }
 
   // -------------------------------------------------------------------
@@ -116,7 +163,9 @@
     if (etat.occupe) return Promise.resolve();
     etat.occupe = true;
     var s = source();
-    return Promise.all([s.velos(), s.statistiques(), s.alertes(60), etat.mode === "api" ? s.refus(8) : null])
+    // Le journal des refus n'est lu que par le gestionnaire (rôle vérifié par le serveur).
+    var lireRefus = etat.mode === "api" && etat.compte && etat.compte.droits.indexOf("refus") >= 0;
+    return Promise.all([s.velos(), s.statistiques(), s.alertes(60), lireRefus ? s.refus(8) : null])
       .then(function (r) {
         etat.velos = r[0].velos;
         etat.maintenantMs = r[0].maintenantMs;
@@ -134,6 +183,14 @@
       })
       .then(function (h) { if (h) afficherDetail(h); })
       .catch(function (e) {
+        if (e.deconnecte) {
+          // Le serveur ne reconnaît plus le jeton : retour à la connexion.
+          garderJeton(null);
+          etat.jeton = null;
+          clearInterval(etat.minuteur);
+          afficherConnexion("Le serveur a refusé le jeton : se reconnecter.");
+          return;
+        }
         $("etatTitre").textContent = "Serveur injoignable";
         $("etatDetail").textContent = e.message;
         $("etatGlobal").className = "etat-global attention";
@@ -218,12 +275,15 @@
       parStation[s.nom] = { p: p, velos: [] };
     });
 
-    var libres = [];
+    // RGPD : un vélo en location n'a PAS de position (non conservée) ; il
+    // est listé sous la carte au lieu d'y être placé.
+    var libres = [], sansPosition = [];
     etat.velos.forEach(function (v) {
-      if (v.lat === null) return;
+      if (v.lat === null || v.lon === null) { sansPosition.push(v); return; }
       if (!v.enLocation && v.station && parStation[v.station]) parStation[v.station].velos.push(v);
       else libres.push(v);
     });
+    afficherSansPosition(sansPosition);
     function dessinerVelo(v, x, y) {
       var classe = "velo " + v.statut + (v.enLocation ? " roule" : "") + (v.id === etat.choisi ? " choisi" : "");
       var c = el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 8, class: classe, "data-id": v.id });
@@ -240,8 +300,24 @@
         dessinerVelo(v, g.p.x + rayon * Math.cos(angle), g.p.y + rayon * Math.sin(angle));
       });
     });
-    // Vélos en location : à leur position
+    // Vélos hors station dont on connaît la position (rare : rendus ailleurs)
     libres.forEach(function (v) { var p = projeter(v.lat, v.lon); dessinerVelo(v, p.x, p.y); });
+  }
+
+  // Sous la carte : les vélos sans position (en location, ou sans GPS).
+  function afficherSansPosition(liste) {
+    var zone = $("horsCarte");
+    zone.hidden = liste.length === 0;
+    if (liste.length === 0) { zone.innerHTML = ""; return; }
+    var enLocation = liste.filter(function (v) { return v.enLocation; }).length;
+    var titre = enLocation === liste.length
+      ? "En location · position non conservée (RGPD)"
+      : "Sans position connue · en location : position non conservée (RGPD)";
+    zone.innerHTML = "<span class=\"hors-carte-titre\">" + titre + "</span>" + liste.map(function (v) {
+      return "<button type=\"button\" class=\"puce-velo" + (v.id === etat.choisi ? " choisi" : "") + "\" data-id=\"" + echapper(v.id) + "\" title=\"" +
+        echapper(v.nom + " · " + STATUTS[v.statut].texte + " · " + v.raison) + "\"><i class=\"pastille " + echapper(v.statut) +
+        (v.enLocation ? " anneau" : "") + "\"></i>" + echapper(v.id) + "</button>";
+    }).join("");
   }
 
   // -------------------------------------------------------------------
@@ -340,7 +416,7 @@
       ["Batterie du boîtier", r.batterie === null ? "–" : r.batterie + " %", r.batterie !== null && r.batterie < TPMS.FLOTTE.batterieFaiblePct ? "attention-texte" : ""],
       ["Piles des capteurs", (r.pileAv === null ? "–" : r.pileAv + " %") + " / " + (r.pileAr === null ? "–" : r.pileAr + " %"), ""],
       ["Compteur", r.km === null ? "–" : nombre(r.km, 0) + " km", ""],
-      ["Position", r.enLocation ? "En location" : (r.station || "–"), ""],
+      ["Position", r.enLocation ? "En location (position non conservée)" : (r.station || (r.lat === null ? "Inconnue" : "Hors station")), ""],
       ["Dernière mesure", r.t === null ? "–" : depuis(h.maintenantMs - r.t), ""],
       ["Regonflages (7 j)", String(h.regonflages.length), ""]
     ];
@@ -418,12 +494,18 @@
   var MOTIFS = {
     signature: "Signature invalide", rejeu: "Rejeu", horodatage: "Horodatage hors fenêtre", inconnu: "Vélo inconnu",
     identifiant: "Identifiant mal formé", "en-tetes": "En-têtes manquants", validation: "Valeurs refusées", json: "JSON invalide",
-    debit: "Trop de requêtes", taille: "Corps trop gros", type: "Mauvais type"
+    debit: "Trop de requêtes", taille: "Corps trop gros", type: "Mauvais type",
+    authentification: "Lecture sans jeton valide", droits: "Hors des droits du compte"
   };
 
   function afficherSecurite() {
     if (etat.mode !== "api") return;
-    var motifs = etat.stats.securite ? etat.stats.securite.refusParMotif : [];
+    // Technicien : le serveur ne lui donne pas le journal de sécurité.
+    var reserve = !etat.stats.securite;
+    $("secuServeur").hidden = reserve;
+    $("secuReserve").hidden = !reserve;
+    if (reserve) return;
+    var motifs = etat.stats.securite.refusParMotif;
     barres($("secuMotifs"), motifs.map(function (m) { return { nom: MOTIFS[m.motif] || m.motif, n: m.n }; }), "alerte");
     $("secuRefus").innerHTML = etat.refus.map(function (r) {
       return "<tr><td>" + dateCourte(r.t) + "</td><td class=\"mono\">" + echapper(r.velo || "–") + "</td><td>" +
@@ -527,6 +609,10 @@
       var tr = e.target.closest("tr");
       if (tr && tr.dataset.id) { choisir(tr.dataset.id); $("zoneDetail").scrollIntoView(); }
     });
+    $("horsCarte").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (b && b.dataset.id) choisir(b.dataset.id);
+    });
     $("listeAlertes").addEventListener("click", function (e) {
       var li = e.target.closest("li");
       if (li && li.dataset.id) choisir(li.dataset.id);
@@ -597,16 +683,83 @@
     }, 30);
   }
 
-  function demarrerApi() {
+  function demarrerApi(jeton, compte) {
     etat.mode = "api";
+    etat.jeton = jeton;
+    etat.compte = compte;
+    $("ecranConnexion").hidden = true;
     $("txtActualise").hidden = false;
-    $("txtSource").textContent = "Connecté au serveur";
+    // HTTP ou HTTPS : on le dit franchement (en HTTP, le jeton circule en clair).
+    $("txtSource").textContent = location.protocol === "https:" ? "Serveur · HTTPS chiffré" : "Serveur · HTTP non chiffré";
+    $("txtCompte").textContent = compte.compte === compte.role ? "Compte " + compte.role : "Compte " + compte.compte + " (" + compte.role + ")";
+    $("zoneCompte").hidden = false;
     $("txtSecuMode").textContent = "serveur";
-    $("secuServeur").hidden = false;
     rafraichir();
-    setInterval(rafraichir, 5000);
+    clearInterval(etat.minuteur);
+    etat.minuteur = setInterval(rafraichir, 5000);
+  }
+
+  // -------------------------------------------------------------------
+  // Connexion et déconnexion (mode api)
+  // -------------------------------------------------------------------
+  function afficherConnexion(message) {
+    etat.mode = "connexion";
+    $("txtSource").textContent = "Serveur · connexion requise";
+    $("zoneCompte").hidden = true;
+    $("etatTitre").textContent = "Connexion requise";
+    $("etatDetail").textContent = "Les données de la flotte sont réservées aux comptes identifiés.";
+    $("ecranConnexion").hidden = false;
+    $("avertHttp").hidden = location.protocol === "https:";
+    var erreur = $("erreurConnexion");
+    erreur.textContent = message || "";
+    erreur.hidden = !message;
+    $("champJeton").value = "";
+    $("champJeton").focus();
+  }
+
+  function brancherConnexion() {
+    $("formConnexion").addEventListener("submit", function (e) {
+      e.preventDefault();                       // pas d'envoi du formulaire : le jeton ne va jamais dans l'adresse
+      var jeton = $("champJeton").value.trim();
+      var bouton = $("btnConnexion");
+      bouton.disabled = true;
+      fetch("../api/moi", { cache: "no-store", headers: enTetes(jeton) })
+        .then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (json) {
+            if (r.ok) {
+              garderJeton(jeton);
+              demarrerApi(jeton, json);
+              return;
+            }
+            var message = r.status === 401 ? "Jeton refusé par le serveur."
+              : r.status === 429 ? "Trop d'essais : adresse bloquée quelques minutes par le serveur."
+              : "Erreur du serveur (HTTP " + r.status + ").";
+            $("erreurConnexion").textContent = message;
+            $("erreurConnexion").hidden = false;
+          });
+        })
+        .catch(function () {
+          $("erreurConnexion").textContent = "Serveur injoignable.";
+          $("erreurConnexion").hidden = false;
+        })
+        .then(function () { bouton.disabled = false; });
+    });
+    // Se déconnecter : le navigateur oublie le jeton, et on recharge la
+    // page pour effacer toutes les données affichées. (Pour RÉVOQUER un
+    // jeton, on retire son empreinte de la configuration du serveur.)
+    $("btnDeconnexion").addEventListener("click", function () {
+      garderJeton(null);
+      etat.jeton = null;
+      clearInterval(etat.minuteur);
+      location.reload();
+    });
   }
 
   brancherEvenements();
-  detecterServeur().then(function (present) { if (present) demarrerApi(); else demarrerDemo(); });
+  brancherConnexion();
+  detecterServeur().then(function (r) {
+    if (r.mode === "api") demarrerApi(r.jeton, r.compte);
+    else if (r.mode === "connexion") afficherConnexion(r.message);
+    else demarrerDemo();
+  });
 })();

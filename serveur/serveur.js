@@ -1,26 +1,37 @@
 // =====================================================================
 // serveur.js — Serveur de supervision de la flotte (Node.js 24)
 // ---------------------------------------------------------------------
-// Lancement :  node serveur/serveur.js            (port 8080)
+// Lancement :  node serveur/serveur.js            HTTPS (port 8443) si serveur/certificats/
+//                                                 contient cert.pem et cle.pem, sinon HTTP (port 8080)
+//              node serveur/serveur.js --https    exige HTTPS (erreur si pas de certificat)
+//              node serveur/serveur.js --http     force HTTP même avec un certificat
 //              node serveur/serveur.js --port 9000
-// Puis ouvrir  http://localhost:8080/flotte/
+//              node serveur/serveur.js --base essai.db   (autre fichier de base)
+// Certificat de démo : node serveur/generer-certificat.js (auto-signé)
+// Puis ouvrir  https://localhost:8443/flotte/  (ou http://localhost:8080/flotte/)
 //
 // AUCUNE dépendance à installer : uniquement des modules intégrés à Node
-//   node:http    le serveur web
-//   node:sqlite  la base de données (fichier serveur/flotte.db)
-//   node:crypto  la signature HMAC-SHA256
+//   node:http, node:https   le serveur web (HTTPS = HTTP dans un tunnel TLS chiffré)
+//   node:sqlite             la base de données (fichier serveur/flotte.db)
+//   node:crypto             signature HMAC-SHA256, empreinte SHA-256 des jetons
 //
 // API REST (JSON) :
 //   POST /api/mesures                   un vélo envoie un lot de mesures (SIGNÉ)
+// Lectures, avec l'en-tête « Authorization: Bearer <jeton> » :
+//   GET  /api/moi                       compte et rôle du jeton présenté
 //   GET  /api/velos                     dernier état de chaque vélo
 //   GET  /api/velos/V07/historique?jours=7
 //   GET  /api/alertes?limite=50
 //   GET  /api/statistiques              indicateurs de l'entreprise
-//   GET  /api/refus?limite=20           journal des requêtes refusées
-// Les autres adresses servent les fichiers du dépôt (page /flotte/...).
+//   GET  /api/refus?limite=20           journal des refus (gestionnaire seulement)
+// Les autres adresses servent les fichiers du dépôt (page /flotte/...),
+// sans compte : ce sont les mêmes fichiers que sur GitHub Pages.
 //
 // Cybersécurité (détails dans serveur/README.md) :
 //   - chaque vélo signe ses envois (HMAC-SHA256 avec SA clé secrète) ;
+//   - lecture réservée aux comptes identifiés (jeton, rôles technicien
+//     et gestionnaire) ; le serveur ne garde que l'empreinte des jetons ;
+//   - HTTPS (confidentialité) dès qu'un certificat est présent ;
 //   - fenêtre d'horodatage de ±60 s et numéro de séquence : anti-rejeu ;
 //   - validation stricte de chaque champ (flotte/flotte-logique.js) ;
 //   - requêtes SQL paramétrées uniquement (serveur/base.js) ;
@@ -30,6 +41,7 @@
 //   - journal des refus (table « refus » + console).
 // =====================================================================
 var http = require("node:http");
+var https = require("node:https");
 var crypto = require("node:crypto");
 var fs = require("node:fs");
 var path = require("node:path");
@@ -58,6 +70,62 @@ function chargerCles(fichier) {
 function signer(cle, message) {
   return crypto.createHmac("sha256", cle).update(message, "utf8").digest("hex");
 }
+
+// ---------------------------------------------------------------------
+// Comptes de lecture (technicien, gestionnaire)
+// ---------------------------------------------------------------------
+// Chaque personne qui consulte l'API présente un JETON (un long texte
+// aléatoire) dans l'en-tête « Authorization: Bearer <jeton> ».
+// Le serveur ne garde PAS les jetons : seulement leur empreinte SHA-256
+// (comme on stocke l'empreinte d'un mot de passe). Si la configuration
+// fuit, on ne peut pas en déduire les jetons. Un jeton de 192 bits tiré
+// au hasard ne se devine pas : un simple SHA-256 suffit (pour un mot de
+// passe choisi par un humain, il faudrait une fonction lente : scrypt).
+// En démo, cles-demo.json donne les jetons en clair (champ « jeton »),
+// hachés dès la lecture ; en production il ne contiendrait que le champ
+// « empreinte ».
+function empreinteJeton(jeton) {
+  return crypto.createHash("sha256").update(jeton, "utf8").digest();
+}
+
+// Ce que chaque rôle a le droit de lire. Le technicien prépare sa
+// tournée ; seul le gestionnaire voit le journal de sécurité (il
+// contient des adresses IP).
+var DROITS = {
+  technicien:   ["moi", "velos", "historique", "alertes", "statistiques"],
+  gestionnaire: ["moi", "velos", "historique", "alertes", "statistiques", "refus"]
+};
+function autorise(role, ressource) {
+  return Object.prototype.hasOwnProperty.call(DROITS, role) && DROITS[role].indexOf(ressource) >= 0;
+}
+
+// Retourne [{ nom, role, empreinte (Buffer de 32 octets) }].
+function chargerComptes(fichier) {
+  var config = JSON.parse(fs.readFileSync(fichier, "utf8"));
+  var comptes = [];
+  Object.keys(config.comptes || {}).forEach(function (nom) {
+    var c = config.comptes[nom];
+    if (!Object.prototype.hasOwnProperty.call(DROITS, c.role)) return;          // rôle inconnu : ignoré
+    var empreinte = null;
+    if (typeof c.empreinte === "string" && /^[0-9a-f]{64}$/.test(c.empreinte)) empreinte = Buffer.from(c.empreinte, "hex");
+    else if (typeof c.jeton === "string" && c.jeton.length >= 16) empreinte = empreinteJeton(c.jeton);   // démo
+    // Le jeton en clair n'est PAS gardé en mémoire : seulement son empreinte.
+    if (empreinte) comptes.push({ nom: nom, role: c.role, empreinte: empreinte });
+  });
+  return comptes;
+}
+
+// ---------------------------------------------------------------------
+// HTTPS : en-tête HSTS
+// ---------------------------------------------------------------------
+// « Strict-Transport-Security » : le navigateur retient de n'utiliser
+// QUE HTTPS pour ce site pendant max-age secondes (plus de retour
+// possible vers HTTP en clair, même si un attaquant l'y pousse).
+// On commence par 1 jour, comme le recommande un déploiement prudent ;
+// en production on monte à 1 an (31536000) une fois HTTPS validé.
+// Les navigateurs ignorent cet en-tête si le certificat n'est pas de
+// confiance (certificat auto-signé de démo) et sur une adresse IP.
+var HSTS = "max-age=86400";
 
 // ---------------------------------------------------------------------
 // Limitation de débit : compteur par clé (vélo ou IP) sur une minute
@@ -157,10 +225,14 @@ function servirFichier(req, res, cheminUrl) {
 // Création du serveur
 // ---------------------------------------------------------------------
 // options = { cheminBase, fichierCles, journal (true : affiche les refus),
-//             requetesParMinute, refusParMinuteMax, blocageMs }
+//             requetesParMinute, refusParMinuteMax, blocageMs,
+//             comptes (sinon lus dans fichierCles),
+//             tls: { cert, key } pour HTTPS (contenu des fichiers .pem) }
 function creerServeur(options) {
   var o = options || {};
-  var cles = o.cles || chargerCles(o.fichierCles || path.join(__dirname, "cles-demo.json"));
+  var fichierCles = o.fichierCles || path.join(__dirname, "cles-demo.json");
+  var cles = o.cles || chargerCles(fichierCles);
+  var comptes = o.comptes || chargerComptes(fichierCles);
   var velos = [];
   cles.forEach(function (cle, id) { velos.push({ id: id, nom: "Vélo " + id.slice(1) }); });
   velos.sort(function (a, b) { return a.id < b.id ? -1 : 1; });
@@ -173,7 +245,7 @@ function creerServeur(options) {
   var journal = o.journal !== false;
 
   // Toute requête refusée passe par ici : réponse + trace.
-  function refuser(req, res, statut, motif, detail, veloAnnonce) {
+  function refuser(req, res, statut, motif, detail, veloAnnonce, enTetesEnPlus) {
     var maintenant = Date.now();
     var ip = req.socket.remoteAddress || "?";
     var velo = typeof veloAnnonce === "string" ? veloAnnonce.slice(0, 32) : null;   // tronqué : on ne stocke pas n'importe quoi
@@ -186,7 +258,25 @@ function creerServeur(options) {
     }
     // Réponse volontairement brève : le motif aide à la démo, mais on ne
     // renvoie jamais la signature attendue ni d'autre secret.
-    envoyerJson(res, statut, { erreur: detail, motif: motif });
+    envoyerJson(res, statut, { erreur: detail, motif: motif }, enTetesEnPlus);
+  }
+
+  // --- Lecture : qui présente quel jeton ? ------------------------------
+  // Retourne { compte } si le jeton est bon, sinon { detail }.
+  function authentifier(req) {
+    var entete = req.headers.authorization;
+    if (entete === undefined) return { absent: true, detail: "authentification requise (en-tête Authorization: Bearer <jeton>)" };
+    // Format d'un jeton « Bearer » (RFC 6750), longueur bornée.
+    var m = /^Bearer ([A-Za-z0-9._~+\/-]{16,128}=*)$/.exec(entete);
+    if (!m) return { detail: "en-tête Authorization mal formé" };
+    var empreinte = empreinteJeton(m[1]);
+    var trouve = null;
+    // On compare à TOUS les comptes, à temps constant (crypto.timingSafeEqual) :
+    // le temps de réponse ne renseigne pas sur le jeton essayé.
+    comptes.forEach(function (c) {
+      if (crypto.timingSafeEqual(c.empreinte, empreinte) && trouve === null) trouve = c;
+    });
+    return trouve ? { compte: trouve } : { detail: "jeton invalide" };
   }
 
   // --- POST /api/mesures ---------------------------------------------
@@ -282,17 +372,20 @@ function creerServeur(options) {
     });
   }
 
-  function lireStatistiques(res) {
+  function lireStatistiques(res, compte) {
     var maintenant = Date.now();
     var resumes = base.fiches().map(function (f) { return TPMS.flotteResume(f, maintenant); });
     var stats = base.agregats(maintenant);
+    // Les chiffres de sécurité (refus par motif) : gestionnaire seulement.
+    if (!autorise(compte.role, "refus")) stats.securite = null;
     stats.maintenantMs = maintenant;
     stats.indicateurs = TPMS.flotteIndicateurs(resumes);
     envoyerJson(res, 200, stats);
   }
 
   // --- Aiguillage -------------------------------------------------------
-  var serveur = http.createServer(function (req, res) {
+  function aiguiller(req, res) {
+    if (o.tls) res.setHeader("Strict-Transport-Security", HSTS);
     var url;
     try { url = new URL(req.url, "http://localhost"); } catch (e) { return envoyerJson(res, 400, { erreur: "adresse invalide" }); }
     var chemin = url.pathname;
@@ -312,20 +405,44 @@ function creerServeur(options) {
         return recevoirMesures(req, res);
       }
       if (req.method !== "GET") return envoyerJson(res, 405, { erreur: "GET attendu" }, { Allow: "GET" });
-      if (chemin === "/api/velos") return lireVelos(res);
-      if (chemin === "/api/alertes") return envoyerJson(res, 200, { alertes: base.alertes(entier(url.searchParams.get("limite"), 50, 1, 500)) });
-      if (chemin === "/api/statistiques") return lireStatistiques(res);
-      if (chemin === "/api/refus") return envoyerJson(res, 200, { refus: base.refus(entier(url.searchParams.get("limite"), 20, 1, 200)) });
-      var m = /^\/api\/velos\/([^/]+)\/historique$/.exec(chemin);
-      if (m) {
-        var id;
-        try { id = decodeURIComponent(m[1]); } catch (e) { return envoyerJson(res, 400, { erreur: "adresse invalide" }); }
-        return lireHistorique(res, id, url.searchParams);
+
+      // Toutes les lectures exigent un compte. Sans jeton du tout (page
+      // ouverte avant la connexion), simple 401 : ce n'est pas une attaque,
+      // on ne remplit pas le journal de sécurité. Un jeton FAUX, lui, est
+      // journalisé et compte pour le blocage de l'adresse IP (anti force brute).
+      var auth = authentifier(req);
+      if (auth.absent) {
+        return envoyerJson(res, 401, { erreur: auth.detail, motif: "authentification" }, { "WWW-Authenticate": "Bearer realm=\"flotte\"" });
       }
-      return envoyerJson(res, 404, { erreur: "route inconnue" });
+      if (!auth.compte) {
+        return refuser(req, res, 401, "authentification", auth.detail, null, { "WWW-Authenticate": "Bearer realm=\"flotte\"" });
+      }
+      var compte = auth.compte;
+      var m = /^\/api\/velos\/([^/]+)\/historique$/.exec(chemin);
+      var ressource = chemin === "/api/moi" ? "moi" : chemin === "/api/velos" ? "velos" : chemin === "/api/alertes" ? "alertes" :
+        chemin === "/api/statistiques" ? "statistiques" : chemin === "/api/refus" ? "refus" : m ? "historique" : null;
+      if (ressource === null) return envoyerJson(res, 404, { erreur: "route inconnue" });
+      // Rôle : le compte a-t-il le droit de lire CETTE ressource ?
+      if (!autorise(compte.role, ressource)) {
+        return refuser(req, res, 403, "droits", "le compte « " + compte.nom + " » n'a pas accès à " + chemin, null);
+      }
+
+      if (ressource === "moi") return envoyerJson(res, 200, { compte: compte.nom, role: compte.role, droits: DROITS[compte.role] });
+      if (ressource === "velos") return lireVelos(res);
+      if (ressource === "alertes") return envoyerJson(res, 200, { alertes: base.alertes(entier(url.searchParams.get("limite"), 50, 1, 500)) });
+      if (ressource === "statistiques") return lireStatistiques(res, compte);
+      if (ressource === "refus") return envoyerJson(res, 200, { refus: base.refus(entier(url.searchParams.get("limite"), 20, 1, 200)) });
+      var id;
+      try { id = decodeURIComponent(m[1]); } catch (e) { return envoyerJson(res, 400, { erreur: "adresse invalide" }); }
+      return lireHistorique(res, id, url.searchParams);
     }
     servirFichier(req, res, chemin);
-  });
+  }
+
+  // HTTP, ou HTTPS si on a un certificat (TLS 1.2 au minimum).
+  var serveur = o.tls
+    ? https.createServer({ cert: o.tls.cert, key: o.tls.key, minVersion: "TLSv1.2" }, aiguiller)
+    : http.createServer(aiguiller);
 
   // Contre les connexions lentes (« slowloris ») : délais limités.
   serveur.headersTimeout = 10000;
@@ -333,22 +450,53 @@ function creerServeur(options) {
   serveur.keepAliveTimeout = 5000;
   serveur.on("close", function () { base.fermer(); });
   serveur.base = base;
+  serveur.comptes = comptes;
+  serveur.https = !!o.tls;
   return serveur;
 }
 
-module.exports = { creerServeur: creerServeur, signer: signer, chargerCles: chargerCles };
+module.exports = {
+  creerServeur: creerServeur, signer: signer, chargerCles: chargerCles,
+  chargerComptes: chargerComptes, empreinteJeton: empreinteJeton, DROITS: DROITS, HSTS: HSTS
+};
 
 // ---------------------------------------------------------------------
 // Lancement en ligne de commande
 // ---------------------------------------------------------------------
 if (require.main === module) {
-  var port = 8080;
-  var i = process.argv.indexOf("--port");
-  if (i > 0) port = Number(process.argv[i + 1]);
-  var serveur = creerServeur({});
+  var argv = process.argv;
+  var dossierCertificats = path.join(__dirname, "certificats");
+  var fichierCert = path.join(dossierCertificats, "cert.pem"), fichierCle = path.join(dossierCertificats, "cle.pem");
+  var certificatPresent = fs.existsSync(fichierCert) && fs.existsSync(fichierCle);
+  var enHttps = argv.indexOf("--https") >= 0 || (certificatPresent && argv.indexOf("--http") < 0);
+  if (enHttps && !certificatPresent) {
+    console.error("HTTPS demandé, mais serveur/certificats/cert.pem et cle.pem sont absents.");
+    console.error("Pour un certificat de démonstration : node serveur/generer-certificat.js");
+    process.exit(1);
+  }
+  var port = enHttps ? 8443 : 8080;
+  var i = argv.indexOf("--port");
+  if (i > 0) port = Number(argv[i + 1]);
+  var j = argv.indexOf("--base");
+  var cheminBase = j > 0 ? path.resolve(argv[j + 1]) : path.join(__dirname, "flotte.db");
+  var serveur = creerServeur({
+    cheminBase: cheminBase,
+    tls: enHttps ? { cert: fs.readFileSync(fichierCert), key: fs.readFileSync(fichierCle) } : null
+  });
   serveur.listen(port, function () {
-    console.log("Serveur de flotte TPMS : http://localhost:" + port + "/flotte/");
-    console.log("Base : " + path.join(__dirname, "flotte.db") + " · clés de DÉMO : serveur/cles-demo.json");
+    console.log("Serveur de flotte TPMS : " + (enHttps ? "https" : "http") + "://localhost:" + port + "/flotte/");
+    console.log("Base : " + cheminBase + " · clés et jetons de DÉMO : serveur/cles-demo.json");
+    console.log("Comptes de lecture : " + serveur.comptes.map(function (c) { return c.nom + " (" + c.role + ")"; }).join(", "));
+    if (enHttps) {
+      console.log("HTTPS actif (serveur/certificats/cert.pem). Certificat auto-signé de démo : le navigateur affiche");
+      console.log("un avertissement, c'est normal. Script de flotte : node serveur/flotte-vers-serveur.js --https");
+    } else {
+      console.warn("");
+      console.warn("ATTENTION : serveur en HTTP, SANS chiffrement. Les jetons des comptes et les mesures circulent en");
+      console.warn("clair : quelqu'un sur le même réseau peut les lire. Acceptable pour une démo sur ce PC uniquement.");
+      console.warn("Pour passer en HTTPS : node serveur/generer-certificat.js, puis relancer le serveur.");
+      console.warn("");
+    }
   });
   process.on("SIGINT", function () { serveur.close(); process.exit(0); });
 }

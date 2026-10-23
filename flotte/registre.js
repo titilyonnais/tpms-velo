@@ -12,13 +12,16 @@
 //
 // Le registre fait confiance aux lots reçus (ils viennent de la
 // simulation, dans la même page) : la validation et la signature sont
-// le travail du vrai serveur.
+// le travail du vrai serveur. Les règles RGPD, elles, s'appliquent ici
+// aussi : pas de position pendant une location, mesures effacées après
+// 30 jours (flotte-logique.js, FLOTTE_CONSERVATION).
 // =====================================================================
 var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
 // velos = [{ id, nom }]
 TPMS.creerRegistre = function (velos) {
-  var r = { ordre: [], fiches: {}, mesures: {}, alertes: [], regonflages: [], nbMesures: 0 };
+  var r = { ordre: [], fiches: {}, mesures: {}, alertes: [], regonflages: [], nbMesures: 0,
+    plusRecenteMs: -Infinity };   // instant de la mesure la plus récente reçue (pour la purge)
   velos.forEach(function (v) {
     r.ordre.push(v.id);
     r.fiches[v.id] = { id: v.id, nom: v.nom, derniere: null, tendance: { AV: null, AR: null },
@@ -31,19 +34,22 @@ TPMS.creerRegistre = function (velos) {
 };
 
 // Équivalent de POST /api/mesures (après validation).
-// Retourne { acceptees, ignorees, alertes, regonflages }.
+// Retourne { acceptees, ignorees, alertes, regonflages, purgees }.
 TPMS.registreAjouterLot = function (r, id, mesures) {
   var liste = r.mesures[id];
   var fiche = r.fiches[id];
-  var bilan = { acceptees: 0, ignorees: 0, alertes: 0, regonflages: 0 };
+  var bilan = { acceptees: 0, ignorees: 0, alertes: 0, regonflages: 0, purgees: 0 };
   if (!liste) return bilan;
   var precedente = liste.length > 0 ? liste[liste.length - 1] : null;
 
-  mesures.forEach(function (m) {
+  mesures.forEach(function (recue) {
+    // RGPD : pas de position pendant une location (même règle que le serveur).
+    var m = TPMS.flotteMinimiserPosition(recue);
     // Règle commune avec le serveur : seules les mesures plus récentes
     // que la dernière reçue sont gardées (un lot renvoyé est ignoré).
     if (precedente && m.t <= precedente.t) { bilan.ignorees++; return; }
     liste.push(m);
+    if (m.t > r.plusRecenteMs) r.plusRecenteMs = m.t;
     r.nbMesures++;
     garderPoint(fiche, m);
     bilan.acceptees++;
@@ -72,8 +78,36 @@ TPMS.registreAjouterLot = function (r, id, mesures) {
       }
       fiche.tendance[roue] = apres;
     });
+    bilan.purgees = TPMS.registrePurger(r, TPMS.flotteLimiteConservation(r.plusRecenteMs));
   }
   return bilan;
+};
+
+// RGPD : efface les mesures et les alertes plus anciennes que limiteMs
+// (équivalent des DELETE de serveur/base.js). Les regonflages restent :
+// ils servent aux statistiques agrégées et ne décrivent aucun trajet.
+TPMS.registrePurger = function (r, limiteMs) {
+  var effacees = 0;
+  r.ordre.forEach(function (id) {
+    var liste = r.mesures[id], fiche = r.fiches[id];
+    // Mesures rangées de la plus ancienne à la plus récente : on retire le début.
+    var n = 0;
+    while (n < liste.length && liste[n].t < limiteMs) n++;
+    if (n > 0) {
+      liste.splice(0, n);
+      effacees += n;
+      if (liste.length === 0) fiche.derniere = null;      // plus aucune donnée sur ce vélo
+    }
+    ["AV", "AR"].forEach(function (roue) {
+      var points = fiche.points[roue];
+      while (points.length > 0 && points[0].t < limiteMs) points.shift();
+    });
+  });
+  r.nbMesures -= effacees;
+  if (r.alertes.some(function (a) { return a.t < limiteMs; })) {
+    r.alertes = r.alertes.filter(function (a) { return a.t >= limiteMs; });
+  }
+  return effacees;
 };
 
 function garderPoint(fiche, m) {
