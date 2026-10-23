@@ -37,8 +37,13 @@ Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
 
   float p = roue->mesure.pressionBar;
   if (p < seuils->crevaisonBar || roue->mesure.alarme == 0x01) return ETAT_CREVAISON;
-  if (p < seuils->roue[position].basBar) return ETAT_BASSE;
-  if (p > seuils->roue[position].hautBar) return ETAT_HAUTE;
+  // Hystérésis : une alerte basse (ou haute) déjà donnée ne s'éteint que
+  // si la pression revient de 0,05 bar du bon côté (sinon alerte en boucle
+  // quand la pression oscille autour du seuil, défaut révélé par la flotte).
+  float bas = seuils->roue[position].basBar + (roue->etat == ETAT_BASSE ? HYSTERESIS_ALERTE_BAR : 0.0f);
+  float haut = seuils->roue[position].hautBar - (roue->etat == ETAT_HAUTE ? HYSTERESIS_ALERTE_BAR : 0.0f);
+  if (p < bas) return ETAT_BASSE;
+  if (p > haut) return ETAT_HAUTE;
   if (roue->penteBarH < seuils->fuiteBarH) return ETAT_FUITE;
   return ETAT_OK;
 }

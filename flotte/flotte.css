@@ -1,0 +1,110 @@
+/* ===================================================================
+   flotte.css — Compléments propres à la supervision de la flotte.
+   La base (couleurs, tuiles, boutons, graphes) vient de
+   ../simulateur/style.css : même identité visuelle.
+   =================================================================== */
+
+.cache { position: absolute; }
+
+/* Navigation : des liens d'ancre au lieu de boutons */
+.navigation a {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--texte-2); text-decoration: none;
+  padding: 10px 12px; border-radius: var(--rayon-petit); font-weight: 500;
+  transition: background .15s, color .15s;
+}
+.navigation a svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.navigation a:hover { background: var(--tuile-2); color: var(--texte); }
+.navigation a.actif { background: var(--accent-doux); color: var(--accent); }
+.navigation-pied a { padding: 6px 0; color: var(--accent); }
+.navigation-pied a:hover { background: none; }
+#txtSource { margin-bottom: 6px; }
+
+html { scroll-behavior: smooth; }
+section[id] { scroll-margin-top: 90px; }
+
+.commandes-temps { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.actualise { font-size: 12px; color: var(--texte-2); text-align: right; }
+
+.bandeau-demo {
+  margin: 16px 28px 0; padding: 12px 16px; border-radius: 14px;
+  background: var(--accent-doux); border: 1px solid rgba(167, 139, 250, .35); color: #ddd6fe; font-size: 13px;
+}
+.bandeau-demo code { background: rgba(0, 0, 0, .35); padding: 1px 6px; border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
+
+/* Grille : tuiles d'indicateurs sur 3 colonnes de 12 */
+.large-3 { grid-column: span 3; }
+.indicateur .grand-chiffre span { font-size: 40px; }
+.indicateur .discret { min-height: 1.4em; }
+
+/* ---------- Carte ---------- */
+.carte-flotte .fleuve { fill: none; stroke: #1b2a44; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+.carte-flotte .fleuve-nom { fill: #3b5480; font-size: 11px; font-style: italic; font-family: var(--police); }
+.carte-flotte .station { fill: var(--tuile-2); stroke: var(--bord-fort); stroke-width: 1.5; }
+.carte-flotte .station-nom { fill: var(--texte-2); font-size: 12px; font-family: var(--police); font-weight: 500; }
+.carte-flotte .velo { stroke: var(--fond); stroke-width: 2; cursor: pointer; }
+.carte-flotte .velo.choisi { stroke: #fff; stroke-width: 2.5; }
+.carte-flotte .velo-texte { fill: #0b0b0d; font-size: 8px; font-weight: 500; font-family: var(--mono); pointer-events: none; }
+.carte-flotte .trajet { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 4; opacity: .55; fill: none; }
+
+.velo.ok, .pastille.ok { fill: var(--ok); background: var(--ok); }
+.velo.surveiller, .pastille.surveiller { fill: var(--info); background: var(--info); }
+.velo.regonfler, .pastille.regonfler { fill: var(--attention); background: var(--attention); }
+.velo.urgent, .velo.immobilise, .pastille.urgent { fill: var(--alerte); background: var(--alerte); }
+.velo.muet, .pastille.muet { fill: var(--texte-3); background: var(--texte-3); }
+.pastille.roule { background: transparent; border: 2px solid var(--accent); }
+.carte-flotte .velo.roule { stroke: var(--accent); stroke-width: 2.5; }
+.pastille { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 5px 0 10px; vertical-align: -1px; }
+.legende span { white-space: nowrap; }
+
+/* ---------- Tableau de priorité ---------- */
+.tableau-priorite th button {
+  border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit;
+  padding: 0; cursor: pointer;
+}
+.tableau-priorite th button.actif { color: var(--accent); }
+.tableau-priorite th button.actif::after { content: " ↓"; }
+.tableau-priorite th button.actif.montant::after { content: " ↑"; }
+.tableau-priorite tbody tr { cursor: pointer; }
+.tableau-priorite tbody tr:hover td { background: var(--tuile-2); }
+.tableau-priorite tbody tr.choisi td { background: var(--accent-doux); }
+.tableau-priorite td { font-variant-numeric: tabular-nums; }
+.tableau-priorite td:first-child { color: var(--texte); font-family: var(--police); font-size: 13px; font-weight: 600; }
+.tableau-priorite .raison { display: block; font-size: 12px; color: var(--texte-2); margin-top: 3px; white-space: normal; }
+.jauge-priorite { display: inline-block; width: 42px; height: 6px; border-radius: 999px; background: var(--tuile-3); overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.jauge-priorite i { display: block; height: 100%; background: var(--accent); }
+.puce.surveiller { background: rgba(96, 165, 250, .14); color: var(--info); }
+.puce.muet { background: var(--tuile-3); color: var(--texte-2); }
+
+/* ---------- Détail ---------- */
+.verite { margin: 14px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--tuile-2); font-size: 12px; color: var(--texte-2); }
+.verite b { color: var(--texte); }
+#detailMesures dd.alerte-texte { color: var(--alerte); }
+#detailMesures dd.attention-texte { color: var(--attention); }
+
+/* Barres horizontales dans des tuiles étroites : la piste garde de la place */
+.barre-ligne { grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1fr) 40px; }
+
+/* ---------- Sécurité ---------- */
+.banc { margin: 12px 0 14px; }
+.banc .bouton { flex: 1 1 140px; }
+.fil-evenements li .verdict-ok { color: var(--ok); font-weight: 600; }
+.fil-evenements li .verdict-refus { color: var(--alerte); font-weight: 600; }
+#secuRefus td:last-child { color: var(--alerte); }
+
+/* ---------- Écrans plus petits ---------- */
+@media (max-width: 1250px) {
+  .large-3 { grid-column: span 6; }
+}
+@media (max-width: 900px) {
+  .navigation a span, .navigation-pied { display: none; }
+  .navigation a { padding: 10px; }
+  .bandeau-demo { margin: 12px 16px 0; }
+  .commandes-temps { width: 100%; }
+  .actualise { text-align: left; }
+}
+@media (max-width: 560px) {
+  .large-3 { grid-column: span 12; }
+  .indicateur .grand-chiffre span { font-size: 34px; }
+  .tableau-priorite th:nth-child(4), .tableau-priorite td:nth-child(4) { display: none; }
+}

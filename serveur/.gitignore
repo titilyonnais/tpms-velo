@@ -1,0 +1,4 @@
+# Base de données de la démo (recréée au lancement du serveur)
+flotte.db
+flotte.db-*
+*.db-journal

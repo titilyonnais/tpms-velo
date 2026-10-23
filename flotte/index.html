@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TPMS · Flotte</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Même identité visuelle que le simulateur : on reprend sa feuille de style -->
+  <link rel="stylesheet" href="../simulateur/style.css">
+  <link rel="stylesheet" href="flotte.css">
+</head>
+<body>
+
+<svg width="0" height="0" class="cache" aria-hidden="true">
+  <symbol id="i-accueil" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></symbol>
+  <symbol id="i-carte" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+  <symbol id="i-liste" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+  <symbol id="i-velo" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9 7.5 6H6M15 9l-3 7.5"/></symbol>
+  <symbol id="i-cloche" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-bouclier" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></symbol>
+  <symbol id="i-donnees" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-pneu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></symbol>
+  <symbol id="i-goutte" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></symbol>
+  <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z"/></symbol>
+</svg>
+
+<div class="appli">
+  <!-- ================= NAVIGATION ================= -->
+  <nav class="navigation" id="navigation">
+    <div class="marque"><span class="marque-logo"></span><span>TPMS<b>flotte</b></span></div>
+    <a href="#haut" class="actif"><svg><use href="#i-accueil"/></svg><span>Vue d'ensemble</span></a>
+    <a href="#zoneCarte"><svg><use href="#i-carte"/></svg><span>Carte</span></a>
+    <a href="#zonePriorite"><svg><use href="#i-liste"/></svg><span>Tournée</span></a>
+    <a href="#zoneDetail"><svg><use href="#i-velo"/></svg><span>Vélo</span></a>
+    <a href="#zoneAlertes"><svg><use href="#i-cloche"/></svg><span>Alertes</span></a>
+    <a href="#zoneSecurite"><svg><use href="#i-bouclier"/></svg><span>Sécurité</span></a>
+    <div class="navigation-pied">
+      <div id="txtSource">Recherche du serveur…</div>
+      <a href="../simulateur/">Simulateur d'un vélo →</a>
+    </div>
+  </nav>
+
+  <div class="contenu" id="haut">
+    <!-- ================= BARRE DU HAUT ================= -->
+    <header class="barre-haute">
+      <div class="etat-global repos" id="etatGlobal">
+        <span class="point-etat"></span>
+        <div>
+          <div class="etat-titre" id="etatTitre">Préparation…</div>
+          <div class="etat-detail" id="etatDetail"></div>
+        </div>
+      </div>
+      <div class="temps">
+        <div class="horloge"><span id="txtJour">Lyon</span><b id="horloge">--:--</b></div>
+        <div class="commandes-temps" id="commandesTemps" hidden>
+          <button type="button" class="bouton-rond" id="btnPause" title="Pause / lecture"><svg><use href="#i-pause"/></svg></button>
+          <div class="pilules" id="choixFacteur" role="group" aria-label="Vitesse du temps">
+            <button type="button" data-facteur="1">×1</button>
+            <button type="button" data-facteur="60" class="actif">×60</button>
+            <button type="button" data-facteur="3600">×3600</button>
+          </div>
+          <button type="button" class="bouton" id="btnJour">+1 jour</button>
+        </div>
+        <div class="actualise" id="txtActualise" hidden></div>
+      </div>
+    </header>
+
+    <div class="bandeau-demo" id="bandeauDemo" hidden>
+      <b>Mode démo.</b> Aucun serveur n'a répondu : la flotte de 20 vélos est simulée dans votre navigateur
+      (graine <span id="txtGraine">42</span>, 1<sup>er</sup> octobre 2026). Pour la version avec serveur :
+      <code>node serveur/serveur.js</code> puis <code>node serveur/flotte-vers-serveur.js</code>.
+    </div>
+
+    <main>
+      <div class="grille">
+        <!-- ===== Indicateurs ===== -->
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-pneu"/></svg><h3>À regonfler</h3></header>
+          <div class="grand-chiffre"><span id="kpiRegonfler">–</span><small>vélos</small></div>
+          <p class="discret" id="kpiRegonflerDetail"></p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-goutte"/></svg><h3>Fuites lentes</h3></header>
+          <div class="grand-chiffre"><span id="kpiFuites">–</span><small>repérées</small></div>
+          <p class="discret">Invisibles au boîtier, vues par le serveur sur plusieurs jours</p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-horloge"/></svg><h3>Entre deux regonflages</h3></header>
+          <div class="grand-chiffre"><span id="kpiIntervalle">–</span><small>jours</small></div>
+          <p class="discret" id="kpiIntervalleDetail">Moyenne par roue</p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-velo"/></svg><h3>Flotte</h3></header>
+          <div class="grand-chiffre"><span id="kpiLocation">–</span><small id="kpiLocationUnite">en location</small></div>
+          <p class="discret" id="kpiFlotteDetail"></p>
+        </section>
+
+        <!-- ===== Carte ===== -->
+        <section class="tuile large-7" id="zoneCarte">
+          <header><svg><use href="#i-carte"/></svg><h3>Stations de Lyon</h3><span class="discret">Plan schématique</span></header>
+          <svg class="carte carte-flotte" id="carte" viewBox="0 0 640 480" role="img" aria-label="Carte des stations et des vélos"></svg>
+          <div class="legende" id="legendeCarte">
+            <span><i class="pastille ok"></i>OK</span>
+            <span><i class="pastille surveiller"></i>À surveiller</span>
+            <span><i class="pastille regonfler"></i>À regonfler</span>
+            <span><i class="pastille urgent"></i>Urgent / immobilisé</span>
+            <span><i class="pastille muet"></i>Muet</span>
+            <span><i class="pastille roule"></i>En location</span>
+          </div>
+        </section>
+
+        <!-- ===== Tournée du technicien ===== -->
+        <section class="tuile large-5" id="zonePriorite">
+          <header>
+            <svg><use href="#i-liste"/></svg><h3>Tournée du technicien</h3>
+            <div class="pilules petites" id="choixFiltre" role="group" aria-label="Vélos affichés">
+              <button type="button" data-filtre="traiter" class="actif">À traiter</button>
+              <button type="button" data-filtre="tous">Tous</button>
+            </div>
+          </header>
+          <div class="tableau-defile">
+            <table class="tableau tableau-priorite">
+              <thead><tr>
+                <th><button type="button" data-tri="id">Vélo</button></th>
+                <th><button type="button" data-tri="priorite" class="actif">Priorité</button></th>
+                <th><button type="button" data-tri="pression">AV / AR</button></th>
+                <th><button type="button" data-tri="prochain">Regonflage</button></th>
+              </tr></thead>
+              <tbody id="corpsPriorite"></tbody>
+            </table>
+          </div>
+          <p class="discret" id="txtPriorite"></p>
+        </section>
+
+        <!-- ===== Détail d'un vélo ===== -->
+        <section class="tuile large-7" id="zoneDetail">
+          <header><svg><use href="#i-velo"/></svg><h3 id="detailTitre">Vélo</h3><span class="puce" id="detailStatut"></span></header>
+          <p class="discret" id="detailRaison"></p>
+          <svg class="graphe" id="grapheDetail" viewBox="0 0 640 220" role="img" aria-label="Courbe de pression"></svg>
+          <div class="legende">Pression ramenée à 20 °C, 7 derniers jours :
+            <span class="trait"></span> avant <span class="trait s2"></span> arrière · pointillés : seuil « à regonfler »</div>
+          <dl class="petites-mesures" id="detailMesures"></dl>
+          <p class="verite" id="detailVerite" hidden></p>
+        </section>
+
+        <!-- ===== Journal des alertes ===== -->
+        <section class="tuile large-5" id="zoneAlertes">
+          <header><svg><use href="#i-cloche"/></svg><h3>Journal</h3><span class="discret" id="txtJournal">Alertes</span></header>
+          <ul class="fil-evenements long" id="listeAlertes"></ul>
+        </section>
+
+        <!-- ===== Statistiques ===== -->
+        <section class="tuile large-6">
+          <header><svg><use href="#i-donnees"/></svg><h3>Données de la semaine</h3></header>
+          <dl class="petites-mesures" id="statsMesures"></dl>
+          <h4>Alertes des 7 derniers jours</h4>
+          <div class="barres-horizontales" id="statsAlertes"></div>
+        </section>
+
+        <!-- ===== Sécurité ===== -->
+        <section class="tuile large-6" id="zoneSecurite">
+          <header><svg><use href="#i-bouclier"/></svg><h3>Sécurité du serveur</h3><span class="puce accent" id="txtSecuMode"></span></header>
+          <div id="secuServeur" hidden>
+            <p class="discret">Chaque lot est signé par le vélo (HMAC-SHA256). Requêtes refusées par le serveur :</p>
+            <div class="barres-horizontales" id="secuMotifs"></div>
+            <div class="tableau-defile">
+              <table class="tableau"><thead><tr><th>Heure</th><th>Vélo annoncé</th><th>Motif</th></tr></thead>
+                <tbody id="secuRefus"></tbody></table>
+            </div>
+          </div>
+          <div id="secuDemo" hidden>
+            <p class="discret">Banc d'essai : la même vérification que le serveur
+              (<code>TPMS.flotteControlerRequete</code>, HMAC-SHA256 de <code>logique/sha256.js</code>),
+              exécutée ici avec une clé de démonstration du vélo V01.</p>
+            <div class="rangee banc">
+              <button type="button" class="bouton" data-essai="valide">Lot signé</button>
+              <button type="button" class="bouton" data-essai="rejeu">Rejouer</button>
+              <button type="button" class="bouton" data-essai="falsifie">Modifier la pression</button>
+              <button type="button" class="bouton" data-essai="cle">Clé d'un autre vélo</button>
+              <button type="button" class="bouton" data-essai="vieux">Vieux de 2 min</button>
+              <button type="button" class="bouton" data-essai="horsPlage">12 bar</button>
+            </div>
+            <ul class="fil-evenements" id="secuEssais"></ul>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Logique partagée (mêmes fichiers que le serveur Node, voir flotte/node.js) -->
+<script src="../logique/trame.js"></script>
+<script src="../logique/fuite.js"></script>
+<script src="../logique/alertes.js"></script>
+<script src="../logique/securite.js"></script>
+<script src="../logique/sha256.js"></script>
+<script src="../simulateur/monde/alea.js"></script>
+<script src="../simulateur/monde/atmosphere.js"></script>
+<script src="../simulateur/monde/pneu.js"></script>
+<script src="../simulateur/monde/capteur.js"></script>
+<script src="flotte-logique.js"></script>
+<script src="registre.js"></script>
+<script src="flotte.js"></script>
+<!-- Affichage -->
+<script src="../simulateur/vues/graphe.js"></script>
+<script src="page.js"></script>
+</body>
+</html>

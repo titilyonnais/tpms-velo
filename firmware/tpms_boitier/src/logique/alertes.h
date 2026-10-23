@@ -56,6 +56,9 @@ struct Roue;
 //   On ne reproche pas au capteur de s'être tu pendant que le boîtier
 //   dormait : le délai de perte ne compte qu'à partir du réveil.
 // enMouvement = la roue tourne (le boîtier le sait grâce à l'aimant).
+// Hystérésis des alertes basse et haute (bar).
+const float HYSTERESIS_ALERTE_BAR = 0.05f;
+
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
                  int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement = true);
 

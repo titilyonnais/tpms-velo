@@ -432,6 +432,19 @@ function proche(a, b, tolerance) {
   verifier("durée en texte", TPMS.dureeEnTexte(4965) === "1:22:45", TPMS.dureeEnTexte(4965));
 })();
 
+// Hystérésis des alertes : une pression qui oscille autour du seuil bas
+// ne rallume pas l alerte en boucle.
+(function () {
+  var seuils = TPMS.seuilsParDefaut();   // AV : bas 1,8 bar
+  var roue = { mesure: { pressionBar: 1.78, alarme: 0 }, dernierRecuMs: 0, penteBarH: 0, intrusionJusquaMs: -1, etat: "OK" };
+  roue.etat = TPMS.evaluerRoue(roue, "AV", seuils, 1000, 0, true);
+  verifier("hystérésis : 1,78 bar → BASSE", roue.etat === "BASSE", roue.etat);
+  roue.mesure.pressionBar = 1.82;
+  verifier("hystérésis : 1,82 bar reste BASSE (il faut 1,85)", TPMS.evaluerRoue(roue, "AV", seuils, 2000, 0, true) === "BASSE");
+  roue.mesure.pressionBar = 1.86;
+  verifier("hystérésis : 1,86 bar → OK", TPMS.evaluerRoue(roue, "AV", seuils, 3000, 0, true) === "OK");
+})();
+
 // ---------------------------------------------------------------------
 // Prévision du prochain regonflage
 // ---------------------------------------------------------------------

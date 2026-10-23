@@ -58,11 +58,21 @@ TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisM
 
   var p = roue.mesure.pressionBar;
   if (p < seuils.crevaisonBar || roue.mesure.alarme === 0x01) return TPMS.ETAT.CREVAISON;
-  if (p < seuils[position].basBar) return TPMS.ETAT.BASSE;
-  if (p > seuils[position].hautBar) return TPMS.ETAT.HAUTE;
+  // Hystérésis : une alerte basse (ou haute) déjà donnée ne s'éteint que
+  // si la pression revient franchement du bon côté (0,05 bar). Sans cela,
+  // une pression qui oscille autour du seuil (refroidissement la nuit,
+  // bruit du capteur) rallume l'alerte en boucle (défaut révélé par la
+  // simulation de la flotte).
+  var marge = TPMS.HYSTERESIS_ALERTE_BAR;
+  var bas = seuils[position].basBar + (roue.etat === TPMS.ETAT.BASSE ? marge : 0);
+  var haut = seuils[position].hautBar - (roue.etat === TPMS.ETAT.HAUTE ? marge : 0);
+  if (p < bas) return TPMS.ETAT.BASSE;
+  if (p > haut) return TPMS.ETAT.HAUTE;
   if (roue.penteBarH < seuils.fuiteBarH) return TPMS.ETAT.FUITE;
   return TPMS.ETAT.OK;
 };
+
+TPMS.HYSTERESIS_ALERTE_BAR = 0.05;
 
 // Les états qui déclenchent bip + LED.
 TPMS.estAlerte = function (etat) {
