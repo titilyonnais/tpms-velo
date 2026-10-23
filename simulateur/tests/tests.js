@@ -445,6 +445,24 @@ function proche(a, b, tolerance) {
   verifier("hystérésis : 1,86 bar → OK", TPMS.evaluerRoue(roue, "AV", seuils, 3000, 0, true) === "OK");
 })();
 
+// Délai de perte selon la vitesse : en montée lente (5 km/h), le capteur
+// peut se croire à l'arrêt et n'annoncer qu'une fois par minute. Le boîtier
+// ne crie « capteur perdu » après 60 s qu'au-dessus de 10 km/h.
+(function () {
+  function silenceApres(vitesseKmh) {
+    var b = TPMS.creerBoitier();
+    b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
+    var trameAV = TPMS.encoderTrame({ numero: 1, adresse: [0xEA, 0xCA, 0x3F, 0x1B, 0x07], pressionBar: 2.2, temperatureC: 20, batteriePct: 90, alarme: 0 });
+    TPMS.boitierRecevoirTrame(b, trameAV, 0);
+    var periodeTopMs = b.reglages.circonferenceMm / (vitesseKmh / 3.6);   // un tour de roue
+    for (var t = periodeTopMs; t <= 90000; t += periodeTopMs) TPMS.boitierTopRoue(b, Math.round(t));
+    TPMS.boitierMiseAJour(b, 90000);
+    return b.roues.AV.etat;
+  }
+  verifier("perte : 90 s sans trame à 5 km/h (montée lente) → pas « capteur perdu »", silenceApres(5) !== "PERDU", silenceApres(5));
+  verifier("perte : 90 s sans trame à 20 km/h → « capteur perdu »", silenceApres(20) === "PERDU", silenceApres(20));
+})();
+
 // ---------------------------------------------------------------------
 // Prévision du prochain regonflage
 // ---------------------------------------------------------------------

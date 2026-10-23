@@ -52,8 +52,9 @@ Sur place : imprimante 3D, fer à souder fin/CMS, oscilloscope. Pas de mesureur 
 ## Le simulateur (cœur du projet depuis le 22/10/2026)
 Décision de Thibault : en attendant le matériel, le projet est un **logiciel de simulation complète et réaliste** (page web, rien à installer) : physique du pneu et du vélo, météo et altitude, radio BLE réaliste, électronique animée, sorties sur plusieurs jours (planning « semaine type »), enregistrement et rejeu exact (graine + actions horodatées), statistiques, export CSV. Le firmware C++ et l'app Web Bluetooth restent dans le dépôt mais ne sont plus prioritaires.
 - Principe d'architecture : la **logique** (`logique/`, pure, temps passé en paramètre) est séparée des **sources de données** ; elle est traduite telle quelle en C++ dans `firmware/tpms_boitier/src/logique/` et réutilisée par l'app.
-- Réglages clés du boîtier : écoute radio 3 s toutes les 5 s à position variable + écoute renforcée 15 s après une trame douteuse ; capteur perdu après 60 s en roulant, 600 s à l'arrêt ; historique de pression compensé en température.
-- Tests : `node simulateur/tests/tout.js` (412 tests en 6 suites, tous verts au 22/10/2026).
+- Réglages clés du boîtier : écoute radio 3 s toutes les 5 s à position variable + écoute renforcée 15 s après une trame douteuse ; capteur perdu après 60 s au-dessus de 10 km/h, 10 min sinon ; historique de pression compensé en température ; hystérésis de 0,05 bar sur les alertes basse/haute ; contrôle du rythme qui tolère la rafale d'une vraie crevaison ; prévision du prochain regonflage ; journal de sécurité chaîné (SHA-256) ; détection d'inondation radio.
+- Ajouts du 23/10/2026 : statistiques et pression conseillée, page « Vie privée » (pistage par récepteurs espions), capteurs « v2 » en proposition (adresse privée, compteur, signature HMAC), attaques synchronisée / inondation / homme du milieu, mode flotte (serveur Node + SQLite + supervision de 20 vélos), boîtier 3D OpenSCAD (non encore rendu).
+- Tests : `node simulateur/tests/tout.js` (539 tests JS en 7 suites, serveur compris) + 109 tests C++ (`firmware/tests_pc`), lancés par GitHub Actions à chaque push.
 - Chiffres à jour et défauts révélés par la simulation : voir `docs/` (analyse de risques, bilan énergétique) et `docs/rapport-e6.md`.
 
 ## Organisation du dépôt
@@ -64,6 +65,9 @@ app/          application Web Bluetooth (transport réel ou simulé)
 firmware/     programme du boîtier (Arduino, XIAO nRF52840), traduction C++ de la logique
 docs/         cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma, rapport E6
 presentation/ diaporama de soutenance (page web, publiée sur GitHub Pages)
+serveur/      serveur Node.js + SQLite du mode flotte (API REST signée HMAC)
+flotte/       simulation de 20 vélos de location et page de supervision (mode démo sans serveur)
+boitier-3d/   modèle OpenSCAD du boîtier, aperçu coté, outils de vérification
 ```
 Le simulateur est l'outil de travail de Thibault (pas de « mode jury »). Style visuel : tableau de bord sombre, fond noir, cartes arrondies, accent violet #A78BFA, barre latérale.
 En ligne (GitHub Pages, dépôt public titilyonnais/tpms-velo) : https://titilyonnais.github.io/tpms-velo/simulateur/ , /app/ et /presentation/. Commits avec l'adresse noreply 107395514+titilyonnais@users.noreply.github.com.
