@@ -161,18 +161,32 @@ TPMS.RYTHME_MIN_MS = 2000;
 TPMS.RYTHME_ANOMALIES_MAX = 3;      // 3 anomalies en 1 min = intrusion
 TPMS.RYTHME_FENETRE_MS = 60000;
 TPMS.QUARANTAINE_MS = 60000;        // durée du « signal suspect »
+// Exception : pendant une vraie crevaison, le capteur annonce tout de
+// suite chaque variation rapide, donc une trame par seconde, et la
+// pression ne fait que BAISSER. Défaut révélé par la simulation complète :
+// cette rafale passait pour un second émetteur (« SIGNAL SUSPECT » au lieu
+// de « CREVAISON » pendant 1 min, dans 1 cas sur 6). Deux trames
+// rapprochées ne sont donc une anomalie que si la pression ne baisse pas.
+// Un pirate mêlé au vrai capteur, lui, fait forcément REMONTER la valeur
+// une fois sur deux (fausse valeur puis vraie, ou l'inverse) : il reste
+// détecté.
+TPMS.RYTHME_DESCENTE_BAR = 0.05;
 
 TPMS.creerRythme = function () {
-  return { dernierMs: -1, anomaliesMs: [] };
+  return { dernierMs: -1, anomaliesMs: [], dernierePressionBar: null };
 };
 
 // À appeler pour CHAQUE trame portant l'adresse d'un capteur appairé.
+// pressionBar : pression annoncée par cette trame (facultative).
 // Retourne true si une intrusion vient d'être détectée.
-TPMS.controlerRythme = function (r, maintenantMs) {
-  if (r.dernierMs >= 0 && maintenantMs - r.dernierMs < TPMS.RYTHME_MIN_MS) {
+TPMS.controlerRythme = function (r, maintenantMs, pressionBar) {
+  var connue = pressionBar !== undefined && r.dernierePressionBar !== null;
+  var descente = connue && pressionBar < r.dernierePressionBar - TPMS.RYTHME_DESCENTE_BAR;
+  if (r.dernierMs >= 0 && maintenantMs - r.dernierMs < TPMS.RYTHME_MIN_MS && !descente) {
     r.anomaliesMs.push(maintenantMs);
   }
   r.dernierMs = maintenantMs;
+  if (pressionBar !== undefined) r.dernierePressionBar = pressionBar;
   // On oublie les anomalies de plus d'une minute.
   while (r.anomaliesMs.length > 0 && maintenantMs - r.anomaliesMs[0] > TPMS.RYTHME_FENETRE_MS) {
     r.anomaliesMs.shift();

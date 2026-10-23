@@ -244,17 +244,28 @@ TPMS.capteurTPMSMesurer = function (c, pneu, ctx) {
 TPMS.capteurTPMSAnnoncer = function (c, t, emissions) {
   var m = c.derniereMesure;
   TPMS.capteurTPMSConsommer(c, TPMS.capteurConso().annonceMas);
-  emissions.push({
-    tMs: t,
-    octets: TPMS.encoderTrame({
-      numero: c.numero,
-      adresse: c.adresse,
-      pressionBar: m.pressionBar,
-      temperatureC: m.temperatureC,
-      batteriePct: c.pilePct,
-      alarme: m.alarme
-    })
-  });
+  var mesure = {
+    numero: c.numero,
+    adresse: c.adresse,
+    pressionBar: m.pressionBar,
+    temperatureC: m.temperatureC,
+    batteriePct: c.pilePct,
+    alarme: m.alarme
+  };
+  var octets;
+  if (c.cleV2) {
+    // Capteur v2 : nouvelle adresse privée tous les quarts d'heure,
+    // compteur +1 et signature à chaque trame (logique/trame2.js).
+    if (!c.adresseV2 || t - c.rotationAdresseMs >= TPMS.ROTATION_ADRESSE_MS) {
+      c.adresseV2 = TPMS.adressePrivee(c.cleV2, Math.floor(c.alea() * 256), Math.floor(c.alea() * 256));
+      c.rotationAdresseMs = t;
+    }
+    c.compteurV2 = (c.compteurV2 || 0) + 1;
+    octets = TPMS.encoderTrameV2(mesure, c.cleV2, c.adresseV2, c.compteurV2);
+  } else {
+    octets = TPMS.encoderTrame(mesure);
+  }
+  emissions.push({ tMs: t, octets: octets });
   c.nbAnnonces++;
   c.derniereAnnonceMs = t;
   c.derniereAnnoncePressionBar = m.pressionBar;

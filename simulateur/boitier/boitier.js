@@ -37,15 +37,23 @@ TPMS.creerRoue = function () {
     acquittee: false,             // alerte acquittée par appui long
     verification: TPMS.creerVerification(),   // protection « vraisemblance »
     rythme: TPMS.creerRythme(),               // protection « rythme »
-    intrusionJusquaMs: -1         // fin du « signal suspect »
+    intrusionJusquaMs: -1,        // fin du « signal suspect »
+    dernierCompteur: -1,          // capteurs v2 : dernier compteur accepté (anti-rejeu)
+    dernierRefusJournalMs: -Infinity
   };
 };
+
+// Au-dessus de cette vitesse, on est sûr que les capteurs sont en mode
+// roulage (une annonce toutes les 3 s). Hypothèse prudente : le seuil
+// réel de leur accéléromètre est inconnu (4,4 km/h dans le simulateur).
+TPMS.VITESSE_ROULAGE_SURE_KMH = 10;
 
 TPMS.creerBoitier = function () {
   var circonference = 2105;   // 700×25C, valeur par défaut
   return {
     reglages: {
       appairage: { AV: "EA:CA:3F:1B:07", AR: "EA:CA:3F:1B:08" },
+      clesV2: null,               // capteurs v2 : { AV: clé 16 octets, AR: clé } (null = capteurs du commerce)
       protections: TPMS.protectionsParDefaut(),
       seuils: TPMS.seuilsParDefaut(),
       circonferenceMm: circonference,
@@ -62,6 +70,11 @@ TPMS.creerBoitier = function () {
     dernierMouvementMs: 0,
     ecouteDepuisMs: 0,
     ecouteContinueJusquaMs: -1,   // écoute renforcée après une trame douteuse
+    inconnuesSeconde: 0,          // annonces inconnues reçues depuis la dernière seconde
+    secondesSaturees: 0,
+    secondesCalmes: 0,
+    radioSaturee: false,          // inondation d'annonces détectée
+    journalSecurise: TPMS.creerJournalSecurise(),   // journal chaîné (journal.js)
     batteriePct: 100,
     enCharge: false,
     bipDemande: false,
@@ -76,6 +89,8 @@ TPMS.creerBoitier = function () {
       tramesInconnues: 0,
       tramesInvalides: 0,
       tramesManquees: 0,
+      signaturesFausses: 0,       // capteurs v2 : trame mal signée
+      rejeux: 0,                  // capteurs v2 : compteur déjà vu
       rejetsVraisemblance: 0,     // trames en attente de confirmation ou hors limites
       rejetsRythme: 0,            // trames reçues pendant un « signal suspect »
       intrusions: 0,
@@ -88,6 +103,51 @@ TPMS.creerBoitier = function () {
 
 TPMS.boitierJournal = function (b, maintenantMs, texte) {
   b.journal.push({ tMs: maintenantMs, texte: texte });
+  TPMS.journalAjouter(b.journalSecurise, maintenantMs, texte);   // copie chaînée, infalsifiable
+};
+
+// Inondation d'annonces : au-delà de 50 annonces inconnues par seconde
+// pendant 5 s, le boîtier signale une radio saturée. Ce n'est qu'une
+// INFORMATION (pas de bip) : dans une rue très fréquentée, beaucoup
+// d'objets Bluetooth émettent, et une fausse alerte sonore serait pénible.
+TPMS.SEUIL_INONDATION_PAR_S = 50;
+TPMS.DUREE_INONDATION_S = 5;
+TPMS.DUREE_RETOUR_CALME_S = 10;
+
+// Appelée une fois par seconde par boitierMiseAJour.
+TPMS.boitierSurveillerSaturation = function (b, maintenantMs) {
+  var n = b.inconnuesSeconde;
+  b.inconnuesSeconde = 0;
+  if (n > TPMS.SEUIL_INONDATION_PAR_S) {
+    b.secondesSaturees++;
+    b.secondesCalmes = 0;
+    if (!b.radioSaturee && b.secondesSaturees >= TPMS.DUREE_INONDATION_S) {
+      b.radioSaturee = true;
+      b.ecranUrgent = true;
+      TPMS.boitierJournal(b, maintenantMs, "Radio saturée : " + n + " annonces inconnues par seconde (inondation ?)");
+    }
+  } else {
+    b.secondesSaturees = 0;
+    if (b.radioSaturee && ++b.secondesCalmes >= TPMS.DUREE_RETOUR_CALME_S) {
+      b.radioSaturee = false;
+      b.ecranUrgent = true;
+      TPMS.boitierJournal(b, maintenantMs, "Radio redevenue normale");
+    }
+  }
+};
+
+// Capteurs v2 : à quelle roue appartient cette adresse privée ?
+TPMS.positionCapteurV2 = function (cles, adresse) {
+  if (TPMS.adresseResolue(cles.AV, adresse)) return "AV";
+  if (TPMS.adresseResolue(cles.AR, adresse)) return "AR";
+  return null;
+};
+
+// Journal d'un refus, au plus une fois par minute et par roue.
+TPMS.boitierJournalRefus = function (b, roue, maintenantMs, texte) {
+  if (maintenantMs - roue.dernierRefusJournalMs < 60000) return;
+  roue.dernierRefusJournalMs = maintenantMs;
+  TPMS.boitierJournal(b, maintenantMs, texte);
 };
 
 // La radio écoute-t-elle à cet instant ?
@@ -144,25 +204,51 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
     return "radio-coupee";
   }
 
-  var mesure = TPMS.decoderTrame(octets);
-  if (mesure === null) {
-    b.stats.tramesInvalides++;
-    return "invalide";
+  var mesure, position, roue, authentifiee = false;
+  if (b.reglages.clesV2) {
+    // Capteurs v2 : seules les trames signées par NOS capteurs comptent.
+    mesure = TPMS.decoderTrameV2(octets);
+    position = mesure === null ? null : TPMS.positionCapteurV2(b.reglages.clesV2, mesure.adresseOctets);
+    if (position === null) {
+      b.stats.tramesInconnues++;
+      b.inconnuesSeconde++;
+      return "inconnue";
+    }
+    roue = b.roues[position];
+    if (!TPMS.signatureValide(b.reglages.clesV2[position], octets)) {
+      b.stats.signaturesFausses++;
+      TPMS.boitierJournalRefus(b, roue, maintenantMs, position + " : trame mal signée refusée (usurpation ?)");
+      return "signature-fausse";
+    }
+    if (mesure.compteur <= roue.dernierCompteur) {
+      b.stats.rejeux++;
+      TPMS.boitierJournalRefus(b, roue, maintenantMs, position + " : trame rejouée refusée (compteur déjà vu)");
+      return "rejeu";
+    }
+    roue.dernierCompteur = mesure.compteur;
+    authentifiee = true;   // signée par notre capteur : pas besoin du contrôle du rythme
+  } else {
+    mesure = TPMS.decoderTrame(octets);
+    if (mesure === null) {
+      b.stats.tramesInvalides++;
+      b.inconnuesSeconde++;
+      return "invalide";
+    }
+    // 1. De quelle roue s'agit-il ?
+    position = protections.listeBlanche
+      ? TPMS.positionCapteur(b.reglages.appairage, mesure.adresse)
+      : TPMS.positionParNumero(mesure.numero);
+    if (position === null) {
+      b.stats.tramesInconnues++;
+      b.inconnuesSeconde++;
+      return "inconnue";
+    }
+    roue = b.roues[position];
   }
-
-  // 1. De quelle roue s'agit-il ?
-  var position = protections.listeBlanche
-    ? TPMS.positionCapteur(b.reglages.appairage, mesure.adresse)
-    : TPMS.positionParNumero(mesure.numero);
-  if (position === null) {
-    b.stats.tramesInconnues++;
-    return "inconnue";
-  }
-  var roue = b.roues[position];
 
   // 2. Rythme : deux émetteurs avec la même identité ?
-  if (protections.rythme) {
-    if (TPMS.controlerRythme(roue.rythme, maintenantMs)) {
+  if (protections.rythme && !authentifiee) {
+    if (TPMS.controlerRythme(roue.rythme, maintenantMs, mesure.pressionBar)) {
       if (roue.intrusionJusquaMs <= maintenantMs) {
         b.stats.intrusions++;
         TPMS.boitierJournal(b, maintenantMs,
@@ -268,6 +354,7 @@ TPMS.boitierVue = function (b, maintenantMs) {
     batterieBoitierPct: b.batteriePct,
     appConnectee: b.liaison.connecte,
     codeAppairage: b.liaison.code,
+    radioSaturee: b.radioSaturee,
     roues: { AV: TPMS.vueRoue(b.roues.AV, b.reglages.seuils.AV.basBar),
              AR: TPMS.vueRoue(b.roues.AR, b.reglages.seuils.AR.basBar) },
     vitesseKmh: b.veille ? 0 : TPMS.compteurVitesseKmh(c, maintenantMs),
@@ -297,6 +384,7 @@ TPMS.vueRoue = function (roue, seuilBasBar) {
 // Retourne les sorties à piloter : LED d'alerte, bip, LED d'éclairage,
 // et le type de rafraîchissement d'écran effectué.
 TPMS.boitierMiseAJour = function (b, maintenantMs) {
+  if (!b.veille) TPMS.boitierSurveillerSaturation(b, maintenantMs);
   // 1. Veille si le vélo ne roule plus depuis longtemps.
   if (!b.veille && maintenantMs - b.dernierMouvementMs > b.reglages.delaiVeilleMs) {
     b.veille = true;
@@ -317,7 +405,12 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
     var pos = positions[i];
     var roue = b.roues[pos];
     if (!b.veille) {
-      var enMouvement = TPMS.compteurVitesseKmh(b.compteur, maintenantMs) > 0;
+      // « En mouvement » pour le délai de perte : seulement au-dessus de
+      // 10 km/h. Plus lentement (montée raide), le capteur peut ne pas
+      // sentir la rotation et n'émettre qu'une fois par minute : avec le
+      // délai de 60 s, fausses alertes « capteur perdu » (défaut révélé par
+      // la semaine type, montée de la Croix-Rousse à 4 km/h).
+      var enMouvement = TPMS.compteurVitesseKmh(b.compteur, maintenantMs) > TPMS.VITESSE_ROULAGE_SURE_KMH;
       var etat = TPMS.evaluerRoue(roue, pos, b.reglages.seuils, maintenantMs, b.ecouteDepuisMs, enMouvement);
       if (etat !== roue.etat) {
         roue.etat = etat;

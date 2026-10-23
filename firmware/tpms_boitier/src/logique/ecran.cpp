@@ -24,7 +24,9 @@ void dessinerEcran(Ecran* e, const Vue* vue) {
 
   // ---- Barre d'état ----
   ecranTexte(e, 3, 3, "TPMS", 1, NOIR);
-  if (vue->veille) {
+  if (vue->radioSaturee) {
+    ecranTexte(e, 34, 3, "SATURE", 1, NOIR);   // inondation d'annonces
+  } else if (vue->veille) {
     ecranTexte(e, 34, 3, "VEILLE", 1, NOIR);
   } else if (vue->eclairage) {
     ecranTexte(e, 34, 3, "ECLAIRAGE", 1, NOIR);

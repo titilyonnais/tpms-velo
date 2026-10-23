@@ -93,6 +93,7 @@ Verdict verifierVraisemblance(Verification* v, const Mesure* ancienne, int32_t a
 // ---------------------------------------------------------------------
 void creerRythme(Rythme* r) {
   r->dernierMs = -1;
+  r->dernierePressionBar = -1.0f;
   r->nbAnomalies = 0;
 }
 
@@ -104,8 +105,10 @@ static void rythmeOublierPlusAncienne(Rythme* r) {
   r->nbAnomalies--;
 }
 
-bool controlerRythme(Rythme* r, int32_t maintenantMs) {
-  if (r->dernierMs >= 0 && maintenantMs - r->dernierMs < RYTHME_MIN_MS) {
+bool controlerRythme(Rythme* r, int32_t maintenantMs, float pressionBar) {
+  bool connue = pressionBar >= 0.0f && r->dernierePressionBar >= 0.0f;
+  bool descente = connue && pressionBar < r->dernierePressionBar - RYTHME_DESCENTE_BAR;
+  if (r->dernierMs >= 0 && maintenantMs - r->dernierMs < RYTHME_MIN_MS && !descente) {
     // Le tableau est vidé dès qu'il est plein (voir plus bas) : il
     // reste donc toujours de la place. Le test est une simple sécurité.
     if (r->nbAnomalies < RYTHME_ANOMALIES_MAX) {
@@ -114,6 +117,7 @@ bool controlerRythme(Rythme* r, int32_t maintenantMs) {
     }
   }
   r->dernierMs = maintenantMs;
+  if (pressionBar >= 0.0f) r->dernierePressionBar = pressionBar;
   // On oublie les anomalies de plus d'une minute.
   while (r->nbAnomalies > 0 && maintenantMs - r->anomaliesMs[0] > RYTHME_FENETRE_MS) {
     rythmeOublierPlusAncienne(r);

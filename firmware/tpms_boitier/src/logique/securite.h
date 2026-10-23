@@ -147,8 +147,15 @@ const int32_t QUARANTAINE_MS = 60000;    // durée du « signal suspect »
 
 // En JS, anomaliesMs est un tableau sans limite. Il est vidé dès qu'il
 // atteint 3 cases : un tableau C de 3 cases suffit donc.
+// Une vraie crevaison fait émettre le capteur en rafale (une trame par
+// seconde) avec une pression qui ne fait que BAISSER : ce n'est pas une
+// anomalie (défaut révélé par la simulation). Un pirate mêlé au vrai
+// capteur fait remonter la valeur une fois sur deux : il reste détecté.
+const float RYTHME_DESCENTE_BAR = 0.05f;
+
 struct Rythme {
   int32_t dernierMs;                            // -1 = aucune trame
+  float dernierePressionBar;                    // -1 = inconnue (en JS : null)
   int32_t anomaliesMs[RYTHME_ANOMALIES_MAX];
   int nbAnomalies;
 };
@@ -157,7 +164,8 @@ void creerRythme(Rythme* r);
 
 // À appeler pour CHAQUE trame portant l'adresse d'un capteur appairé.
 // Retourne true si une intrusion vient d'être détectée.
-bool controlerRythme(Rythme* r, int32_t maintenantMs);
+// pressionBar : pression de cette trame (-1 = inconnue).
+bool controlerRythme(Rythme* r, int32_t maintenantMs, float pressionBar = -1.0f);
 
 // Le contrôle du rythme a-t-il un doute sur cette roue ?
 // (au moins une anomalie dans la dernière minute)

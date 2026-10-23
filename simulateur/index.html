@@ -26,6 +26,7 @@
   <symbol id="i-batterie" viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/></symbol>
   <symbol id="i-velo" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9 7.5 6H6M15 9l-3 7.5"/></symbol>
   <symbol id="i-carte" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+  <symbol id="i-oeil" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-cloche" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></symbol>
 </svg>
 
@@ -37,6 +38,7 @@
     <button type="button" data-page="config"><svg><use href="#i-reglages"/></svg><span>Configuration</span></button>
     <button type="button" data-page="pneus"><svg><use href="#i-pneu"/></svg><span>Pneus</span></button>
     <button type="button" data-page="radio"><svg><use href="#i-radio"/></svg><span>Radio et sécurité</span></button>
+    <button type="button" data-page="privee"><svg><use href="#i-oeil"/></svg><span>Vie privée</span></button>
     <button type="button" data-page="elec"><svg><use href="#i-eclair"/></svg><span>Électronique</span></button>
     <button type="button" data-page="app"><svg><use href="#i-tel"/></svg><span>Application</span></button>
     <button type="button" data-page="donnees"><svg><use href="#i-donnees"/></svg><span>Données</span></button>
@@ -160,6 +162,8 @@
               <button type="button" data-attaque="usurpation" class="actif">Fausse pression</button>
               <button type="button" data-attaque="rejeu">Rejeu</button>
               <button type="button" data-attaque="brouillage">Brouillage</button>
+              <button type="button" data-attaque="synchro">Synchronisé</button>
+              <button type="button" data-attaque="inondation">Inondation</button>
             </div>
           </article>
           <article class="tuile large-4">
@@ -186,6 +190,12 @@
               <p class="discret" id="cfgPlanningAide" hidden>Du lundi au vendredi : trajet domicile-travail à 7 h 45 et 17 h 30. Samedi et dimanche : une sortie sur le parcours choisi. Dimanche soir : boîtier en charge de 20 h à 23 h.</p>
               <label><span>Météo</span><select id="cfgMeteo"></select></label>
               <label><span>Heure de départ</span><span class="champ-unite"><input type="number" id="cfgHeure" min="0" max="23.5" step="0.5" value="8"><i>h</i></span></label>
+              <label><span>Capteurs</span>
+                <select id="cfgCapteurs">
+                  <option value="commerce" selected>Du commerce (adresse fixe, en clair)</option>
+                  <option value="v2">Version 2 (adresse changeante, trames signées)</option>
+                </select>
+              </label>
               <label><span>Chambres à air</span><select id="cfgChambre"><option value="butyle">Butyle (standard)</option><option value="latex">Latex (perd vite)</option><option value="tubeless">Tubeless</option></select></label>
               <label><span>Pression avant</span><span class="champ-unite"><input type="number" id="cfgPAV" step="0.1" value="2.2"><i>bar</i></span></label>
               <label><span>Pression arrière</span><span class="champ-unite"><input type="number" id="cfgPAR" step="0.1" value="2.4"><i>bar</i></span></label>
@@ -302,6 +312,8 @@
                   <button type="button" data-attaque="usurpation" class="actif">Fausse pression</button>
                   <button type="button" data-attaque="rejeu">Rejeu</button>
                   <button type="button" data-attaque="brouillage">Brouillage</button>
+                  <button type="button" data-attaque="synchro">Synchronisé</button>
+                  <button type="button" data-attaque="inondation">Inondation</button>
                 </span>
               </label>
               <label><span>Roue visée</span>
@@ -312,7 +324,7 @@
               </label>
               <label><span>Distance au vélo</span><span class="curseur-zone"><input type="range" id="curDistancePirate" min="1" max="60" step="1" value="8"><output id="txtDistancePirate">8 m</output></span></label>
               <label><span>Puissance</span><span class="curseur-zone"><input type="range" id="curPuissancePirate" min="-20" max="20" step="1" value="4"><output id="txtPuissancePirate">+4 dBm</output></span></label>
-              <label><span>Cadence</span>
+              <label id="ligneCadence"><span>Cadence</span>
                 <span class="pilules petites" id="choixCadence"><button type="button" data-cadence="500">0,5 s</button><button type="button" data-cadence="1000" class="actif">1 s</button><button type="button" data-cadence="3000">3 s</button></span>
               </label>
               <label id="ligneFaussePression"><span>Pression annoncée</span><span class="curseur-zone"><input type="range" id="curFaussePression" min="0" max="4" step="0.05" value="0.3"><output id="txtFaussePression">0,30 bar</output></span></label>
@@ -329,6 +341,39 @@
           <article class="tuile large-12">
             <header><h3>Trafic radio</h3></header>
             <div class="tableau-defile"><table class="tableau" id="tableTrafic"></table></div>
+          </article>
+          <article class="tuile large-12">
+            <header><h3>Journal de sécurité chaîné</h3><span class="puce" id="puceJournal"></span></header>
+            <p class="discret">Chaque ligne contient l'empreinte SHA-256 de la précédente : modifier une seule ligne casse la chaîne à cet endroit. Le boîtier garde les 64 dernières lignes.</p>
+            <div class="rangee">
+              <button type="button" class="bouton" id="btnVerifierJournal">Vérifier la chaîne</button>
+              <button type="button" class="bouton danger" id="btnFalsifierJournal">Falsifier une ligne</button>
+              <button type="button" class="bouton" id="btnCopierEmpreinte">Copier l'empreinte sur le téléphone</button>
+            </div>
+            <p class="discret" id="txtJournalVerif"></p>
+            <div class="tableau-defile"><table class="tableau" id="tableJournal"></table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== VIE PRIVÉE =============== -->
+      <section class="page" id="page-privee" hidden>
+        <div class="grille">
+          <article class="tuile large-7">
+            <header><svg><use href="#i-oeil"/></svg><h3>Ce que voient les espions</h3><span class="puce" id="pucePistage"></span></header>
+            <svg id="cartePistage" viewBox="0 0 640 420" class="carte"></svg>
+            <p class="legende"><span class="carre-mouchard"></span>récepteur espion · <span class="carre-mouchard actif"></span>a vu le vélo · <span class="trait alerte"></span>dernier trajet reconstitué · <span class="rond-depart"></span>départ habituel</p>
+          </article>
+          <article class="tuile large-5">
+            <header><h3>Ce que l'espion a appris</h3></header>
+            <dl class="petites-mesures colonne" id="savoirEspion"></dl>
+            <p class="discret" id="txtPistage"></p>
+            <button type="button" class="bouton principal" id="btnRelancerV2">Relancer avec des capteurs v2</button>
+          </article>
+          <article class="tuile large-12">
+            <header><h3>Passages notés par les espions</h3></header>
+            <div class="tableau-defile"><table class="tableau" id="tablePassages"></table></div>
+            <p class="discret">L'attaque ne demande aucune compétence : une vingtaine de récepteurs Bluetooth à environ 40 € (Raspberry Pi) posés dans des vitrines. Les capteurs du commerce émettent toutes les 3 s une adresse qui ne change jamais : c'est un traceur. Avec les capteurs v2, l'adresse change tous les quarts d'heure et seul le boîtier, qui a la clé, sait la reconnaître.</p>
           </article>
         </div>
       </section>
@@ -379,6 +424,18 @@
             <button type="button" class="bouton" id="btnOublierTel">Oublier le téléphone</button>
             <h4>Octets échangés</h4>
             <div class="tableau-defile"><table class="tableau" id="tableEchanges"></table></div>
+          </article>
+          <article class="tuile large-12">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Attaque de l'appairage (homme du milieu)</h3></header>
+            <p class="discret">Un pirate s'intercale entre le téléphone et le boîtier pendant l'appairage. Compare la méthode retenue (code à 6 chiffres affiché sur l'écran du boîtier) à un appairage sans code.</p>
+            <div class="rangee">
+              <span class="pilules petites" id="choixModeAppairage">
+                <button type="button" data-mode="code" class="actif">Avec code (notre choix)</button>
+                <button type="button" data-mode="sans-code">Sans code (Just Works)</button>
+              </span>
+              <button type="button" class="bouton danger" id="btnMitm">Lancer l'attaque</button>
+            </div>
+            <ol class="fil-evenements" id="etapesMitm"></ol>
           </article>
         </div>
       </section>
@@ -444,6 +501,9 @@
 <script src="../logique/energie.js"></script>
 <script src="../logique/statistiques.js"></script>
 <script src="../logique/conseil.js"></script>
+<script src="../logique/sha256.js"></script>
+<script src="../logique/journal.js"></script>
+<script src="../logique/trame2.js"></script>
 <!-- Boîtier simulé -->
 <script src="boitier/police5x7.js"></script>
 <script src="boitier/epaper.js"></script>
@@ -461,11 +521,13 @@
 <script src="monde/lipo.js"></script>
 <script src="monde/circuit.js"></script>
 <script src="sources/pirate.js"></script>
+<script src="sources/mouchards.js"></script>
 <script src="moteur.js"></script>
 <!-- Affichage -->
 <script src="vues/graphe.js"></script>
 <script src="vues/carte.js"></script>
 <script src="vues/schema.js"></script>
+<script src="vues/pistage.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -7,12 +7,13 @@ var chemin = require("path");
 [
   "../../logique/trame.js", "../../logique/vitesse.js", "../../logique/fuite.js",
   "../../logique/alertes.js", "../../logique/securite.js", "../../logique/protocole.js",
-  "../../logique/energie.js",
+  "../../logique/energie.js", "../../logique/statistiques.js", "../../logique/conseil.js",
+  "../../logique/sha256.js", "../../logique/journal.js", "../../logique/trame2.js",
   "../boitier/police5x7.js", "../boitier/epaper.js", "../boitier/ecran.js",
   "../boitier/liaison.js", "../boitier/boitier.js",
   "../monde/alea.js", "../monde/atmosphere.js", "../monde/pneu.js", "../monde/capteur.js",
   "../monde/parcours.js", "../monde/velo.js", "../monde/radio.js", "../monde/lipo.js",
-  "../monde/circuit.js", "../sources/pirate.js", "../moteur.js"
+  "../monde/circuit.js", "../sources/pirate.js", "../sources/mouchards.js", "../moteur.js"
 ].forEach(function (f) { require(chemin.join(__dirname, f)); });
 
 var reussis = 0, rates = 0;
@@ -145,6 +146,21 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
   }
   verifier("fin d'attaque : pas de fausse alerte « capteur perdu »", perdu === 0, perdu + " s en alerte");
   verifier("fin d'attaque : la roue arrière revient à OK", a.boitier.roues.AR.etat === "OK", a.boitier.roues.AR.etat);
+})();
+
+// 10. Pistage par des récepteurs espions : 2 jours de trajets
+// domicile-travail. Capteurs du commerce : l'espion relie les trajets.
+// Capteurs v2 : adresses changeantes, aucun lien entre deux trajets.
+(function () {
+  [false, true].forEach(function (v2) {
+    var a = TPMS.creerMonde(options({ graine: 3, parcoursId: "lyon-ville", heureDepartH: 6, planning: "semaine", semaines: 1, capteursV2: v2 }));
+    for (var h = 0; h < 48; h++) TPMS.mondeAvancer(a, 3600000);
+    var analyse = TPMS.mouchardsAnalyser(a.reseauMouchards, a.heureDepartH);
+    var maxTrajets = analyse.reduce(function (mx, x) { return Math.max(mx, x.trajets.length); }, 0);
+    if (!v2) verifier("pistage : capteurs du commerce → les 4 trajets de 2 jours reliés", maxTrajets >= 4, maxTrajets);
+    else verifier("pistage : capteurs v2 → aucune adresse vue sur plus d'un trajet", maxTrajets <= 1 && analyse.length > 8, maxTrajets + " trajets, " + analyse.length + " adresses");
+    if (v2) verifier("pistage : capteurs v2 → le boîtier reconnaît toujours ses capteurs", a.boitier.stats.tramesAcceptees > 100 && a.boitier.roues.AV.etat !== "PERDU", a.boitier.stats.tramesAcceptees);
+  });
 })();
 
 // 9. Semaine type : 10 trajets + 2 sorties de week-end + 1 recharge,

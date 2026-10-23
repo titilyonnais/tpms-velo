@@ -91,7 +91,8 @@
       vehiculesVoisins: parseInt($("cfgVoisins").value, 10) || 0,
       plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5,
       planning: $("cfgPlanning").value === "semaine" ? "semaine" : undefined,
-      masseCyclisteKg: parseFloat($("cfgPoids").value) || 75
+      masseCyclisteKg: parseFloat($("cfgPoids").value) || 75,
+      capteursV2: $("cfgCapteurs").value === "v2"
     };
   }
 
@@ -150,7 +151,8 @@
       if (vue.page === "accueil") afficherAccueil();
       else if (vue.page === "config") afficherConfig();
       else if (vue.page === "pneus") afficherPneus();
-      else if (vue.page === "radio") afficherRadio();
+      else if (vue.page === "radio") { afficherRadio(); afficherJournalSecurise(); }
+      else if (vue.page === "privee") afficherPrivee();
       else if (vue.page === "elec") afficherElectronique();
       else if (vue.page === "app") afficherLiaison();
       else if (vue.page === "donnees") afficherDonnees();
@@ -558,6 +560,8 @@
     { court: "adresse", debut: 3, fin: 8 }, { court: "pression (Pa)", debut: 8, fin: 12, pression: true },
     { court: "température", debut: 12, fin: 16 }, { court: "pile", debut: 16, fin: 17 }, { court: "al.", debut: 17, fin: 18 }
   ];
+  // Capteurs v2 : compteur anti-rejeu et signature à la suite.
+  var CHAMPS_V2 = [{ court: "compteur", debut: 18, fin: 22 }, { court: "signature", debut: 22, fin: 26 }];
   function construireRegistres() {
     $("registres").innerHTML = POSITIONS.map(function (pos) {
       return '<div class="registre-bloc" id="registre' + pos + '"><div class="registre-tete"><b>Capteur ' + NOMS[pos] +
@@ -576,7 +580,7 @@
         index += "<td>" + k + "</td>";
         hexa += "<td" + cl + ">" + TPMS.octetEnHexa(o[k]) + "</td>";
       }
-      CHAMPS.forEach(function (c) {
+      (o.length === TPMS.TAILLE_TRAME_V2 ? CHAMPS.concat(CHAMPS_V2) : CHAMPS).forEach(function (c) {
         champs += '<td colspan="' + (c.fin - c.debut) + '"' + (c.pression ? ' class="champ-pression"' : "") + ">" + c.court + "</td>";
       });
       var bloc = $("registre" + pos);
@@ -596,6 +600,7 @@
   var VERDICTS = {
     acceptee: ["ok", "acceptée"], inconnue: ["non", "ignorée (inconnu)"], invalide: ["rejet", "rejetée"],
     intrusion: ["rejet", "rejetée (suspecte)"], suspecte: ["attente", "à confirmer"],
+    "signature-fausse": ["rejet", "rejetée (mal signée)"], rejeu: ["rejet", "rejetée (rejeu)"],
     "hors-limites": ["rejet", "hors limites"], "radio-coupee": ["non", "radio coupée"]
   };
   function verdict(tr) {
@@ -690,6 +695,61 @@
     });
   }
 
+  // Journal de sécurité chaîné
+  function afficherJournalSecurise() {
+    var j = m.boitier.journalSecurise;
+    var html = "<tr><th>N°</th><th>Heure</th><th>Événement</th><th>Empreinte précédente</th><th>Empreinte</th></tr>";
+    j.lignes.slice(-12).reverse().forEach(function (l) {
+      html += "<tr" + (vue.ligneFalsifiee === l.n ? ' class="ligne-pirate"' : "") + "><td>" + l.n + "</td><td>" + horodatage(l.tMs) + "</td><td>" + l.texte +
+        '</td><td class="mono-court">' + l.precedente.slice(0, 10) + '…</td><td class="mono-court">' + l.empreinte.slice(0, 10) + "…</td></tr>";
+    });
+    $("tableJournal").innerHTML = html;
+    puce($("puceJournal"), j.suivant + " lignes", "");
+  }
+  function verifierJournal() {
+    var j = m.boitier.journalSecurise, i = TPMS.journalVerifier(j), texte;
+    if (i < 0) texte = "Chaîne intacte : les " + j.lignes.length + " lignes gardées se vérifient une à une.";
+    else texte = "Chaîne cassée à la ligne n° " + j.lignes[i].n + " : son contenu ne correspond plus à son empreinte. Le journal a été modifié.";
+    if (vue.empreinteCopiee) {
+      var trouvee = j.lignes.some(function (l) { return l.empreinte === vue.empreinteCopiee; }) || j.ancre === vue.empreinteCopiee;
+      texte += trouvee ? " L'empreinte copiée sur le téléphone est bien dans la chaîne." : " L'empreinte copiée sur le téléphone n'est plus dans la chaîne : journal réécrit !";
+    }
+    $("txtJournalVerif").textContent = texte;
+    notifier(i < 0 ? "Journal intact" : "Journal falsifié", "", i < 0 ? "ok" : "alerte");
+  }
+
+  // Vie privée : ce que les espions ont reconstitué
+  function afficherPrivee() {
+    var analyse = TPMS.mouchardsAnalyser(m.reseauMouchards, m.heureDepartH);
+    var suivi = analyse[0] || null;
+    TPMS.pistageDessiner($("cartePistage"), m.reseauMouchards, suivi);
+    var v2 = !!m.boitier.reglages.clesV2;
+    puce($("pucePistage"), v2 ? "Capteurs v2" : "Capteurs du commerce", v2 ? "ok" : "alerte");
+    function heureCourte(h) { return heureTexte(h).slice(0, 5); }
+    var lignes = [
+      ["Récepteurs espions", m.reseauMouchards.mouchards.length],
+      ["Annonces captées", m.reseauMouchards.annoncesEntendues],
+      ["Adresses différentes vues", analyse.length]
+    ];
+    if (suivi) {
+      lignes.push(["Adresse la plus suivie", suivi.adresse]);
+      lignes.push(["Passages notés pour elle", suivi.passages]);
+      lignes.push(["Trajets reconstitués", suivi.trajets.length + " sur " + suivi.jours + " jour" + (suivi.jours > 1 ? "s" : "")]);
+      lignes.push(["Heures de départ", suivi.heures.slice(-6).map(heureCourte).join(", ")]);
+      lignes.push(["Départ habituel du matin", suivi.departHabituel ? "près du récepteur " + suivi.departHabituel + " (" + suivi.departsHabituels + " fois)" : "–"]);
+    }
+    $("savoirEspion").innerHTML = mesures(lignes);
+    $("txtPistage").textContent = !suivi ? "Aucun passage pour l'instant : roule en ville (parcours « Lyon » ou « Domicile – travail »), idéalement une semaine type."
+      : v2 ? "L'adresse change tous les quarts d'heure : l'espion voit " + analyse.length + " inconnus, chacun sur un seul trajet au plus. Il ne peut ni les relier, ni savoir d'où part le vélo chaque matin."
+      : "La même adresse revient à chaque passage : l'espion relie tous tes trajets, connaît tes horaires et le quartier d'où tu pars le matin.";
+    $("btnRelancerV2").hidden = v2;
+    var html = "<tr><th>Début</th><th>Récepteur</th><th>Adresse vue</th><th>Annonces</th></tr>";
+    m.reseauMouchards.passages.slice(-12).reverse().forEach(function (p) {
+      html += "<tr><td>" + horodatage(p.debutMs) + "</td><td>" + p.mouchard + '</td><td class="mono">' + p.adresse + "</td><td>" + p.annonces + "</td></tr>";
+    });
+    $("tablePassages").innerHTML = html;
+  }
+
   function attaqueCourante() { return m.pirateMonde.brouillage ? "brouillage" : m.pirate.attaque; }
   function choisirAttaque(a) {
     action({ type: "pirate", pirate: a === "brouillage" ? {} : { attaque: a }, monde: { brouillage: a === "brouillage" } });
@@ -698,7 +758,8 @@
   function activerPirate(actif) {
     action({ type: "pirate", pirate: { actif: actif } });
     notifier(actif ? "Attaque pirate lancée" : "Attaque arrêtée",
-      actif ? { usurpation: "Fausse pression envoyée au nom du capteur.", rejeu: "Rejeu de trames enregistrées.", brouillage: "Brouillage des canaux radio." }[attaqueCourante()] : "",
+      actif ? { usurpation: "Fausse pression envoyée au nom du capteur.", rejeu: "Rejeu de trames enregistrées.", brouillage: "Brouillage des canaux radio.",
+        synchro: "Fausse pression émise en même temps que le vrai capteur.", inondation: "500 annonces par seconde pour saturer la radio." }[attaqueCourante()] : "",
       actif ? "alerte" : "ok");
     synchroniserPirate();
   }
@@ -709,12 +770,15 @@
     });
     $("chkPirate").checked = m.pirate.actif;
     $("chkPirateAccueil").checked = m.pirate.actif;
-    $("ligneFaussePression").hidden = a !== "usurpation";
+    $("ligneFaussePression").hidden = a !== "usurpation" && a !== "synchro";
+    $("ligneCadence").hidden = a !== "usurpation" && a !== "rejeu";
     $("ligneEnregistrement").hidden = a !== "rejeu";
     $("noteAttaque").textContent = {
       usurpation: "Le pirate a relevé l'adresse du capteur en écoutant l'air, et diffuse des trames à son nom avec la pression de son choix.",
       rejeu: "Le pirate renvoie à l'identique des trames enregistrées plus tôt, par exemple pneu gonflé pour masquer une crevaison.",
-      brouillage: "Le pirate émet en continu sur les canaux d'annonce : près de lui, plus rien n'est reçu."
+      brouillage: "Le pirate émet en continu sur les canaux d'annonce : près de lui, plus rien n'est reçu.",
+      synchro: "Le pirate a appris le rythme du capteur et émet en même temps que lui. La norme BLE ajoute un délai aléatoire de 0 à 10 ms à chaque annonce : le boîtier reçoit souvent les deux. Seules des trames signées (capteurs v2) l'arrêtent à coup sûr.",
+      inondation: "500 annonces par seconde à adresses aléatoires : collisions et boîtier débordé. On ne peut pas l'empêcher (c'est de la physique), seulement la détecter : le boîtier affiche SATURE."
     }[a];
   }
 
@@ -1145,6 +1209,36 @@
     });
 
     // Application
+    pilules($("choixModeAppairage"), function (bt) { vue.modeAppairage = bt.dataset.mode; });
+    $("btnMitm").addEventListener("click", function () {
+      action({ type: "mitm", mode: vue.modeAppairage || "code" });
+      var r = m.dernierMitm;
+      $("etapesMitm").innerHTML = r.etapes.map(function (t, i) {
+        var cl = i === r.etapes.length - 1 ? (r.reussie ? ' class="alerte"' : ' class="ok"') : "";
+        return "<li" + cl + '><span class="heure">' + (i + 1) + "</span><span>" + t + "</span></li>";
+      }).join("");
+      notifier(r.reussie ? "Attaque réussie" : "Attaque déjouée", r.reussie ? "Le pirate a modifié les réglages du boîtier." : "Le code affiché sur le boîtier a protégé l'appairage.", r.reussie ? "alerte" : "ok");
+    });
+    $("btnVerifierJournal").addEventListener("click", verifierJournal);
+    $("btnFalsifierJournal").addEventListener("click", function () {
+      // L'attaquant efface la trace d'un événement… sans pouvoir recalculer
+      // les empreintes de la chaîne.
+      var lignes = m.boitier.journalSecurise.lignes;
+      if (lignes.length < 3) { notifier("Journal trop court", "Laisse tourner la simulation un peu."); return; }
+      var cible = lignes[Math.floor(lignes.length / 2)];
+      cible.texte = "Rien à signaler";
+      vue.ligneFalsifiee = cible.n;
+      notifier("Ligne n° " + cible.n + " modifiée", "Clique sur « Vérifier la chaîne ».", "alerte");
+    });
+    $("btnCopierEmpreinte").addEventListener("click", function () {
+      vue.empreinteCopiee = TPMS.journalDerniereEmpreinte(m.boitier.journalSecurise);
+      notifier("Empreinte copiée", vue.empreinteCopiee.slice(0, 16) + "…", "ok");
+    });
+    $("btnRelancerV2").addEventListener("click", function () {
+      $("cfgCapteurs").value = "v2";
+      nouvelleSimulation();
+      notifier("Capteurs v2", "Nouvelle simulation avec des capteurs à adresse changeante et trames signées.", "ok");
+    });
     $("btnOublierTel").addEventListener("click", function () { TPMS.liaisonOublier(m.boitier, m.tMs); versApp({ type: "deconnecte" }); });
 
     // Données

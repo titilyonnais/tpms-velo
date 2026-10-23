@@ -31,6 +31,8 @@
 #include "vue.h"
 #include "epaper.h"
 #include "liaison.h"
+#include "journal.h"
+#include "trame2.h"
 
 // Un rafraîchissement complet (écran qui clignote noir/blanc) toutes les
 // 20 mises à jour partielles, pour effacer les traces ("ghosting").
@@ -56,6 +58,9 @@ struct Roue {
   Verification verification;    // protection « vraisemblance »
   Rythme rythme;                // protection « rythme »
   int32_t intrusionJusquaMs;    // fin du « signal suspect » (-1 = aucun)
+  bool compteurConnu;           // capteurs v2 : un compteur a déjà été accepté
+  uint32_t dernierCompteur;     // capteurs v2 : dernier compteur accepté (anti-rejeu)
+  int32_t dernierRefusJournalMs;
 };
 
 struct Stats {
@@ -63,6 +68,8 @@ struct Stats {
   uint32_t tramesInconnues;
   uint32_t tramesInvalides;
   uint32_t tramesManquees;
+  uint32_t signaturesFausses;   // capteurs v2 : trame mal signée
+  uint32_t rejeux;              // capteurs v2 : compteur déjà vu
   uint32_t rejetsVraisemblance;   // trames en attente de confirmation ou hors limites
   uint32_t rejetsRythme;          // trames reçues pendant un « signal suspect »
   uint32_t intrusions;
@@ -96,7 +103,17 @@ struct Boitier {
   Liaison liaison;          // dialogue avec l'application
   Stats stats;
   FonctionJournal journal;
+  // Inondation d'annonces (voir boitier.js)
+  int inconnuesSeconde;
+  int secondesSaturees;
+  int secondesCalmes;
+  bool radioSaturee;
+  JournalSecurise journalSecurise;   // journal chaîné (journal.h)
 };
+
+const int SEUIL_INONDATION_PAR_S = 50;
+const int DUREE_INONDATION_S = 5;
+const int DUREE_RETOUR_CALME_S = 10;
 
 // Ce qu'il est advenu d'une trame (en JS : un texte).
 enum Resultat {
@@ -106,7 +123,9 @@ enum Resultat {
   RESULTAT_INCONNUE,       // "inconnue"
   RESULTAT_INTRUSION,      // "intrusion"
   RESULTAT_HORS_LIMITES,   // "hors-limites"
-  RESULTAT_SUSPECTE        // "suspecte"
+  RESULTAT_SUSPECTE,       // "suspecte"
+  RESULTAT_SIGNATURE_FAUSSE, // "signature-fausse" (capteurs v2)
+  RESULTAT_REJEU           // "rejeu" (capteurs v2)
 };
 const char* texteResultat(Resultat r);
 
@@ -133,6 +152,9 @@ void boitierJournal(Boitier* b, int32_t maintenantMs, const char* texte);
 // La radio écoute-t-elle à cet instant ?
 // Elle est allumée pendant les fenetreMs premières millisecondes de
 // chaque période, et coupée en veille.
+// Au-dessus de cette vitesse, les capteurs sont sûrement en mode roulage.
+const float VITESSE_ROULAGE_SURE_KMH = 10.0f;
+
 bool boitierEcoute(const Boitier* b, int32_t maintenantMs);
 void boitierEcouteRenforcee(Boitier* b, int32_t maintenantMs);
 

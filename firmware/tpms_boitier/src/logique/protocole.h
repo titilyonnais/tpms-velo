@@ -64,6 +64,10 @@ struct Reglages {
   int32_t ecouteFenetreMs;    // ... et écoute pendant 3 s (60 % du temps)
   int32_t delaiVeilleMs;      // veille après 5 min sans rouler
   int32_t periodeEcranMs;     // en roulant, au plus un rafraîchissement toutes les 2 s
+  // Capteurs v2 (trames signées, logique/trame2.js) : clés secrètes
+  // partagées à l'appairage. Jamais envoyées à l'application.
+  bool capteursV2;
+  uint8_t clesV2[NB_ROUES][16];
 };
 
 // Le contenu de la notification MESURES (en JS : un objet).

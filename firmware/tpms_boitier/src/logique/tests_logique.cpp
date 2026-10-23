@@ -5,6 +5,9 @@
 // LOGIQUE PURE : aucun appel Arduino.
 // =====================================================================
 #include "tests_logique.h"
+#include "journal.h"
+#include "sha256.h"
+#include "trame2.h"
 #include "boitier.h"
 #include "ecran.h"
 #include "outils.h"
@@ -145,6 +148,38 @@ static void testsFuite() {
   verifier("prevision : stable -> infini", isinf(joursAvantSeuil(2.2f, 0.0f, 1.8f)));
   relevesAjouter(&r, 5 * 86400000L, 2.5f);
   verifier("prevision : regonflage -> releves effaces", r.n == 1);
+
+  // SHA-256 et HMAC : vecteurs officiels (mêmes résultats qu'en JS)
+  uint8_t emp[32];
+  char hexa[65];
+  sha256((const uint8_t*)"abc", 3, emp);
+  enHexa(emp, 32, hexa);
+  verifier("sha256 abc", strcmp(hexa, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") == 0);
+  const char* long_ = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+  sha256((const uint8_t*)long_, strlen(long_), emp);
+  enHexa(emp, 32, hexa);
+  verifier("sha256 2 blocs", strcmp(hexa, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1") == 0);
+  const char* msg = "what do ya want for nothing?";
+  hmacSha256((const uint8_t*)"Jefe", 4, (const uint8_t*)msg, strlen(msg), emp);
+  enHexa(emp, 32, hexa);
+  verifier("hmac-sha256 RFC 4231", strcmp(hexa, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843") == 0);
+
+  // Journal chaîné
+  static JournalSecurise j;
+  creerJournalSecurise(&j);
+  journalAjouter(&j, 0, "Reveil");
+  journalAjouter(&j, 1000, "AV : SIGNAL SUSPECT");
+  journalAjouter(&j, 2000, "Mise en veille");
+  verifier("journal : chaine intacte", journalVerifier(&j) == -1);
+  strcpy(j.lignes[1].texte, "Rien a signaler");
+  verifier("journal : ligne modifiee reperee", journalVerifier(&j) == 1);
+
+  // Rythme : rafale d'une vraie crevaison (pression qui baisse) acceptée
+  static Rythme ry;
+  creerRythme(&ry);
+  bool intrusion = false;
+  for (int k = 0; k < 10; k++) intrusion = controlerRythme(&ry, k * 1000, 2.2f - 0.25f * k) || intrusion;
+  verifier("rythme : rafale de crevaison sans fausse intrusion", !intrusion);
 }
 
 // ---------------------------------------------------------------------

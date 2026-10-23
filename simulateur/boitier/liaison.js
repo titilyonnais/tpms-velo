@@ -158,3 +158,53 @@ TPMS.liaisonCommande = function (b, octet, maintenantMs) {
   }
   return "commande inconnue";
 };
+
+// ---------------------------------------------------------------------
+// Démonstration : attaque de l'homme du milieu pendant l'appairage
+// ---------------------------------------------------------------------
+// Le pirate s'intercale : il se fait passer pour le boîtier auprès du
+// téléphone, et pour le téléphone auprès du boîtier. Tout dépend alors de
+// la méthode d'appairage :
+//   "sans-code" (Just Works) : aucune vérification humaine, les deux
+//       appairages réussissent ; le pirate lit tout et écrit ses réglages.
+//   "code" (notre choix, BLE Secure Connections avec code affiché) : le
+//       code n'apparaît que sur l'écran du boîtier. Le pirate ne le voit
+//       pas et doit le deviner : 1 chance sur 1 000 000 par essai, et le
+//       boîtier se bloque 1 min après 3 codes faux.
+// tirerCode() : code à 6 chiffres essayé par le pirate.
+// Retourne { reussie, etapes: [textes] }.
+TPMS.liaisonAttaqueHommeDuMilieu = function (b, mode, maintenantMs, tirerCode) {
+  var etapes = ["Le pirate se place entre le téléphone et le boîtier et relaie leurs messages."];
+  if (mode === "sans-code") {
+    etapes.push("Appairage sans code : rien ne permet de voir l'intrus. Les deux appairages réussissent.");
+    b.liaison.appaire = true;
+    b.reglages.seuils.AV.basBar = 0.5;
+    b.reglages.seuils.AR.basBar = 0.5;
+    TPMS.boitierJournal(b, maintenantMs, "Réglages reçus d'un appareil appairé : seuils bas à 0,5 bar");
+    etapes.push("Le pirate écrit ses réglages : seuils bas à 0,5 bar. Le boîtier les accepte, le lien est « appairé ».");
+    etapes.push("Résultat : une pression basse ne déclenche plus d'alerte. Le cycliste ne voit rien.");
+    return { reussie: true, etapes: etapes };
+  }
+  var l = b.liaison;
+  if (maintenantMs < l.bloqueJusquaMs) {
+    etapes.push("Le boîtier refuse : appairage bloqué après trop d'essais.");
+    return { reussie: false, etapes: etapes };
+  }
+  // Nouvelle demande d'appairage : le boîtier affiche un code (sans
+  // remplacer un code encore valide).
+  if (l.code === null || maintenantMs > l.codeJusquaMs) {
+    l.code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+    l.codeJusquaMs = maintenantMs + TPMS.CODE_DUREE_MS;
+    b.ecranUrgent = true;
+  }
+  etapes.push("Le boîtier affiche un code sur son écran. Le pirate, à quelques mètres, ne peut pas le lire.");
+  for (var i = 0; i < TPMS.CODE_ESSAIS_MAX; i++) {
+    var essai = tirerCode();
+    var r = TPMS.liaisonSaisirCode(b, essai, maintenantMs);
+    etapes.push("Essai " + (i + 1) + " : " + essai + " → " + (r === "ok" ? "accepté" : (r === "bloque" ? "faux, appairage bloqué 1 min" : "faux")));
+    if (r === "ok") return { reussie: true, etapes: etapes };
+    if (r !== "faux") break;
+  }
+  etapes.push("Échec : 3 chances sur 1 000 000 par minute de blocage, soit environ 5 mois d'essais sans interruption pour avoir une chance sur deux.");
+  return { reussie: false, etapes: etapes };
+};

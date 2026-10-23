@@ -44,7 +44,8 @@ TPMS.GEOMETRIE_VELO = {
 //             jourDepart (0 = lundi), styleCycliste, chambre,
 //             pressionAVBar, pressionARBar, volumePneuL, largeurPneuMm,
 //             vehiculesVoisins (nombre de vélos équipés autour), planning,
-//             masseCyclisteKg }
+//             masseCyclisteKg, capteursV2 (true = capteurs « version 2 »,
+//             adresse changeante et trames signées, voir logique/trame2.js) }
 TPMS.creerMonde = function (options) {
   var o = options;
   var graine = o.graine >>> 0;
@@ -97,6 +98,7 @@ TPMS.creerMonde = function (options) {
     actions: [],                    // journal des actions (pour le rejeu)
     actionsAJouer: [],              // actions d'un rejeu, en attente
     planning: [],                   // sorties programmées (semaine type)
+    reseauMouchards: TPMS.creerReseauMouchards(graine),   // espions Bluetooth en ville
     rafraichissementsEcran: [],     // événements pour la page
     bipsAJouer: 0
   };
@@ -122,6 +124,20 @@ TPMS.creerMonde = function (options) {
       plageMaxBar: o.plageCapteurBar || 3.5
     });
   });
+
+  // Capteurs v2 : une clé secrète de 16 octets par capteur, partagée avec
+  // le boîtier à l'appairage (QR code dans la boîte, par exemple).
+  if (o.capteursV2) {
+    var aleaCles = TPMS.creerAleaNomme(graine, "cles");
+    var cles = {};
+    ["AV", "AR"].forEach(function (pos) {
+      var cle = new Uint8Array(16);
+      for (var q = 0; q < 16; q++) cle[q] = Math.floor(aleaCles() * 256);
+      cles[pos] = cle;
+      m.capteurs[pos].cleV2 = cle;
+    });
+    m.boitier.reglages.clesV2 = cles;
+  }
 
   // Vélos voisins équipés de capteurs TPMS (ils croisent notre route)
   var aleaVoisins = TPMS.creerAleaNomme(graine, "voisins");
@@ -212,6 +228,12 @@ function appliquerAction(m, a) {
     case "recharge": m.vbusV = a.branche ? 5 : 0; break;
     case "reglage": appliquerReglage(b, a.cle, a.valeur); break;
     case "protection": b.reglages.protections[a.cle] = a.valeur; break;
+    case "mitm":   // attaque de l'appairage (démonstration)
+      m.aleaMitm = m.aleaMitm || TPMS.creerAleaNomme(m.graine, "mitm");
+      m.dernierMitm = TPMS.liaisonAttaqueHommeDuMilieu(b, a.mode, m.tMs, function () {
+        return String(Math.floor(m.aleaMitm() * 1000000)).padStart(6, "0");
+      });
+      break;
     case "pirate":
       Object.assign(m.pirate, a.pirate || {});
       Object.assign(m.pirateMonde, a.monde || {});
@@ -452,6 +474,13 @@ function unPas(m, dtS) {
       });
     });
   });
+  // Les espions postés en ville écoutent nos deux capteurs.
+  var nosAnnonces = [];
+  emissions.forEach(function (e) {
+    nosAnnonces.push({ tMs: e.tMs, octets: e.octets, position: e.emetteur.position, extraPerteDb: e.extraPerteDb });
+  });
+  TPMS.mouchardsEcouter(m.reseauMouchards, nosAnnonces, function (lat, lon) { return TPMS.mondeVersMetres(m, lat, lon); }, m.canal);
+
   m.voisins.forEach(function (v) {
     v.decalageM += v.sens * v.vitesseMs * dtS;
     // Un flux de cyclistes : celui qui s'est éloigné de plus de 300 m est
@@ -548,15 +577,50 @@ function emissionsPirate(m, t, dtS, base, cap, emissions) {
     emissions.push({ id: "brouillage@" + t, source: "pirate", tMs: t - dtS * 500, octets: new Uint8Array(0), type: "brouillage", emetteur: noeud, extraPerteDb: 0 });
   }
   if (!p.actif || pm.brouillage) { p.prochaineEmissionMs = t; return; }
+  var identite = {
+    numero: m.capteurs[p.cible].numero || (p.cible === "AV" ? 1 : 2),
+    adresse: TPMS.adresseDepuisTexte(m.boitier.reglages.appairage[p.cible]),
+    temperatureC: m.capteurs[p.cible].temperatureCapteurC || m.instant.temperatureC,
+    batteriePct: 90
+  };
+
+  // Pirate SYNCHRONISÉ (pire cas) : il a appris le rythme du capteur et
+  // émet exactement en même temps que lui, plus fort. Par effet de
+  // capture, le boîtier ne reçoit que la trame du pirate : le rythme
+  // paraît normal et la vraie trame ne passe jamais.
+  if (p.attaque === "synchro") {
+    var visees = emissions.filter(function (e) { return e.source === p.cible && e.type === "annonce"; });
+    visees.forEach(function (e) {
+      var fausse = TPMS.pirateTrame(p, identite);
+      if (fausse) emissions.push({ id: "pirate@" + e.tMs, source: "pirate", tMs: e.tMs + 0.01, octets: fausse, type: "annonce", emetteur: noeud, extraPerteDb: 0 });
+    });
+    p.prochaineEmissionMs = t;
+    return;
+  }
+
+  // INONDATION : des centaines d'annonces par seconde, avec des adresses
+  // tirées au hasard. Elles occupent la radio (collisions) et obligent le
+  // boîtier à les examiner une à une.
+  if (p.attaque === "inondation") {
+    pm.alea = pm.alea || TPMS.creerAleaNomme(m.graine, "inondation");
+    var nb = Math.round(TPMS.PIRATE_INONDATION_PAR_S * dtS);
+    for (var q = 0; q < nb; q++) {
+      var adresse = [];
+      for (var k = 0; k < 5; k++) adresse.push(Math.floor(pm.alea() * 256));
+      var tI = t - dtS * 1000 + (q + pm.alea()) * dtS * 1000 / nb;
+      emissions.push({
+        id: "inondation@" + tI, source: "pirate", tMs: tI, type: "annonce", emetteur: noeud, extraPerteDb: 0,
+        octets: TPMS.encoderTrame({ numero: 1 + Math.floor(pm.alea() * 2), adresse: adresse, pressionBar: 0.5 + 3 * pm.alea(), temperatureC: 20, batteriePct: 90, alarme: 0 })
+      });
+    }
+    p.prochaineEmissionMs = t;
+    return;
+  }
+
   while (p.prochaineEmissionMs <= t) {
     var tE = p.prochaineEmissionMs;
     p.prochaineEmissionMs += p.intervalleMs;
-    var octets = TPMS.pirateTrame(p, {
-      numero: m.capteurs[p.cible].numero || (p.cible === "AV" ? 1 : 2),
-      adresse: TPMS.adresseDepuisTexte(m.boitier.reglages.appairage[p.cible]),
-      temperatureC: m.capteurs[p.cible].temperatureCapteurC || m.instant.temperatureC,
-      batteriePct: 90
-    });
+    var octets = TPMS.pirateTrame(p, identite);
     if (octets === null) continue;
     emissions.push({ id: "pirate@" + tE, source: "pirate", tMs: tE, octets: octets, type: "annonce", emetteur: noeud, extraPerteDb: 0 });
   }
@@ -565,7 +629,7 @@ function emissionsPirate(m, t, dtS, base, cap, emissions) {
 function noterTrafic(m, e, r, verdict) {
   // Le pirate enregistre ce qu'il entend de sa cible.
   if (e.source === m.pirate.cible) TPMS.pirateEcouter(m.pirate, e.source, e.octets);
-  var dec = TPMS.decoderTrame(e.octets);
+  var dec = TPMS.decoderTrame(e.octets) || TPMS.decoderTrameV2(e.octets);
   m.trafic.unshift({
     tMs: e.tMs, source: e.source, octets: e.octets,
     pressionBar: dec ? dec.pressionBar : null,

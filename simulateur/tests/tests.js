@@ -15,6 +15,7 @@ if (typeof require !== "undefined") {
     "../../logique/alertes.js", "../../logique/securite.js",
     "../../logique/protocole.js", "../../logique/energie.js",
     "../../logique/statistiques.js", "../../logique/conseil.js",
+    "../../logique/sha256.js", "../../logique/journal.js", "../../logique/trame2.js",
     "../boitier/police5x7.js", "../boitier/epaper.js",
     "../boitier/ecran.js", "../boitier/liaison.js", "../boitier/boitier.js",
     "../sources/pirate.js"
@@ -516,6 +517,109 @@ function proche(a, b, tolerance) {
   verifier("conseil : un pneu large de VTT se gonfle bien moins (< 3 bar)", vtt.AR < 3 && vtt.AV < 3, vtt.AV + " / " + vtt.AR);
   var enfant = TPMS.pressionConseillee({ masseCyclisteKg: 20, masseVeloKg: 8, largeurPneuMm: 57, repartitionAV: 0.4 });
   verifier("conseil : jamais moins de 1 bar", enfant.AV === 1, enfant.AV);
+})();
+
+// ---------------------------------------------------------------------
+// SHA-256, HMAC et journal chaîné
+// ---------------------------------------------------------------------
+(function () {
+  function h(t) { return TPMS.enHexa(TPMS.sha256(TPMS.texteEnOctets(t))); }
+  // Vecteurs de test officiels (FIPS 180-4)
+  verifier("sha256 : message vide", h("") === "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", h(""));
+  verifier("sha256 : « abc »", h("abc") === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", h("abc"));
+  var long = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+  verifier("sha256 : message de 2 blocs", h(long) === "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1", h(long));
+  // RFC 4231, cas n° 2
+  var mac = TPMS.enHexa(TPMS.hmacSha256(TPMS.texteEnOctets("Jefe"), TPMS.texteEnOctets("what do ya want for nothing?")));
+  verifier("hmac-sha256 : vecteur RFC 4231", mac === "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843", mac);
+  verifier("utf-8 : « é » = 2 octets", TPMS.texteEnOctets("é").length === 2);
+
+  var j = TPMS.creerJournalSecurise();
+  ["Réveil", "AV : SIGNAL SUSPECT", "Code d'appairage faux (1/3)", "Mise en veille"].forEach(function (t, i) { TPMS.journalAjouter(j, i * 1000, t); });
+  verifier("journal : chaîne intacte", TPMS.journalVerifier(j) === -1);
+  j.lignes[1].texte = "Rien à signaler";   // on efface la trace de l'attaque
+  verifier("journal : ligne modifiée repérée (n° 1)", TPMS.journalVerifier(j) === 1, TPMS.journalVerifier(j));
+  var j2 = TPMS.creerJournalSecurise();
+  for (var k = 0; k < TPMS.JOURNAL_TAILLE + 10; k++) TPMS.journalAjouter(j2, k, "événement " + k);
+  verifier("journal : mémoire pleine, la chaîne se vérifie encore (ancre)", j2.lignes.length === TPMS.JOURNAL_TAILLE && TPMS.journalVerifier(j2) === -1);
+  var copie = TPMS.journalDerniereEmpreinte(j2);
+  j2.lignes.forEach(function (l, i) {   // réécriture complète, empreintes recalculées
+    l.texte = "faux " + i;
+    l.precedente = i === 0 ? j2.ancre : j2.lignes[i - 1].empreinte;
+    l.empreinte = TPMS.empreinteLigne(l.n, l.tMs, l.texte, l.precedente);
+  });
+  verifier("journal : réécriture complète invisible à la vérification seule (limite)", TPMS.journalVerifier(j2) === -1);
+  verifier("journal : … mais l'empreinte copiée sur le téléphone ne correspond plus", TPMS.journalDerniereEmpreinte(j2) !== copie);
+})();
+
+// ---------------------------------------------------------------------
+// Capteurs v2 : adresse privée, signature, compteur
+// ---------------------------------------------------------------------
+(function () {
+  var cle = new Uint8Array(16), autre = new Uint8Array(16);
+  for (var i = 0; i < 16; i++) { cle[i] = i * 17; autre[i] = 255 - i; }
+  var adr = TPMS.adressePrivee(cle, 0x12, 0x34);
+  verifier("v2 : le boîtier reconnaît l'adresse privée de son capteur", TPMS.adresseResolue(cle, adr));
+  verifier("v2 : une autre clé ne la reconnaît pas", !TPMS.adresseResolue(autre, adr));
+  var adr2 = TPMS.adressePrivee(cle, 0x9a, 0x01);
+  verifier("v2 : deux adresses du même capteur n'ont rien en commun", adr[2] !== adr2[2] || adr[3] !== adr2[3]);
+  var mesure = { numero: 1, pressionBar: 2.2, temperatureC: 20, batteriePct: 90, alarme: 0 };
+  var o = TPMS.encoderTrameV2(mesure, cle, adr, 41);
+  var d = TPMS.decoderTrameV2(o);
+  verifier("v2 : trame de 26 octets décodée (pression, compteur)", o.length === 26 && Math.abs(d.pressionBar - 2.2) < 1e-9 && d.compteur === 41);
+  verifier("v2 : signature valide", TPMS.signatureValide(cle, o));
+  var trafiquee = o.slice(); trafiquee[8] ^= 0x01;   // un bit de pression changé
+  verifier("v2 : un bit changé → signature fausse", !TPMS.signatureValide(cle, trafiquee));
+  verifier("v2 : une trame v1 n'est pas une trame v2", TPMS.decoderTrameV2(TPMS.encoderTrame({ numero: 1, adresse: [1, 2, 3, 4, 5], pressionBar: 2, temperatureC: 20, batteriePct: 90, alarme: 0 })) === null);
+
+  // Dans le boîtier
+  var b = TPMS.creerBoitier();
+  b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
+  b.reglages.clesV2 = { AV: cle, AR: autre };
+  verifier("v2 boîtier : trame signée acceptée", TPMS.boitierRecevoirTrame(b, o, 0) === "acceptee");
+  verifier("v2 boîtier : la même trame rejouée est refusée", TPMS.boitierRecevoirTrame(b, o, 3000) === "rejeu");
+  verifier("v2 boîtier : trame mal signée refusée", TPMS.boitierRecevoirTrame(b, trafiquee.map(function (x, i) { return i >= 18 && i < 22 ? (i === 18 ? 99 : 0) : x; }), 6000) === "signature-fausse");
+  var pirate = TPMS.encoderTrame({ numero: 1, adresse: TPMS.adresseDepuisTexte("EA:CA:3F:1B:07"), pressionBar: 0.3, temperatureC: 20, batteriePct: 90, alarme: 0 });
+  verifier("v2 boîtier : trame en clair du pirate ignorée", TPMS.boitierRecevoirTrame(b, pirate, 9000) === "inconnue");
+  verifier("v2 boîtier : compteur suivant accepté", TPMS.boitierRecevoirTrame(b, TPMS.encoderTrameV2(mesure, cle, adr2, 42), 12000) === "acceptee");
+})();
+
+// ---------------------------------------------------------------------
+// Rythme : rafale d'une vraie crevaison, inondation, homme du milieu
+// ---------------------------------------------------------------------
+(function () {
+  var r = TPMS.creerRythme(), intrusion = false;
+  // Vraie crevaison : une trame par seconde, pression qui ne fait que baisser.
+  for (var k = 0; k < 10; k++) intrusion = TPMS.controlerRythme(r, k * 1000, 2.2 - 0.25 * k) || intrusion;
+  verifier("rythme : la rafale d'une vraie crevaison n'est pas une intrusion", !intrusion);
+  var r2 = TPMS.creerRythme(), intrusion2 = false;
+  // Pirate mêlé au vrai capteur : 2,2 puis 0,3 puis 2,2… toutes les 0,5 s.
+  for (var q = 0; q < 10; q++) intrusion2 = TPMS.controlerRythme(r2, q * 500, q % 2 ? 0.3 : 2.2) || intrusion2;
+  verifier("rythme : pirate mêlé au vrai capteur toujours détecté", intrusion2);
+
+  var b = TPMS.creerBoitier();
+  b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
+  for (var s = 0; s < 8; s++) {
+    for (var n = 0; n < 80; n++) {
+      TPMS.boitierRecevoirTrame(b, TPMS.encoderTrame({ numero: 1, adresse: [n, s, 7, 7, 7], pressionBar: 2, temperatureC: 20, batteriePct: 90, alarme: 0 }), s * 1000 + n * 10);
+    }
+    TPMS.boitierMiseAJour(b, s * 1000 + 999);
+  }
+  verifier("inondation : 80 annonces inconnues/s pendant 5 s → radio saturée", b.radioSaturee);
+  verifier("inondation : affichée sur l'écran (SATURE)", TPMS.boitierVue(b, 8000).radioSaturee === true);
+  for (var c = 0; c < 12; c++) TPMS.boitierMiseAJour(b, 9000 + c * 1000);
+  verifier("inondation : retour au calme après 10 s", !b.radioSaturee);
+
+  var essais = 0;
+  function tirer() { essais++; return "000000"; }
+  var b1 = TPMS.creerBoitier();
+  var sans = TPMS.liaisonAttaqueHommeDuMilieu(b1, "sans-code", 0, tirer);
+  verifier("homme du milieu sans code : réussi, seuils changés", sans.reussie && b1.reglages.seuils.AV.basBar === 0.5);
+  var b2 = TPMS.creerBoitier();
+  b2.liaison.code = "123456"; b2.liaison.codeJusquaMs = 60000;   // code affiché, inconnu du pirate
+  var avec = TPMS.liaisonAttaqueHommeDuMilieu(b2, "code", 0, tirer);
+  verifier("homme du milieu avec code : échec après 3 essais, appairage bloqué",
+    !avec.reussie && essais === 3 && b2.liaison.bloqueJusquaMs > 0 && b2.reglages.seuils.AV.basBar === 1.8);
 })();
 
 // ---------------------------------------------------------------------

@@ -28,7 +28,9 @@ TPMS.dessinerEcran = function (e, vue) {
 
   // ---- Barre d'état ----
   TPMS.ecranTexte(e, 3, 3, "TPMS", 1, N);
-  if (vue.veille) {
+  if (vue.radioSaturee) {
+    TPMS.ecranTexte(e, 34, 3, "SATURE", 1, N);   // inondation d'annonces
+  } else if (vue.veille) {
     TPMS.ecranTexte(e, 34, 3, "VEILLE", 1, N);
   } else if (vue.eclairage) {
     TPMS.ecranTexte(e, 34, 3, "ECLAIRAGE", 1, N);

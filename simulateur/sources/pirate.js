@@ -17,16 +17,29 @@
 //                (par exemple la veille, pneu bien gonflé) et les
 //                renvoie telles quelles, octet pour octet. Exemple :
 //                masquer une crevaison en cours.
+//
+//   SYNCHRO    : usurpation « parfaite » (pire cas) : le pirate émet au
+//                même instant que le vrai capteur et plus fort que lui.
+//                Le boîtier ne reçoit que la fausse trame (effet de
+//                capture) et le rythme paraît normal. Avec les capteurs
+//                du commerce, aucune protection ne l'arrête : il faut des
+//                trames signées (capteurs v2, logique/trame2.js).
+//
+//   INONDATION : des centaines d'annonces par seconde à adresses
+//                aléatoires pour saturer la radio (déni de service).
+//                (Les deux dernières sont fabriquées dans moteur.js, qui
+//                connaît les instants d'émission du vrai capteur.)
 // =====================================================================
 var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
 TPMS.PIRATE_TAILLE_ENREGISTREMENT = 20;
+TPMS.PIRATE_INONDATION_PAR_S = 500;   // annonces par seconde pendant une inondation
 
 TPMS.creerPirate = function () {
   return {
     actif: false,
     cible: "AV",                  // roue visée
-    attaque: "usurpation",        // "usurpation" ou "rejeu"
+    attaque: "usurpation",        // "usurpation", "rejeu", "synchro" ou "inondation"
     pressionFausseBar: 0.3,       // pour l'usurpation
     intervalleMs: 1000,           // le pirate émet plus souvent que le vrai capteur
     prochaineEmissionMs: 0,

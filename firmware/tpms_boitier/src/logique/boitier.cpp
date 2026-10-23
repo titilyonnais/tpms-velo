@@ -25,6 +25,9 @@ void creerRoue(Roue* roue) {
   creerVerification(&roue->verification);
   creerRythme(&roue->rythme);
   roue->intrusionJusquaMs = -1;
+  roue->compteurConnu = false;
+  roue->dernierCompteur = 0;
+  roue->dernierRefusJournalMs = -1000000;
 }
 
 void creerBoitier(Boitier* b) {
@@ -64,10 +67,49 @@ void creerBoitier(Boitier* b) {
   b->ecranUrgent = true;
   creerLiaison(&b->liaison);
   b->journal = 0;
+  r->capteursV2 = false;
+  b->inconnuesSeconde = 0;
+  b->secondesSaturees = 0;
+  b->secondesCalmes = 0;
+  b->radioSaturee = false;
+  creerJournalSecurise(&b->journalSecurise);
 }
 
 void boitierJournal(Boitier* b, int32_t maintenantMs, const char* texte) {
   if (b->journal != 0) b->journal(maintenantMs, texte);
+  journalAjouter(&b->journalSecurise, maintenantMs, texte);   // copie chaînée
+}
+
+// Inondation : plus de 50 annonces inconnues/s pendant 5 s → radio saturée
+// (information seulement, pas de bip). Appelée une fois par seconde.
+static void surveillerSaturation(Boitier* b, int32_t maintenantMs) {
+  char texte[96];
+  int n = b->inconnuesSeconde;
+  b->inconnuesSeconde = 0;
+  if (n > SEUIL_INONDATION_PAR_S) {
+    b->secondesSaturees++;
+    b->secondesCalmes = 0;
+    if (!b->radioSaturee && b->secondesSaturees >= DUREE_INONDATION_S) {
+      b->radioSaturee = true;
+      b->ecranUrgent = true;
+      snprintf(texte, sizeof(texte), "Radio saturée : %d annonces inconnues par seconde (inondation ?)", n);
+      boitierJournal(b, maintenantMs, texte);
+    }
+  } else {
+    b->secondesSaturees = 0;
+    if (b->radioSaturee && ++b->secondesCalmes >= DUREE_RETOUR_CALME_S) {
+      b->radioSaturee = false;
+      b->ecranUrgent = true;
+      boitierJournal(b, maintenantMs, "Radio redevenue normale");
+    }
+  }
+}
+
+// Journal d'un refus, au plus une fois par minute et par roue.
+static void journalRefus(Boitier* b, Roue* roue, int32_t maintenantMs, const char* texte) {
+  if (maintenantMs - roue->dernierRefusJournalMs < 60000) return;
+  roue->dernierRefusJournalMs = maintenantMs;
+  boitierJournal(b, maintenantMs, texte);
 }
 
 const char* texteResultat(Resultat r) {
@@ -78,6 +120,8 @@ const char* texteResultat(Resultat r) {
     case RESULTAT_INCONNUE:     return "inconnue";
     case RESULTAT_INTRUSION:    return "intrusion";
     case RESULTAT_HORS_LIMITES: return "hors-limites";
+    case RESULTAT_SIGNATURE_FAUSSE: return "signature-fausse";
+    case RESULTAT_REJEU:        return "rejeu";
     default:                    return "suspecte";
   }
 }
@@ -126,24 +170,58 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
   }
 
   Mesure mesure;
-  if (!decoderTrame(octets, longueur, &mesure)) {
-    b->stats.tramesInvalides++;
-    return RESULTAT_INVALIDE;
-  }
-
-  // 1. De quelle roue s'agit-il ?
-  Position position = protections->listeBlanche
-    ? positionCapteur(&b->reglages.appairage, mesure.adresse)
-    : positionParNumero(mesure.numero);
-  if (position == POSITION_AUCUNE) {
-    b->stats.tramesInconnues++;
-    return RESULTAT_INCONNUE;
+  Position position = POSITION_AUCUNE;
+  bool authentifiee = false;
+  if (b->reglages.capteursV2) {
+    // Capteurs v2 : seules les trames signées par NOS capteurs comptent.
+    MesureV2 v2;
+    if (decoderTrameV2(octets, longueur, &v2)) {
+      if (adresseResolue(b->reglages.clesV2[POS_AV], v2.mesure.adresse)) position = POS_AV;
+      else if (adresseResolue(b->reglages.clesV2[POS_AR], v2.mesure.adresse)) position = POS_AR;
+    }
+    if (position == POSITION_AUCUNE) {
+      b->stats.tramesInconnues++;
+      b->inconnuesSeconde++;
+      return RESULTAT_INCONNUE;
+    }
+    Roue* r2 = &b->roues[position];
+    if (!signatureValide(b->reglages.clesV2[position], octets)) {
+      b->stats.signaturesFausses++;
+      snprintf(texte, sizeof(texte), "%s : trame mal signée refusée (usurpation ?)", NOM_POSITION[position]);
+      journalRefus(b, r2, maintenantMs, texte);
+      return RESULTAT_SIGNATURE_FAUSSE;
+    }
+    if (r2->compteurConnu && v2.compteur <= r2->dernierCompteur) {
+      b->stats.rejeux++;
+      snprintf(texte, sizeof(texte), "%s : trame rejouée refusée (compteur déjà vu)", NOM_POSITION[position]);
+      journalRefus(b, r2, maintenantMs, texte);
+      return RESULTAT_REJEU;
+    }
+    r2->compteurConnu = true;
+    r2->dernierCompteur = v2.compteur;
+    mesure = v2.mesure;
+    authentifiee = true;   // signée par notre capteur : pas besoin du contrôle du rythme
+  } else {
+    if (!decoderTrame(octets, longueur, &mesure)) {
+      b->stats.tramesInvalides++;
+      b->inconnuesSeconde++;
+      return RESULTAT_INVALIDE;
+    }
+    // 1. De quelle roue s'agit-il ?
+    position = protections->listeBlanche
+      ? positionCapteur(&b->reglages.appairage, mesure.adresse)
+      : positionParNumero(mesure.numero);
+    if (position == POSITION_AUCUNE) {
+      b->stats.tramesInconnues++;
+      b->inconnuesSeconde++;
+      return RESULTAT_INCONNUE;
+    }
   }
   Roue* roue = &b->roues[position];
 
   // 2. Rythme : deux émetteurs avec la même identité ?
-  if (protections->rythme) {
-    if (controlerRythme(&roue->rythme, maintenantMs)) {
+  if (protections->rythme && !authentifiee) {
+    if (controlerRythme(&roue->rythme, maintenantMs, mesure.pressionBar)) {
       if (roue->intrusionJusquaMs <= maintenantMs) {
         b->stats.intrusions++;
         snprintf(texte, sizeof(texte), "%s : trames trop rapprochées, deux émetteurs → SIGNAL SUSPECT",
@@ -257,6 +335,7 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->enCharge = b->enCharge;
   vue->batterieBoitierPct = b->batteriePct;
   vue->appConnectee = b->liaison.connecte;
+  vue->radioSaturee = b->radioSaturee;
   strcpy(vue->codeAppairage, b->liaison.code);
   vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, &vue->roues[POS_AV]);
   vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, &vue->roues[POS_AR]);
@@ -288,6 +367,7 @@ void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue) {
 
 Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
   char texte[64];
+  if (!b->veille) surveillerSaturation(b, maintenantMs);
 
   // 1. Veille si le vélo ne roule plus depuis longtemps.
   if (!b->veille && maintenantMs - b->dernierMouvementMs > b->reglages.delaiVeilleMs) {
@@ -308,7 +388,10 @@ Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
     Position pos = (Position)i;
     Roue* roue = &b->roues[i];
     if (!b->veille) {
-      bool enMouvement = compteurVitesseKmh(&b->compteur, maintenantMs) > 0;
+      // Au-dessus de 10 km/h seulement : plus lentement, le capteur peut ne
+      // pas sentir la rotation et n'émettre qu'une fois par minute
+      // (défaut révélé par la semaine type du simulateur).
+      bool enMouvement = compteurVitesseKmh(&b->compteur, maintenantMs) > VITESSE_ROULAGE_SURE_KMH;
       Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs, enMouvement);
       if (etat != roue->etat) {
         roue->etat = etat;

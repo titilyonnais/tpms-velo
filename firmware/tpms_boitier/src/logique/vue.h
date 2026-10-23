@@ -35,6 +35,7 @@ struct Vue {
   bool enCharge;
   float batterieBoitierPct;
   bool appConnectee;
+  bool radioSaturee;      // inondation d'annonces détectée
   char codeAppairage[7];  // "" = pas de code (en JS : null)
   VueRoue roues[NB_ROUES];
   float vitesseKmh;
