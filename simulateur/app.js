@@ -26,7 +26,8 @@
     rayonRadio: 2.5, versionsRegistres: { AV: -1, AR: -1 }, schemaInsere: false,
     rssi: { AV: [], AR: [] }, derniereTrameVue: null, echanges: [], journal: [],
     vitesseReelle: 0, dernierToast: -Infinity,
-    sautJusquaMs: null              // avance rapide vers le prochain événement du planning
+    sautJusquaMs: null,             // avance rapide vers le prochain événement du planning
+    periodeStats: "jours"
   };
 
   function $(id) { return document.getElementById(id); }
@@ -89,7 +90,8 @@
       pressionARBar: parseFloat($("cfgPAR").value) || 2.4,
       vehiculesVoisins: parseInt($("cfgVoisins").value, 10) || 0,
       plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5,
-      planning: $("cfgPlanning").value === "semaine" ? "semaine" : undefined
+      planning: $("cfgPlanning").value === "semaine" ? "semaine" : undefined,
+      masseCyclisteKg: parseFloat($("cfgPoids").value) || 75
     };
   }
 
@@ -308,7 +310,8 @@
       var affiche = roue.mesure && roue.etat !== "INTRUSION" ? nombre(roue.mesure.pressionBar, 2) + " bar" : "–";
       tuile.querySelector("[data-sous-titre]").textContent = roue.etat === "ATTENTE"
         ? "Le boîtier attend la 1re annonce du capteur (jusqu'à 1 min vélo à l'arrêt)."
-        : "Boîtier : " + affiche + " · air " + nombre(p.temperatureAirC, 0) + " °C · pile " + nombre(c.pileTensionV, 2) + " V";
+        : "Boîtier : " + affiche + " · air " + nombre(p.temperatureAirC, 0) + " °C · pile " + nombre(c.pileTensionV, 2) + " V" +
+          " · conseillée " + nombre(conseilMonde()[pos], 1) + " bar" + texteRegonflage(roue, pos);
       var etat = roue.etat;
       puce(tuile.querySelector("[data-etat]"),
         texteEtatCourt(etat),
@@ -402,6 +405,50 @@
   // -------------------------------------------------------------------
   // Configuration
   // -------------------------------------------------------------------
+  // Pression conseillée pour le vélo et le cycliste de la simulation en cours.
+  function conseilMonde() {
+    var v = m.velo;
+    return TPMS.pressionConseillee({ masseCyclisteKg: v.masseCyclisteKg, masseVeloKg: v.masseVeloKg,
+      largeurPneuMm: v.largeurPneuMm, repartitionAV: v.repartitionAV });
+  }
+  // Pression conseillée pour ce qui est saisi dans la configuration.
+  function conseilFormulaire() {
+    var p = TPMS.parcoursParId($("cfgParcours").value);
+    var cle = p.type === "route" ? "route" : (p.type === "vtt" ? "vtt" : "ville");
+    var type = TPMS.TYPES_VELO[cle];
+    return { nom: cle === "vtt" ? "VTT" : cle, largeur: type.largeurPneuMm,
+      pressions: TPMS.pressionConseillee({ masseCyclisteKg: parseFloat($("cfgPoids").value) || 75, masseVeloKg: type.masseVeloKg,
+        largeurPneuMm: type.largeurPneuMm, repartitionAV: type.repartitionAV }) };
+  }
+  function afficherConseilFormulaire() {
+    var c = conseilFormulaire(), plage = parseFloat($("cfgPlage").value) || 3.5;
+    $("cfgConseil").textContent = "Conseillé pour ce vélo (" + c.nom + ", pneus de " + c.largeur + " mm) : " +
+      nombre(c.pressions.AV, 1) + " bar à l'avant, " + nombre(c.pressions.AR, 1) + " bar à l'arrière, selon la charge de chaque roue." +
+      (Math.max(c.pressions.AV, c.pressions.AR) > plage ? " Attention : c'est au-dessus de la plage des capteurs choisie." : "");
+  }
+  // " · regonfler dans 12 j" quand le boîtier a assez de recul.
+  function texteRegonflage(roue, pos) {
+    var jours = TPMS.predireRegonflage(roue.releves, m.boitier.reglages.seuils[pos].basBar);
+    if (jours === null) return "";
+    if (jours === Infinity) return " · pression stable";
+    return jours < 1 ? " · regonfler maintenant" : " · regonfler dans " + Math.floor(jours) + " j";
+  }
+
+  // Statistiques par jour ou par semaine, calculées sur l'enregistrement.
+  function afficherStatistiques() {
+    var jours = TPMS.statistiquesParJour(m.enregistrement, TPMS.LIPO_MAH);
+    var parJour = vue.periodeStats === "jours";
+    var lignes = parJour ? jours : TPMS.statistiquesParSemaine(jours);
+    var tete = "<tr><th>" + (parJour ? "Jour" : "Semaine") + "</th><th>Distance</th><th>Roulage</th>" +
+      "<th>P. moy. AV / AR</th><th>P. min AV / AR</th><th>Regonflages</th><th>En alerte</th><th>Batterie</th></tr>";
+    $("tableStats").innerHTML = tete + lignes.slice(-14).reverse().map(function (s) {
+      var nom = parJour ? (m.options.planning === "semaine" ? nomJour(s.jour) + " · J" : "J") + (s.jour + 1) : "S" + (s.jour + 1);
+      return "<tr><td>" + nom + "</td><td>" + nombre(s.km, 1) + " km</td><td>" + Math.round(s.minutesRoulage) + " min</td>" +
+        "<td>" + nombre(s.pMoyAV, 2) + " / " + nombre(s.pMoyAR, 2) + "</td><td>" + nombre(s.pMinAV, 2) + " / " + nombre(s.pMinAR, 2) + "</td>" +
+        "<td>" + s.regonflages + "</td><td>" + Math.round(s.minutesAlerte) + " min</td><td>" + nombre(s.mAhConsommes, 1) + " mAh</td></tr>";
+    }).join("");
+  }
+
   function afficherConfig() {
     var reelle = Math.round(2 * Math.PI * (m.velo.rayonRoulementAVM || m.velo.rayonRoueM) * 1000);
     $("txtCirconferenceReelle").textContent = "Circonférence réelle de la roue simulée : " + reelle + " mm. Choisis la plus proche pour que la vitesse et la distance soient justes.";
@@ -855,6 +902,7 @@
       ["Actions enregistrées", m.actions.length]
     ]);
     $("journal").innerHTML = lignesJournal(200);
+    afficherStatistiques();
   }
 
   // -------------------------------------------------------------------
@@ -1022,6 +1070,22 @@
       if (vue.sautJusquaMs !== null || !ev) { vue.sautJusquaMs = null; return; }
       vue.sautJusquaMs = ev.tMs;
     });
+    pilules($("choixPeriode"), function (bt) { vue.periodeStats = bt.dataset.periode; });
+    ["cfgPoids", "cfgParcours", "cfgPlage"].forEach(function (id) { $(id).addEventListener("change", afficherConseilFormulaire); });
+    $("cfgPoids").addEventListener("input", afficherConseilFormulaire);
+    $("btnConseil").addEventListener("click", function () {
+      var c = conseilFormulaire().pressions;
+      $("cfgPAV").value = c.AV.toFixed(1);
+      $("cfgPAR").value = c.AR.toFixed(1);
+      // Si les capteurs choisis ne mesurent pas si haut, on prend la plage suivante.
+      var plage = $("cfgPlage"), max = Math.max(c.AV, c.AR);
+      if (max > parseFloat(plage.value)) {
+        plage.value = max <= 5 ? "5" : "8";
+        plage.dispatchEvent(new Event("change"));
+        notifier("Plage des capteurs changée", "Capteurs 0 à " + plage.value + " bar, pour mesurer " + nombre(max, 1) + " bar.");
+      }
+    });
+    afficherConseilFormulaire();
     $("cfgPlanning").addEventListener("change", function () {
       $("cfgPlanningAide").hidden = $("cfgPlanning").value !== "semaine";
     });

@@ -189,6 +189,9 @@
               <label><span>Chambres à air</span><select id="cfgChambre"><option value="butyle">Butyle (standard)</option><option value="latex">Latex (perd vite)</option><option value="tubeless">Tubeless</option></select></label>
               <label><span>Pression avant</span><span class="champ-unite"><input type="number" id="cfgPAV" step="0.1" value="2.2"><i>bar</i></span></label>
               <label><span>Pression arrière</span><span class="champ-unite"><input type="number" id="cfgPAR" step="0.1" value="2.4"><i>bar</i></span></label>
+              <label><span>Poids du cycliste</span><span class="champ-unite"><input type="number" id="cfgPoids" min="30" max="150" step="1" value="75"><i>kg</i></span></label>
+              <p class="discret" id="cfgConseil"></p>
+              <button type="button" class="bouton" id="btnConseil">Utiliser les pressions conseillées</button>
               <label><span>Plage des capteurs</span>
                 <select id="cfgPlage">
                   <option value="3.5" selected>0 à 3,5 bar (hypothèse)</option>
@@ -397,6 +400,16 @@
             <svg id="grapheDonnees" viewBox="0 0 900 260" class="graphe"></svg>
             <p class="legende" id="legendeDonnees"></p>
           </article>
+          <article class="tuile large-12">
+            <header><h3>Statistiques</h3>
+              <div class="pilules petites" id="choixPeriode">
+                <button type="button" data-periode="jours" class="actif">Par jour</button>
+                <button type="button" data-periode="semaines">Par semaine</button>
+              </div>
+            </header>
+            <div class="tableau-defile"><table class="tableau" id="tableStats"></table></div>
+            <p class="discret">Calculé à partir de l'enregistrement : distance, temps de roulage, pression moyenne en roulant, pression minimale, regonflages repérés (hausse brusque de plus de 0,2 bar), temps passé en alerte et énergie consommée par le boîtier.</p>
+          </article>
           <article class="tuile large-5">
             <header><h3>Bilan</h3></header>
             <dl class="petites-mesures colonne" id="resume"></dl>
@@ -429,6 +442,8 @@
 <script src="../logique/securite.js"></script>
 <script src="../logique/protocole.js"></script>
 <script src="../logique/energie.js"></script>
+<script src="../logique/statistiques.js"></script>
+<script src="../logique/conseil.js"></script>
 <!-- Boîtier simulé -->
 <script src="boitier/police5x7.js"></script>
 <script src="boitier/epaper.js"></script>

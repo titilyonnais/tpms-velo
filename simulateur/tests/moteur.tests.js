@@ -168,6 +168,10 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
   verifier("semaine : boîtier en veille la plupart du temps", veilles > 7 * 24 * 60 * 0.8, veilles + " minutes");
   verifier("semaine : le chargeur a été branché", rechargee);
   verifier("semaine : batterie jamais sous 90 %", socMin > 0.9, socMin.toFixed(3));
+  // Après une semaine, le boîtier a assez de relevés pour prévoir le
+  // prochain regonflage (chambre butyle : environ 2 à 3 semaines).
+  var prevu = TPMS.boitierVue(a.boitier, a.tMs).roues.AV.joursRegonflage;
+  verifier("semaine : prochain regonflage prévu dans 3 à 60 jours", prevu !== null && prevu >= 3 && prevu <= 60, prevu);
   
   verifier("semaine : calculée en moins de 90 s", duree < 90000, duree + " ms");
   console.log("\n" + reussis + " réussis, " + rates + " en échec");

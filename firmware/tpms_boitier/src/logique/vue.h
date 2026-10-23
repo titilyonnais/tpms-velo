@@ -25,6 +25,7 @@ struct VueRoue {
   float pressionBar;      // pression AFFICHÉE (avec hystérésis)
   float temperatureC;
   uint8_t batteriePct;
+  float joursRegonflage;  // prévision ; JOURS_INCONNU (-1) = pas encore (en JS : null)
 };
 
 struct Vue {

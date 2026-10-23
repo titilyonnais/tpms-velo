@@ -32,6 +32,7 @@ TPMS.creerRoue = function () {
     nbTrames: 0,
     historique: TPMS.creerHistorique(),
     penteBarH: 0,
+    releves: TPMS.creerReleves(),   // un relevé par sortie, pour prévoir le regonflage
     etat: TPMS.ETAT.ATTENTE,
     acquittee: false,             // alerte acquittée par appui long
     verification: TPMS.creerVerification(),   // protection « vraisemblance »
@@ -200,7 +201,9 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
   }
   roue.dernierRecuMs = maintenantMs;
   roue.nbTrames++;
-  TPMS.historiqueAjouter(roue.historique, maintenantMs, TPMS.pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC));
+  var compensee = TPMS.pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC);
+  TPMS.historiqueAjouter(roue.historique, maintenantMs, compensee);
+  TPMS.relevesAjouter(roue.releves, maintenantMs, compensee);
   roue.penteBarH = TPMS.historiquePenteBarH(roue.historique);
   b.stats.tramesAcceptees++;
   return "acceptee";
@@ -265,7 +268,8 @@ TPMS.boitierVue = function (b, maintenantMs) {
     batterieBoitierPct: b.batteriePct,
     appConnectee: b.liaison.connecte,
     codeAppairage: b.liaison.code,
-    roues: { AV: TPMS.vueRoue(b.roues.AV), AR: TPMS.vueRoue(b.roues.AR) },
+    roues: { AV: TPMS.vueRoue(b.roues.AV, b.reglages.seuils.AV.basBar),
+             AR: TPMS.vueRoue(b.roues.AR, b.reglages.seuils.AR.basBar) },
     vitesseKmh: b.veille ? 0 : TPMS.compteurVitesseKmh(c, maintenantMs),
     distanceKm: TPMS.compteurDistanceKm(c),
     moyenneKmh: TPMS.compteurMoyenneKmh(c),
@@ -274,17 +278,18 @@ TPMS.boitierVue = function (b, maintenantMs) {
   };
 };
 
-TPMS.vueRoue = function (roue) {
+TPMS.vueRoue = function (roue, seuilBasBar) {
   // Signal suspect : la dernière valeur a peut-être été fabriquée par le
   // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
   if (roue.mesure === null || roue.etat === TPMS.ETAT.INTRUSION) {
-    return { etat: roue.etat, pressionBar: null };
+    return { etat: roue.etat, pressionBar: null, joursRegonflage: null };
   }
   return {
     etat: roue.etat,
     pressionBar: roue.pressionAffichee,
     temperatureC: roue.mesure.temperatureC,
-    batteriePct: roue.mesure.batteriePct
+    batteriePct: roue.mesure.batteriePct,
+    joursRegonflage: TPMS.predireRegonflage(roue.releves, seuilBasBar)   // null = pas encore de prévision
   };
 };
 

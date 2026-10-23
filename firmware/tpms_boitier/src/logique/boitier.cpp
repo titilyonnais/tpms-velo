@@ -18,6 +18,7 @@ void creerRoue(Roue* roue) {
   roue->dernierRecuMs = -1;
   roue->nbTrames = 0;
   creerHistorique(&roue->historique);
+  creerReleves(&roue->releves);
   roue->penteBarH = 0.0f;
   roue->etat = ETAT_ATTENTE;
   roue->acquittee = false;
@@ -192,7 +193,9 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
   }
   roue->dernierRecuMs = maintenantMs;
   roue->nbTrames++;
-  historiqueAjouter(&roue->historique, maintenantMs, pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC));
+  float compensee = pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC);
+  historiqueAjouter(&roue->historique, maintenantMs, compensee);
+  relevesAjouter(&roue->releves, maintenantMs, compensee);
   roue->penteBarH = historiquePenteBarH(&roue->historique);
   b->stats.tramesAcceptees++;
   return RESULTAT_ACCEPTEE;
@@ -255,8 +258,8 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->batterieBoitierPct = b->batteriePct;
   vue->appConnectee = b->liaison.connecte;
   strcpy(vue->codeAppairage, b->liaison.code);
-  vueRoue(&b->roues[POS_AV], &vue->roues[POS_AV]);
-  vueRoue(&b->roues[POS_AR], &vue->roues[POS_AR]);
+  vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, &vue->roues[POS_AV]);
+  vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, &vue->roues[POS_AR]);
   vue->vitesseKmh = b->veille ? 0.0f : compteurVitesseKmh(c, maintenantMs);
   vue->distanceKm = compteurDistanceKm(c);
   vue->moyenneKmh = compteurMoyenneKmh(c);
@@ -264,7 +267,7 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->dureeRoulageS = c->tempsRoulageMs / 1000.0f;
 }
 
-void vueRoue(const Roue* roue, VueRoue* vue) {
+void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue) {
   vue->etat = roue->etat;
   // Signal suspect : la dernière valeur a peut-être été fabriquée par le
   // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
@@ -273,12 +276,14 @@ void vueRoue(const Roue* roue, VueRoue* vue) {
     vue->pressionBar = 0.0f;
     vue->temperatureC = 0.0f;
     vue->batteriePct = 0;
+    vue->joursRegonflage = JOURS_INCONNU;
     return;
   }
   vue->connue = true;
   vue->pressionBar = roue->pressionAffichee;
   vue->temperatureC = roue->mesure.temperatureC;
   vue->batteriePct = roue->mesure.batteriePct;
+  vue->joursRegonflage = predireRegonflage(&roue->releves, seuilBasBar);
 }
 
 Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {

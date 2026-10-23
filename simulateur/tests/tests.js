@@ -14,6 +14,7 @@ if (typeof require !== "undefined") {
     "../../logique/trame.js", "../../logique/vitesse.js", "../../logique/fuite.js",
     "../../logique/alertes.js", "../../logique/securite.js",
     "../../logique/protocole.js", "../../logique/energie.js",
+    "../../logique/statistiques.js", "../../logique/conseil.js",
     "../boitier/police5x7.js", "../boitier/epaper.js",
     "../boitier/ecran.js", "../boitier/liaison.js", "../boitier/boitier.js",
     "../sources/pirate.js"
@@ -428,6 +429,93 @@ function proche(a, b, tolerance) {
   TPMS.ecranPixel(e, 500, 500, TPMS.NOIR);   // ne doit pas planter
   verifier("écran : pixel hors écran ignoré", true);
   verifier("durée en texte", TPMS.dureeEnTexte(4965) === "1:22:45", TPMS.dureeEnTexte(4965));
+})();
+
+// ---------------------------------------------------------------------
+// Prévision du prochain regonflage
+// ---------------------------------------------------------------------
+(function () {
+  var JOUR = 86400000;
+  // Butyle : −0,03 bar par jour, un relevé toutes les 12 h.
+  var r = TPMS.creerReleves();
+  for (var k = 0; k <= 8; k++) TPMS.relevesAjouter(r, k * JOUR / 2, 2.2 - 0.03 * k / 2);
+  // Après 4 jours : 2,08 bar ; seuil 1,8 → (2,08 − 1,8) / 0,03 = 9,33 jours
+  var jours = TPMS.predireRegonflage(r, 1.8);
+  verifier("prévision : perte de 0,03 bar/j → seuil bas dans 9,3 jours", proche(jours, 9.333, 0.01), jours);
+  verifier("prévision : texte écran « 9J »", TPMS.texteJours(jours) === "9J", TPMS.texteJours(jours));
+
+  var court = TPMS.creerReleves();
+  for (var i = 0; i < 4; i++) TPMS.relevesAjouter(court, i * 4 * 3600000, 2.2 - 0.01 * i);
+  verifier("prévision : moins de 2 jours de recul → pas de prévision", TPMS.predireRegonflage(court, 1.8) === null);
+  verifier("prévision : texte écran « -- » sans prévision", TPMS.texteJours(null) === "--");
+
+  var stable = TPMS.creerReleves();
+  for (var j = 0; j <= 6; j++) TPMS.relevesAjouter(stable, j * JOUR / 2, 2.2 + (j % 2 ? 0.005 : -0.005));
+  var js = TPMS.predireRegonflage(stable, 1.8);
+  verifier("prévision : pression stable → infini, texte « >60J »", js === Infinity && TPMS.texteJours(js) === ">60J", js);
+
+  verifier("prévision : un relevé à moins de 3 h du précédent est ignoré",
+    TPMS.relevesAjouter(r, 4 * JOUR + 3600000, 2.07) === false);
+  TPMS.relevesAjouter(r, 5 * JOUR, 2.5);   // regonflage
+  verifier("prévision : un regonflage efface les anciens relevés", r.tMs.length === 1, r.tMs.length);
+  verifier("prévision : déjà sous le seuil → 0 jour", TPMS.joursAvantSeuil(1.7, -0.03, 1.8) === 0);
+
+  // Dans le boîtier : les trames acceptées alimentent les relevés.
+  var b = TPMS.creerBoitier();
+  b.reglages.ecouteFenetreMs = b.reglages.ecoutePeriodeMs;
+  for (var d = 0; d < 6; d++) {
+    var t = d * JOUR / 2;
+    TPMS.boitierRecevoirTrame(b, TPMS.encoderTrame({ numero: 1, adresse: [0xEA, 0xCA, 0x3F, 0x1B, 0x07],
+      pressionBar: 2.2 - 0.03 * d / 2, temperatureC: 20, batteriePct: 90, alarme: 0 }), t);
+  }
+  var vue = TPMS.boitierVue(b, 3 * JOUR);
+  verifier("prévision : le boîtier prévoit le regonflage de la roue avant (≈ 10,8 j)",
+    vue.roues.AV.joursRegonflage !== null && proche(vue.roues.AV.joursRegonflage, 10.83, 0.2), vue.roues.AV.joursRegonflage);
+})();
+
+// ---------------------------------------------------------------------
+// Statistiques
+// ---------------------------------------------------------------------
+(function () {
+  // Deux jours : une sortie de 10 min à 18 km/h le jour 0, un regonflage
+  // de l'arrière et une sortie avec 2 min d'alerte le jour 1.
+  var points = [], t = 0;
+  function point(jour, v, d, pAV, pAR, etat, soc) {
+    points.push({ tMs: t, jour: jour, vitesseKmh: v, distanceKm: d, pAV: pAV, pAR: pAR, etatAV: etat, etatAR: "OK", soc: soc });
+  }
+  for (var s = 0; s <= 600; s++) { point(0, 18, 18 * s / 3600, 2.2, 2.4, "OK", 1 - s / 600 * 0.01); t += 1000; }
+  t = 86400000;
+  point(1, 0, 0, 2.1, 2.3, "OK", 0.99); t += 60000;
+  point(1, 0, 0, 2.1, 2.8, "OK", 0.99); t += 1000;   // regonflage arrière
+  for (var s2 = 0; s2 <= 300; s2++) { point(1, 20, 20 * s2 / 3600, 2.1, 2.8, s2 < 120 ? "BASSE" : "OK", 0.99); t += 1000; }
+  var jours = TPMS.statistiquesParJour(points, 500);
+  verifier("stats : 2 jours", jours.length === 2, jours.length);
+  verifier("stats : jour 1 = 3 km en 10 min", proche(jours[0].km, 3, 0.01) && proche(jours[0].minutesRoulage, 10, 0.05),
+    jours[0].km + " km, " + jours[0].minutesRoulage + " min");
+  verifier("stats : pression moyenne avant en roulant = 2,2 bar", proche(jours[0].pMoyAV, 2.2, 1e-9), jours[0].pMoyAV);
+  verifier("stats : 5 mAh consommés (1 % de 500 mAh)", proche(jours[0].mAhConsommes, 5, 0.01), jours[0].mAhConsommes);
+  verifier("stats : nouvelle sortie le jour 2, compteur reparti de 0 → 1,67 km", proche(jours[1].km, 1.667, 0.01), jours[1].km);
+  verifier("stats : 1 regonflage repéré le jour 2", jours[1].regonflages === 1, jours[1].regonflages);
+  verifier("stats : 2 min en alerte le jour 2", proche(jours[1].minutesAlerte, 2, 0.05), jours[1].minutesAlerte);
+  var semaines = TPMS.statistiquesParSemaine(jours);
+  verifier("stats : la semaine additionne les jours (4,67 km, 1 regonflage)",
+    semaines.length === 1 && proche(semaines[0].km, 4.667, 0.01) && semaines[0].regonflages === 1, semaines[0].km);
+})();
+
+// ---------------------------------------------------------------------
+// Pression conseillée
+// ---------------------------------------------------------------------
+(function () {
+  var route = TPMS.pressionConseillee({ masseCyclisteKg: 75, masseVeloKg: 8.5, largeurPneuMm: 25, repartitionAV: 0.4 });
+  // 83,5 kg × 60 % = 50,1 kg sur l'arrière ≈ la charge de référence → 6,5 bar
+  verifier("conseil : route 25 mm, 75 kg → 6,5 bar à l'arrière", route.AR === 6.5, route.AR);
+  verifier("conseil : l'avant, moins chargé, est moins gonflé", route.AV < route.AR, route.AV);
+  var lourd = TPMS.pressionConseillee({ masseCyclisteKg: 100, masseVeloKg: 8.5, largeurPneuMm: 25, repartitionAV: 0.4 });
+  verifier("conseil : un cycliste plus lourd gonfle plus", lourd.AR > route.AR, lourd.AR);
+  var vtt = TPMS.pressionConseillee({ masseCyclisteKg: 75, masseVeloKg: 13.5, largeurPneuMm: 57, repartitionAV: 0.4 });
+  verifier("conseil : un pneu large de VTT se gonfle bien moins (< 3 bar)", vtt.AR < 3 && vtt.AV < 3, vtt.AV + " / " + vtt.AR);
+  var enfant = TPMS.pressionConseillee({ masseCyclisteKg: 20, masseVeloKg: 8, largeurPneuMm: 57, repartitionAV: 0.4 });
+  verifier("conseil : jamais moins de 1 bar", enfant.AV === 1, enfant.AV);
 })();
 
 // ---------------------------------------------------------------------

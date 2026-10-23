@@ -53,4 +53,36 @@ float penteMoindresCarresParHeure(const int32_t* tMs, const float* valeurs, int 
 // prendre un pneu qui refroidit pour une fuite.
 float pressionCompenseeBar(float pressionRelBar, float temperatureC);
 
+// ---------------------------------------------------------------------
+// Prévision du prochain regonflage (sur plusieurs jours)
+// ---------------------------------------------------------------------
+// Un relevé au plus toutes les 3 h (en pratique : un par sortie), compensé
+// en température ; on prolonge la droite des moindres carrés jusqu'au
+// seuil bas :  jours restants = (pression − seuil bas) / perte par jour.
+const int RELEVES_TAILLE = 30;                    // ≈ 2 semaines à 2 sorties par jour
+const int32_t RELEVE_ECART_MS = 3L * 3600000L;    // au plus un relevé toutes les 3 h
+const int32_t RELEVES_DUREE_MIN_MS = 2L * 86400000L;  // au moins 2 jours de recul
+const int RELEVES_NB_MIN = 4;                     // et au moins 4 relevés
+const float PENTE_STABLE_BAR_JOUR = -0.005f;      // au-dessus : pression stable
+const int PREVISION_MAX_JOURS = 60;               // au-delà : ">60J"
+const float JOURS_INCONNU = -1.0f;                // en JS : null (pas encore de prévision)
+
+// Mémoire : 30 × (4 + 4) = 240 octets par roue.
+struct Releves {
+  int32_t tMs[RELEVES_TAILLE];
+  float pression[RELEVES_TAILLE];
+  int n;
+};
+
+void creerReleves(Releves* r);
+// Ajoute un relevé si le précédent date d'au moins 3 h ; un regonflage
+// (hausse de plus de 0,2 bar) efface les anciens relevés.
+bool relevesAjouter(Releves* r, int32_t tMs, float pressionBar);
+// Jours avant le seuil bas à perte constante (INFINITY si stable, 0 si dépassé).
+float joursAvantSeuil(float pressionBar, float penteBarJour, float seuilBasBar);
+// Prévision ; JOURS_INCONNU tant qu'il n'y a pas assez de recul.
+float predireRegonflage(const Releves* r, float seuilBasBar);
+// Texte court pour l'écran : "--", "12J", ">60J" (texte : 8 octets au moins).
+void texteJours(float jours, char* texte);
+
 #endif

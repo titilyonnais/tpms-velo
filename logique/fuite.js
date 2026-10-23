@@ -105,3 +105,72 @@ TPMS.penteMoindresCarresParHeure = function (tMs, valeurs) {
   if (denominateur === 0) return 0;
   return numerateur / denominateur;
 };
+
+// ---------------------------------------------------------------------
+// Prévision du prochain regonflage (sur plusieurs jours)
+// ---------------------------------------------------------------------
+// Même une chambre à air en bon état perd de l'air : environ 0,03 bar
+// par jour pour du butyle. L'historique ci-dessus ne couvre que 20 min ;
+// pour prévoir QUAND la pression passera sous le seuil bas, on garde en
+// plus un « relevé » au plus toutes les 3 h (en pratique : un par sortie),
+// compensé en température, et on prolonge la droite des moindres carrés.
+//
+//   jours restants = (pression actuelle − seuil bas) / perte par jour
+TPMS.RELEVES_TAILLE = 30;                  // ≈ 2 semaines à 2 sorties par jour
+TPMS.RELEVE_ECART_MS = 3 * 3600000;        // au plus un relevé toutes les 3 h
+TPMS.RELEVES_DUREE_MIN_MS = 2 * 86400000;  // au moins 2 jours de recul
+TPMS.RELEVES_NB_MIN = 4;                   // et au moins 4 relevés
+// Au-dessus de −0,005 bar/jour, la baisse est noyée dans le bruit du
+// capteur (±0,01 bar) : on considère la pression comme stable.
+TPMS.PENTE_STABLE_BAR_JOUR = -0.005;
+TPMS.PREVISION_MAX_JOURS = 60;             // au-delà, on affiche « >60J »
+
+TPMS.creerReleves = function () {
+  return { tMs: [], pression: [] };
+};
+
+// Ajoute un relevé si le précédent date d'au moins 3 h.
+// Un regonflage (hausse de plus de 0,2 bar) efface les anciens relevés.
+TPMS.relevesAjouter = function (r, tMs, pressionBar) {
+  var n = r.tMs.length;
+  if (n > 0) {
+    if (tMs - r.tMs[n - 1] < TPMS.RELEVE_ECART_MS) return false;
+    if (pressionBar - r.pression[n - 1] > TPMS.HISTO_SAUT_REGONFLAGE) {
+      r.tMs = [];
+      r.pression = [];
+    }
+  }
+  r.tMs.push(tMs);
+  r.pression.push(pressionBar);
+  if (r.tMs.length > TPMS.RELEVES_TAILLE) {
+    r.tMs.shift();
+    r.pression.shift();
+  }
+  return true;
+};
+
+// Jours avant d'atteindre le seuil bas, à perte constante.
+// Infinity si la pression est stable, 0 si le seuil est déjà dépassé.
+// (Aussi utilisée par l'application, avec son propre historique.)
+TPMS.joursAvantSeuil = function (pressionBar, penteBarJour, seuilBasBar) {
+  if (penteBarJour > TPMS.PENTE_STABLE_BAR_JOUR) return Infinity;
+  var jours = (pressionBar - seuilBasBar) / -penteBarJour;
+  return jours < 0 ? 0 : jours;
+};
+
+// Prévision à partir des relevés du boîtier.
+// Retourne null tant qu'il n'y a pas assez de recul.
+TPMS.predireRegonflage = function (r, seuilBasBar) {
+  var n = r.tMs.length;
+  if (n < TPMS.RELEVES_NB_MIN) return null;
+  if (r.tMs[n - 1] - r.tMs[0] < TPMS.RELEVES_DUREE_MIN_MS) return null;
+  var penteJour = TPMS.penteMoindresCarresParHeure(r.tMs, r.pression) * 24;
+  return TPMS.joursAvantSeuil(r.pression[n - 1], penteJour, seuilBasBar);
+};
+
+// Texte court pour l'écran : "--" (pas encore de prévision), "12J", ">60J".
+TPMS.texteJours = function (jours) {
+  if (jours === null) return "--";
+  if (jours > TPMS.PREVISION_MAX_JOURS) return ">" + TPMS.PREVISION_MAX_JOURS + "J";
+  return Math.floor(jours) + "J";
+};

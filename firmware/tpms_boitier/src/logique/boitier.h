@@ -49,6 +49,7 @@ struct Roue {
   int32_t dernierRecuMs;        // -1 = jamais
   uint32_t nbTrames;
   Historique historique;
+  Releves releves;              // un relevé par sortie, pour prévoir le regonflage
   float penteBarH;
   Etat etat;
   bool acquittee;               // alerte acquittée par appui long
@@ -152,7 +153,7 @@ void boitierBouton(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs)
 
 // Les valeurs à afficher, préparées pour ecran.cpp.
 void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue);
-void vueRoue(const Roue* roue, VueRoue* vue);
+void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue);
 
 // Appelée une fois par seconde.
 // Retourne les sorties à piloter : LED d'alerte, bip, LED d'éclairage,

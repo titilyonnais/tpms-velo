@@ -326,10 +326,13 @@
         } else {
           diagnostic = "Perte normale. ";
         }
-        if (etat.reglages && tend.penteJour < 0) {
-          var jours = (tend.derniere - etat.reglages.seuils[r[1]].basBar) / -tend.penteJour;
-          diagnostic += jours <= 0 ? "Sous le seuil bas : regonfler."
-            : "Seuil bas atteint vers le " + date(transport.maintenant() + jours * 86400000, true).slice(0, 5) + ".";
+        if (etat.reglages) {
+          // Même calcul que la prévision du boîtier (logique/fuite.js).
+          var jours = TPMS.joursAvantSeuil(tend.derniere, tend.penteJour, etat.reglages.seuils[r[1]].basBar);
+          diagnostic += jours === Infinity ? "Pression stable."
+            : jours <= 0 ? "Sous le seuil bas : regonfler."
+            : "Seuil bas atteint vers le " + date(transport.maintenant() + jours * 86400000, true).slice(0, 5) +
+              " (dans " + Math.floor(jours) + " j).";
         }
       }
       lignes += "<tr><td>" + r[2] + "</td><td class=\"nombre\">" + pente + "</td><td>" + diagnostic + "</td></tr>";

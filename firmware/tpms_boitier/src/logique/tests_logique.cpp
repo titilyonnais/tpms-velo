@@ -130,6 +130,21 @@ static void testsFuite() {
 
   historiqueAjouter(&h, 1230 * 1000, 2.5f);
   verifier("regonflage : historique remis a zero", h.n == 1);
+
+  // Prévision : -0,03 bar par jour, un relevé toutes les 12 h pendant 4 jours.
+  static Releves r;
+  creerReleves(&r);
+  for (int k = 0; k <= 8; k++) relevesAjouter(&r, k * 43200000L, 2.2f - 0.03f * k / 2.0f);
+  float jours = predireRegonflage(&r, 1.8f);
+  verifier("prevision : seuil bas dans 9,3 jours", proche(jours, 9.333f, 0.02f));
+  char texte[8];
+  texteJours(jours, texte);
+  verifier("prevision : texte ecran 9J", strcmp(texte, "9J") == 0);
+  texteJours(JOURS_INCONNU, texte);
+  verifier("prevision : texte ecran -- sans prevision", strcmp(texte, "--") == 0);
+  verifier("prevision : stable -> infini", isinf(joursAvantSeuil(2.2f, 0.0f, 1.8f)));
+  relevesAjouter(&r, 5 * 86400000L, 2.5f);
+  verifier("prevision : regonflage -> releves effaces", r.n == 1);
 }
 
 // ---------------------------------------------------------------------
@@ -295,7 +310,7 @@ static void testsSecurite() {
   verifier("pirate + toutes protections : derniere valeur de confiance gardee",
            proche(bt.roues[POS_AV].mesure.pressionBar, 2.2f, 1e-6f));
   VueRoue vueAV;
-  vueRoue(&bt.roues[POS_AV], &vueAV);
+  vueRoue(&bt.roues[POS_AV], bt.reglages.seuils.roue[POS_AV].basBar, &vueAV);
   verifier("signal suspect : pression non affichee (-.--)", vueAV.connue == false);
 
   // En cas de doute sur l'émetteur, la 3e trame concordante ne confirme pas.

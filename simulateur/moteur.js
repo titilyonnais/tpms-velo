@@ -43,7 +43,8 @@ TPMS.GEOMETRIE_VELO = {
 // options = { graine, parcoursId, meteo (clé de TPMS.METEOS), heureDepartH,
 //             jourDepart (0 = lundi), styleCycliste, chambre,
 //             pressionAVBar, pressionARBar, volumePneuL, largeurPneuMm,
-//             vehiculesVoisins (nombre de vélos équipés autour), planning }
+//             vehiculesVoisins (nombre de vélos équipés autour), planning,
+//             masseCyclisteKg }
 TPMS.creerMonde = function (options) {
   var o = options;
   var graine = o.graine >>> 0;
@@ -65,7 +66,7 @@ TPMS.creerMonde = function (options) {
     meteo: meteo,
     instant: instant,
     point: depart,
-    velo: TPMS.creerVelo({ type: veloSelonParcours(parcours.type), graine: graine }),
+    velo: TPMS.creerVelo({ type: veloSelonParcours(parcours.type), graine: graine, masseCyclisteKg: o.masseCyclisteKg }),
     cycliste: TPMS.creerCycliste({ style: o.styleCycliste || styleSelonParcours(parcours.type), graine: graine }),
     enSortie: false,                // false = vélo garé (entre deux sorties)
     departSortieM: 0,

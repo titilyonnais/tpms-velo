@@ -5,6 +5,9 @@
 // LOGIQUE PURE : aucun appel Arduino.
 // =====================================================================
 #include "fuite.h"
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 
 void creerHistorique(Historique* h) {
   historiqueVider(h);
@@ -83,4 +86,50 @@ float penteMoindresCarresParHeure(const int32_t* tMs, const float* valeurs, int 
 float pressionCompenseeBar(float pressionRelBar, float temperatureC) {
   float absolue = pressionRelBar + 1.01325f;
   return absolue * 293.15f / (temperatureC + 273.15f) - 1.01325f;
+}
+
+// ---------------------------------------------------------------------
+// Prévision du prochain regonflage
+// ---------------------------------------------------------------------
+void creerReleves(Releves* r) {
+  r->n = 0;
+}
+
+bool relevesAjouter(Releves* r, int32_t tMs, float pressionBar) {
+  if (r->n > 0) {
+    if (tMs - r->tMs[r->n - 1] < RELEVE_ECART_MS) return false;
+    if (pressionBar - r->pression[r->n - 1] > HISTO_SAUT_REGONFLAGE) r->n = 0;
+  }
+  // Tableau plein : on oublie le plus ancien (décalage d'un cran).
+  if (r->n >= RELEVES_TAILLE) {
+    for (int i = 0; i < r->n - 1; i++) {
+      r->tMs[i] = r->tMs[i + 1];
+      r->pression[i] = r->pression[i + 1];
+    }
+    r->n--;
+  }
+  r->tMs[r->n] = tMs;
+  r->pression[r->n] = pressionBar;
+  r->n++;
+  return true;
+}
+
+float joursAvantSeuil(float pressionBar, float penteBarJour, float seuilBasBar) {
+  if (penteBarJour > PENTE_STABLE_BAR_JOUR) return INFINITY;
+  float jours = (pressionBar - seuilBasBar) / -penteBarJour;
+  return jours < 0.0f ? 0.0f : jours;
+}
+
+float predireRegonflage(const Releves* r, float seuilBasBar) {
+  int n = r->n;
+  if (n < RELEVES_NB_MIN) return JOURS_INCONNU;
+  if (r->tMs[n - 1] - r->tMs[0] < RELEVES_DUREE_MIN_MS) return JOURS_INCONNU;
+  float penteJour = penteMoindresCarresParHeure(r->tMs, r->pression, n) * 24.0f;
+  return joursAvantSeuil(r->pression[n - 1], penteJour, seuilBasBar);
+}
+
+void texteJours(float jours, char* texte) {
+  if (jours < 0.0f) { strcpy(texte, "--"); return; }
+  if (jours > PREVISION_MAX_JOURS) { snprintf(texte, 8, ">%dJ", PREVISION_MAX_JOURS); return; }
+  snprintf(texte, 8, "%dJ", (int)floorf(jours));
 }

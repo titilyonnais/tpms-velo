@@ -12,6 +12,7 @@
 // =====================================================================
 #include "ecran.h"
 #include "alertes.h"
+#include "fuite.h"
 #include "outils.h"
 #include "police5x7.h"
 #include <math.h>
@@ -129,7 +130,14 @@ void dessinerPageTrajet(Ecran* e, const Vue* vue) {
   char distance[16];
   nombreEnTexte(vue->distanceKm, 2, distance);
   snprintf(texte, sizeof(texte), "DISTANCE %s km", distance);
-  ecranTexte(e, 4, 188, texte, 1, NOIR);
+  ecranTexte(e, 4, 182, texte, 1, NOIR);
+
+  // Prévision : dans combien de jours chaque pneu passera sous son seuil bas.
+  char av[8], ar[8];
+  texteJours(vue->roues[POS_AV].joursRegonflage, av);
+  texteJours(vue->roues[POS_AR].joursRegonflage, ar);
+  snprintf(texte, sizeof(texte), "REGONFLER AV %s  AR %s", av, ar);
+  ecranTexte(e, 4, 192, texte, 1, NOIR);
 }
 
 void dureeEnTexte(float secondes, char* texte) {

@@ -17,6 +17,7 @@
 //   y = 120 ├──────────────┴───────────────┤
 //           │        23.4 km/h             │  page 1 : vitesse + distance
 //           │ DIST  12.34 km               │  page 2 : stats du trajet
+//           │                              │  + prochain regonflage prévu
 //   y = 199 └──────────────────────────────┘
 // =====================================================================
 var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
@@ -122,7 +123,10 @@ TPMS.dessinerPageTrajet = function (e, vue) {
   TPMS.ecranTexte(e, 4, 166, "TPS", 2, N);
   TPMS.ecranTexteDroite(e, 130, 166, TPMS.dureeEnTexte(vue.dureeRoulageS), 2, N);
 
-  TPMS.ecranTexte(e, 4, 188, "DISTANCE " + vue.distanceKm.toFixed(2) + " km", 1, N);
+  TPMS.ecranTexte(e, 4, 182, "DISTANCE " + vue.distanceKm.toFixed(2) + " km", 1, N);
+  // Prévision : dans combien de jours chaque pneu passera sous son seuil bas.
+  TPMS.ecranTexte(e, 4, 192, "REGONFLER AV " + TPMS.texteJours(vue.roues.AV.joursRegonflage) +
+    "  AR " + TPMS.texteJours(vue.roues.AR.joursRegonflage), 1, N);
 };
 
 // 4 965 s → "1:22:45"
