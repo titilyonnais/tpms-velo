@@ -1,0 +1,32 @@
+# Tests automatiques : à chaque envoi de code (push) sur GitHub, une
+# machine virtuelle lance toutes les suites de tests. Si un seul test
+# échoue, le commit est marqué d'une croix rouge et le badge du README
+# passe au rouge.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:   # bouton « Run workflow » pour relancer à la main
+
+jobs:
+  simulateur:
+    name: Simulateur et logique JS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toutes les suites de tests
+        run: node simulateur/tests/tout.js
+
+  firmware:
+    name: Logique C++ du firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler les tests de la logique C++ sur PC
+        run: g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
+      - name: Lancer les tests C++
+        run: ./tests_pc

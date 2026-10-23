@@ -1,5 +1,7 @@
 # Capteur de pression des pneus de vélo (TPMS)
 
+[![Tests](https://github.com/titilyonnais/tpms-velo/actions/workflows/tests.yml/badge.svg)](https://github.com/titilyonnais/tpms-velo/actions/workflows/tests.yml)
+
 Projet de BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité ».
 Auteur : Thibault MORRETTON.
 
