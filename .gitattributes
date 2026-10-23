@@ -1,0 +1,9 @@
+# Fins de ligne : toujours LF, quel que soit le PC (Windows, Linux, Mac).
+# Sans cette règle, Git sous Windows (core.autocrlf=true) extrait les fichiers
+# en CRLF et le test « schema-boitier.svg à jour » échoue, car le générateur
+# du schéma écrit en LF.
+* text=auto eol=lf
+
+# Fichiers binaires : jamais modifiés par Git.
+*.png binary
+*.pdf binary
