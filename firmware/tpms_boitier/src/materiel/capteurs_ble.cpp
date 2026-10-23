@@ -38,7 +38,8 @@ static bool enEcoute = false;
 
 // Mémoire des dernières trames, pour ignorer les copies.
 static const int NB_DERNIERES = 4;
-static uint8_t dernieresOctets[NB_DERNIERES][TAILLE_TRAME];
+static uint8_t dernieresOctets[NB_DERNIERES][TAILLE_DONNEES_MAX];
+static uint8_t dernieresLongueurs[NB_DERNIERES];
 static int32_t dernieresMs[NB_DERNIERES];
 static int prochaineCase = 0;
 
@@ -49,10 +50,11 @@ static void rappelScan(ble_gap_evt_adv_report_t* rapport) {
   uint8_t donnees[TAILLE_DONNEES_MAX];
   uint8_t n = Bluefruit.Scanner.parseReportByType(rapport, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA,
                                                   donnees, sizeof(donnees));
-  // En temps normal, on ne garde que les annonces de 18 octets : il y a
-  // des dizaines d'objets BLE autour (téléphones, montres...) qui
-  // rempliraient la file pour rien. En mode découverte, on garde tout.
-  bool garder = (n == TAILLE_TRAME) || (MODE_DECOUVERTE && n > 0);
+  // En temps normal, on ne garde que les annonces de 18 octets (capteurs
+  // du commerce) ou de 26 octets (capteurs « v2 », trame2.h) : il y a des
+  // dizaines d'objets BLE autour (téléphones, montres...) qui rempliraient
+  // la file pour rien. En mode découverte, on garde tout.
+  bool garder = (n == TAILLE_TRAME) || (n == TAILLE_TRAME_V2) || (MODE_DECOUVERTE && n > 0);
   if (garder && fileTrames != NULL) {
     TrameRecue t;
     t.tMs = (int32_t)millis();
@@ -94,14 +96,15 @@ void capteursFenetre(bool ecouter) {
 // Une annonce BLE est émise sur 3 canaux en quelques millisecondes : la
 // même trame peut arriver 2 ou 3 fois. Sans ce filtre, le contrôle du
 // rythme (securite.cpp) y verrait un second émetteur !
-static bool estUneCopie(const uint8_t* octets, int32_t tMs) {
+static bool estUneCopie(const uint8_t* octets, uint8_t longueur, int32_t tMs) {
   for (int i = 0; i < NB_DERNIERES; i++) {
-    if (tMs - dernieresMs[i] < COPIE_IGNOREE_MS &&
-        memcmp(dernieresOctets[i], octets, TAILLE_TRAME) == 0) {
+    if (tMs - dernieresMs[i] < COPIE_IGNOREE_MS && dernieresLongueurs[i] == longueur &&
+        memcmp(dernieresOctets[i], octets, longueur) == 0) {
       return true;
     }
   }
-  memcpy(dernieresOctets[prochaineCase], octets, TAILLE_TRAME);
+  memcpy(dernieresOctets[prochaineCase], octets, longueur);
+  dernieresLongueurs[prochaineCase] = longueur;
   dernieresMs[prochaineCase] = tMs;
   prochaineCase = (prochaineCase + 1) % NB_DERNIERES;
   return false;
@@ -130,12 +133,12 @@ void capteursTraiter(Boitier* b) {
   if (fileTrames == NULL) return;
   TrameRecue t;
   while (xQueueReceive(fileTrames, &t, 0) == pdTRUE) {
-    if (t.longueur != TAILLE_TRAME) {
+    if (t.longueur != TAILLE_TRAME && t.longueur != TAILLE_TRAME_V2) {
       // Seulement en mode découverte : on affiche, sans décoder.
-      ecrireTrame(&t, "longueur différente de 18 : format inconnu");
+      ecrireTrame(&t, "longueur différente de 18 et 26 : format inconnu");
       continue;
     }
-    if (estUneCopie(t.octets, t.tMs)) continue;
+    if (estUneCopie(t.octets, t.longueur, t.tMs)) continue;
     Resultat r = boitierRecevoirTrame(b, t.octets, t.longueur, t.tMs);
     if (JOURNAL_TRAMES || MODE_DECOUVERTE) ecrireTrame(&t, texteResultat(r));
   }

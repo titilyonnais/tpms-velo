@@ -34,9 +34,9 @@ Kit de surveillance de la pression des pneus de vélo : 2 capteurs TPMS BLE, un 
 - Les capteurs « version 2 » (adresse privée, compteur, signature) décrits dans le protocole BLE et l'analyse de risques sont une **proposition** pour une future version du produit, simulée seulement.
 - La présentation pour la soutenance est dans `presentation/index.html` (en ligne : https://titilyonnais.github.io/tpms-velo/presentation/).
 
-- Le boîtier imprimé en 3D est conçu mais n'a pas encore été rendu ni imprimé (OpenSCAD absent du PC de développement) ; la liaison boîtier → serveur du mode flotte est une hypothèse.
+- Le boîtier imprimé en 3D est conçu et rendu (OpenSCAD 2021.01, STL prêts dans `boitier-3d/stl/`), pas encore imprimé ; la liaison boîtier → serveur du mode flotte est une hypothèse.
 
 ## À venir
 
-- Premier rendu, impression et essais d'étanchéité du boîtier.
+- Impression et essais d'étanchéité du boîtier (pièce d'essai du joint d'abord).
 - Résultats des mesures sur le matériel réel (trames, consommations).

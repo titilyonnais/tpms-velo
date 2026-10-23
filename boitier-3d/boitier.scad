@@ -412,12 +412,14 @@ module cavite() {
 module tenons_garmin() {
     // col
     translate([0, 0, -qt_h_col]) cylinder(d = qt_col_d, h = qt_h_col + 0.01);
-    // tenons
+    // tenons : 0,01 mm de plus vers le haut pour CHEVAUCHER le col. Sans
+    // ce recouvrement, tenons et col ne se touchaient que par une face :
+    // le premier rendu OpenSCAD donnait deux morceaux séparés.
     translate([0, 0, -qt_h_col - qt_tenon_ep])
         intersection() {
-            cylinder(d = qt_tenon_d, h = qt_tenon_ep);
+            cylinder(d = qt_tenon_d, h = qt_tenon_ep + 0.01);
             translate([-qt_tenon_larg / 2, -qt_tenon_d / 2, 0])
-                cube([qt_tenon_larg, qt_tenon_d, qt_tenon_ep]);
+                cube([qt_tenon_larg, qt_tenon_d, qt_tenon_ep + 0.01]);
         }
 }
 

@@ -52,7 +52,7 @@ Sans serveur, la page `flotte/` tourne en mode démo dans le navigateur (lien «
 
 ## Boîtier imprimé en 3D
 
-`boitier-3d/boitier.scad` : modèle OpenSCAD paramétré, 46,0 × 64,4 × 28,0 mm, joint torique radial, fixation quart de tour. Il n'a pas encore été rendu ni imprimé. Détails : [`boitier-3d/README.md`](boitier-3d/README.md).
+`boitier-3d/boitier.scad` : modèle OpenSCAD paramétré, 46,0 × 64,4 × 28,0 mm, joint torique radial, fixation quart de tour. Rendu avec OpenSCAD 2021.01 : les quatre pièces sont fermées et d'un seul tenant, les STL sont prêts dans `boitier-3d/stl/` ; reste à imprimer et à essayer le joint. Détails : [`boitier-3d/README.md`](boitier-3d/README.md).
 
 ## Lancer le simulateur
 

@@ -186,12 +186,12 @@
 </section>
 
 <!-- ================================================================ 6 -->
-<section class="diapo" data-notes="Modèle OpenSCAD paramétré : les cotes sont calculées à partir des composants, chacune est marquée fiche, dessin, hypothèse ou choix. Joint radial plutôt que plat : un couvercle de 3 mm fléchirait trop entre les vis. Honnêteté : le modèle n'a jamais été rendu, OpenSCAD n'est pas installé sur ce PC.">
+<section class="diapo" data-notes="Modèle OpenSCAD paramétré : les cotes sont calculées à partir des composants, chacune est marquée fiche, dessin, hypothèse ou choix. Joint radial plutôt que plat : un couvercle de 3 mm fléchirait trop entre les vis. Rendu OpenSCAD 2021.01 : quatre pièces fermées et d'un seul tenant, STL prêts ; le premier rendu a révélé des tenons qui ne touchaient le col que par une face, corrigé. Reste à imprimer.">
   <p class="repere">Boîtier mécanique · OpenSCAD</p>
   <h2>Un boîtier de 46 × 64,4 × 28 mm, <em>dimensionné à partir des composants</em></h2>
   <div class="corps grille g-apercu">
     <figure class="apercu-3d">
-      <img src="../boitier-3d/apercu.svg" alt="Vues cotées du boîtier de guidon : dessus, côté, coupe">
+      <img src="../boitier-3d/rendus/eclate.png" alt="Rendu OpenSCAD du boîtier en vue éclatée : couvercle à fenêtre, coque, fixation de cintre">
     </figure>
     <div class="grille cartes-serrees" style="gap:12px; align-content:start">
       <div class="carte carte-accent">
@@ -207,8 +207,8 @@
         <p class="discret petit">Chaque cote marquée [FICHE], [DESSIN], [HYPOTHÈSE] ou [CHOIX]. PETG ou ASA : le PLA flue vers 60 °C au soleil.</p>
       </div>
       <div class="carte">
-        <span class="etiquette rouge">Non vérifié</span>
-        <p class="discret petit">Jamais rendu (OpenSCAD absent de ce PC) · étanchéité réelle · portée BLE dans le boîtier · son du buzzer à travers 1,2 mm.</p>
+        <span class="etiquette rouge">Pas encore imprimé</span>
+        <p class="discret petit">Rendu OpenSCAD fait : 4 pièces fermées, d'un seul tenant, STL prêts (un défaut corrigé : tenons qui ne touchaient le col que par une face). Restent l'impression, l'étanchéité réelle, la portée BLE et le son du buzzer.</p>
       </div>
     </div>
   </div>
@@ -928,7 +928,7 @@
         <tr><td>Consommations</td><td>valeurs de fiches techniques (63,7 j)</td><td>Résistance shunt et oscilloscope</td></tr>
         <tr><td>Appairage sur iPhone</td><td>Bluefy, code à 6 chiffres</td><td>Essai avec l'iPhone et le boîtier réel</td></tr>
         <tr><td>Firmware</td><td>109 tests C++ exécutés sur PC, jamais sur la carte</td><td>Compilation Arduino, tests de la logique sur le XIAO</td></tr>
-        <tr><td>Boîtier 3D</td><td>modèle OpenSCAD jamais rendu ; joint radial calculé</td><td>Rendu, pièce d'essai du joint (20 min), immersion 30 min à 1 m</td></tr>
+        <tr><td>Boîtier 3D</td><td>rendu OpenSCAD, STL prêts ; joint radial calculé</td><td>Impression, pièce d'essai du joint (20 min), immersion 30 min à 1 m</td></tr>
         <tr><td>Seuil d'inondation</td><td>50 annonces inconnues par seconde</td><td>Compter les annonces BLE dans une rue fréquentée</td></tr>
         <tr><td>Capteurs v2</td><td>proposition simulée</td><td>Demande des capteurs dont on écrit le programme</td></tr>
         <tr><td>Mode flotte</td><td>liaison boîtier → serveur supposée ; HTTP en démo</td><td>Choix passerelle ou LTE-M ; HTTPS et vraies clés en production</td></tr>
@@ -948,7 +948,7 @@
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>
-    <p class="discret">Réception du matériel → capture des vraies trames → mesure des consommations → rendu et impression du boîtier, essai du joint → essais sur le vélo.</p>
+    <p class="discret">Réception du matériel → capture des vraies trames → mesure des consommations → impression du boîtier, essai du joint → essais sur le vélo.</p>
   </div>
   <p class="note-bas" style="font-size:34px; color:var(--texte); font-weight:600">Merci. Questions ?</p>
 </section>

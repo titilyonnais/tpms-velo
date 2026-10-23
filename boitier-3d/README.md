@@ -8,7 +8,12 @@ Ce dossier contient le boîtier de guidon modélisé avec **OpenSCAD**. Il est p
 |---|---|
 | `boitier.scad` | Modèle paramétré. Les cotes sont regroupées par composant en tête de fichier, chacune avec sa source. |
 | `apercu.svg` | Vues cotées (dessus, arrière, gauche, avant, détail du joint), pour le dossier et la présentation. |
+| `stl/` | Pièces prêtes à trancher : `coque.stl`, `couvercle.stl`, `fixation_velo.stl`, `essai_joint.stl` (rendu complet OpenSCAD 2021.01). |
+| `rendus/` | Images du rendu complet : boîtier monté, vue éclatée, chaque pièce. |
+| `outils/` | Scripts Node.js : export et contrôle des pièces, vérification de la syntaxe et des cotes, aperçu coté. |
 | `README.md` | Ce document : choix de conception, impression, quincaillerie, montage, essais, cotes à mesurer. |
+
+![Rendu OpenSCAD : vue éclatée](rendus/eclate.png)
 
 ![Vues cotées du boîtier](apercu.svg)
 
@@ -18,7 +23,7 @@ Ce dossier contient le boîtier de guidon modélisé avec **OpenSCAD**. Il est p
 
 ## 1. Ouvrir le modèle et exporter les STL
 
-OpenSCAD est un logiciel gratuit (Windows, macOS, Linux) : https://openscad.org/downloads.html. Il n'est pas installé sur ce PC.
+OpenSCAD est un logiciel gratuit (Windows, macOS, Linux) : https://openscad.org/downloads.html. Version utilisée : **2021.01** (archive portable officielle, empreinte SHA-256 vérifiée). Les fichiers STL sont déjà exportés dans `stl/` : il suffit de les ouvrir dans le trancheur.
 
 1. Ouvrir `boitier.scad` dans OpenSCAD.
 2. **F5** : aperçu rapide, en couleurs, avec les composants en fantôme.
@@ -279,10 +284,7 @@ Chaque valeur se corrige dans `boitier.scad`. Le boîtier se recalcule seul, et 
 
 ## 8. Ce qui n'a pas pu être vérifié
 
-- **OpenSCAD n'est pas installé sur le PC de développement : le modèle n'a jamais été rendu.**
-  - La syntaxe a été contrôlée par un analyseur écrit pour l'occasion (parenthèses, accolades, points-virgules, noms de modules et de variables tous définis).
-  - Les cotes ont été vérifiées par un script de calcul qui reprend les mêmes formules : 42 règles respectées.
-  - Il reste à faire le premier rendu F6 et à regarder chaque pièce : forme, manifold, épaisseurs dans le trancheur.
+- **Le rendu, lui, est fait** (OpenSCAD 2021.01, 23/10/2026) : les quatre pièces se rendent sans avertissement, sont fermées (« Simple: yes ») et d'un seul tenant (voir § « Export et contrôles »). Il reste à regarder les épaisseurs dans le trancheur et à imprimer.
 - **Les cotes marquées « hypothèse »** (§ 7), en particulier la position de la zone active de l'écran, les dimensions des boutons, du buzzer et du connecteur magnétique.
 - **La compatibilité avec un vrai support Garmin** : les cotes des tenons ne viennent d'aucune fiche officielle.
 - **Le son du buzzer** à travers 1,2 mm de PETG.
@@ -291,14 +293,27 @@ Chaque valeur se corrige dans `boitier.scad`. Le boîtier se recalcule seul, et 
 - **La marge autour des inserts** n'est que de 0,7 mm tout en haut, à cause du chanfrein d'entrée (1,5 mm plus bas). Vérifier que la pose des inserts ne fait pas gonfler la paroi de l'alésage, et poser l'insert avec un fer pas trop chaud.
 - **L'étanchéité elle-même**, à valider par les essais du § 6.
 
-## Outils de vérification (sans OpenSCAD)
-
-OpenSCAD n'était pas installé quand le modèle a été écrit : il n'a donc pas encore été rendu. Trois petits scripts Node.js, dans `outils/`, remplacent ce contrôle en attendant :
+## Export et contrôles
 
 ```
-node boitier-3d/outils/verifier-syntaxe.js boitier-3d/boitier.scad    # parenthèses, accolades, points-virgules, modules
+node boitier-3d/outils/exporter.js                                   # rendu complet + STL + images + contrôles
+node boitier-3d/outils/composantes-stl.js boitier-3d/stl/coque.stl   # nombre de morceaux d'un STL
+node boitier-3d/outils/verifier-syntaxe.js boitier-3d/boitier.scad   # parenthèses, accolades, points-virgules, modules
 node boitier-3d/outils/verifier-cotes.js                             # 42 règles : parois ≥ 2 mm, gorge du joint, écrous, batterie…
 node boitier-3d/outils/generer-apercu.js boitier-3d/apercu.svg       # redessine les vues cotées
 ```
 
-Les paramètres sont recopiés à la main dans `verifier-cotes.js` et `generer-apercu.js` : si une cote change dans `boitier.scad`, il faut la changer aussi dans ces deux fichiers, puis régénérer `apercu.svg`. Première chose à faire en ouvrant le modèle dans OpenSCAD : un rendu complet (F6) de chaque pièce, pour vérifier qu'elle est bien fermée (« manifold ») avant l'export STL.
+`exporter.js` cherche OpenSCAD dans la variable d'environnement `OPENSCAD` (sinon à l'endroit où il est installé sur le PC de développement). Pour chaque pièce, il fait le rendu complet (comme F6), exporte le STL et vérifie trois choses : aucun avertissement d'OpenSCAD, objet fermé (« Simple: yes »), et pièce d'un seul tenant.
+
+| Pièce | Rendu | Triangles | Contrôles |
+|---|---|---|---|
+| `coque` | 36 s | 9 924 | fermée, 1 morceau |
+| `couvercle` | 25 s | 7 252 | fermée, 1 morceau |
+| `fixation_velo` | 12 s | 3 124 | fermée, 1 morceau |
+| `essai_joint` | 38 s | 6 268 | fermée, 1 morceau |
+
+Export avec `$fn = 96` (cercles plus lisses que les 64 côtés de l'aperçu), OpenSCAD 2021.01.
+
+**Défaut trouvé au premier rendu, et corrigé.** La coque sortait en **deux morceaux** : les tenons du quart de tour (10 × 27,4 × 2,5 mm) touchaient le col par une seule face, sans le chevaucher. OpenSCAD les gardait séparés ; un trancheur les aurait sans doute recollés, mais une jonction de surface nulle est fragile et ambiguë. Les tenons montent maintenant de 0,01 mm dans le col (module `tenons_garmin`). C'est le même piège que les `+ 0.01` déjà présents ailleurs dans le modèle : toujours faire chevaucher deux volumes à unir.
+
+Avant ce rendu, le modèle avait été vérifié sans OpenSCAD : analyseur de syntaxe (0 problème) et script de calcul des cotes (42 règles). Ces scripts restent utiles : les paramètres y sont recopiés à la main, donc si une cote change dans `boitier.scad`, il faut la changer aussi dans `verifier-cotes.js` et `generer-apercu.js`, puis relancer `exporter.js`.

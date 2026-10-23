@@ -105,7 +105,7 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 | Application Web Bluetooth | `app/` | Fonctionne avec le boîtier simulé ; à essayer avec le vrai boîtier |
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
 | Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé ; démo en ligne sans serveur |
-| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Modèle paramétré écrit ; jamais rendu ni imprimé |
+| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Modèle paramétré, rendu, STL prêts ; pas encore imprimé |
 | Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique |
 
 ---
@@ -538,9 +538,11 @@ Chaque cote est marquée de sa source : **[FICHE]** (fiche du composant), **[DES
 
 Le jeu radial entre la jupe et la paroi est de 0,2 mm, pour que le joint ne file pas dans l'interstice.
 
-**Vérifications faites sans OpenSCAD.** OpenSCAD n'est pas installé sur le PC où j'ai travaillé : le modèle n'a **jamais été rendu**. Pour limiter le risque, trois scripts Node.js (`boitier-3d/outils/`) vérifient la syntaxe du fichier (0 problème), contrôlent 42 règles de cotes (aucun chevauchement entre composants, 1,2 mm de matière au moins autour des inserts : toutes respectées) et dessinent un aperçu coté (`apercu.svg`).
+**Vérifications.** Avant d'avoir OpenSCAD sur le PC, j'ai vérifié le modèle par trois scripts Node.js (`boitier-3d/outils/`) : syntaxe du fichier (0 problème), 42 règles de cotes (aucun chevauchement entre composants, 1,2 mm de matière au moins autour des inserts : toutes respectées) et aperçu coté (`apercu.svg`). J'ai ensuite installé OpenSCAD 2021.01 (archive officielle, empreinte SHA-256 vérifiée) et fait le **rendu complet** de chaque pièce : sans avertissement, pièces fermées (« Simple: yes »). Un script compte les morceaux de chaque STL : la coque sortait en **deux morceaux**, car les tenons du quart de tour ne touchaient le col que par une face. Ils le chevauchent maintenant de 0,01 mm, et les quatre pièces sont d'un seul tenant. `exporter.js` refait tout cela d'une commande et produit les STL (`boitier-3d/stl/`) et les images de rendu (`boitier-3d/rendus/`).
 
-**Ce qui reste à vérifier :** le rendu dans OpenSCAD et l'impression ; l'essai du joint (pièce `essai_joint`) ; l'étanchéité réelle (bulles, puis immersion 1 m pendant 30 min, d'abord à vide avec un papier absorbant) ; le volume du buzzer à travers 1,2 mm ; la portée BLE dans le boîtier fermé ; la compatibilité de la fixation avec un vrai support de type Garmin, dont je n'ai pas trouvé les cotes officielles.
+![Rendu OpenSCAD du boîtier, vue éclatée](../boitier-3d/rendus/eclate.png)
+
+**Ce qui reste à vérifier :** l'impression ; l'essai du joint (pièce `essai_joint`) ; l'étanchéité réelle (bulles, puis immersion 1 m pendant 30 min, d'abord à vide avec un papier absorbant) ; le volume du buzzer à travers 1,2 mm ; la portée BLE dans le boîtier fermé ; la compatibilité de la fixation avec un vrai support de type Garmin, dont je n'ai pas trouvé les cotes officielles.
 
 ---
 
@@ -1024,7 +1026,7 @@ empreinte(n) = SHA256( n | instant | texte | empreinte(n−1) )
 
 Si quelqu'un modifie une ligne, son empreinte change et ne correspond plus à celle notée dans la ligne suivante : la vérification s'arrête sur la ligne trafiquée. C'est le principe d'une chaîne de blocs, sans le réseau. Le boîtier garde 64 lignes (environ 15 Ko en C++, sur 256 Ko de RAM) ; l'empreinte de la dernière ligne oubliée sert d'« ancre ». SHA-256 et HMAC-SHA256 sont écrits sans bibliothèque, en JavaScript et en C++, et vérifiés avec les vecteurs officiels : FIPS 180-4 (message vide, « abc », message de 2 blocs) et RFC 4231 (cas 2).
 
-**La limite, et sa parade.** Quelqu'un qui peut réécrire **tout** le journal peut recalculer toutes les empreintes : la vérification seule ne voit rien (un test le montre volontairement). La parade est de copier régulièrement la dernière empreinte **ailleurs**, sur le téléphone : un journal réécrit ne la contient plus. Dans le simulateur, la tuile « Journal de sécurité chaîné » propose « Vérifier », « Falsifier une ligne » et « Copier l'empreinte sur le téléphone ». Reste à prévoir dans le firmware : le journal est en RAM et serait effacé à chaque veille ; il faudra le sauvegarder en flash ou le recopier sur le téléphone à chaque connexion.
+**La limite, et sa parade.** Quelqu'un qui peut réécrire **tout** le journal peut recalculer toutes les empreintes : la vérification seule ne voit rien (un test le montre volontairement). La parade est de copier régulièrement la dernière empreinte **ailleurs**, sur le téléphone : un journal réécrit ne la contient plus. Dans le simulateur, la tuile « Journal de sécurité chaîné » propose « Vérifier », « Falsifier une ligne » et « Copier l'empreinte sur le téléphone ». Dans le firmware, le journal est en RAM, que la veille efface : `stockage.cpp` le sauvegarde donc en mémoire flash à chaque mise en veille (fichier à part, avec somme de contrôle) et le relit au réveil, comme le dernier compteur des capteurs v2. C'est écrit, mais pas encore essayé sur la carte.
 
 ### 6.13 La sécurité du serveur de flotte
 
@@ -1284,7 +1286,7 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | **Bruit réel des capteurs** | Il conditionne la durée minimale de 10 min pour la fuite lente, et le seuil « stable » de la prévision | Enregistrer un pneu stable pendant une heure |
 | **Vitesse de détection de la rotation** des capteurs | Si elle dépasse 10 km/h, les fausses pertes en montée reviennent (défaut n° 10) | Rouler de plus en plus vite et noter quand l'intervalle passe de 60 s à 3 s |
 | **Nombre d'annonces BLE inconnues en ville** | Le seuil d'inondation (50/s) pourrait donner de fausses détections | Compter les annonces reçues dans une rue fréquentée |
-| **Journal chaîné** | En RAM, il serait effacé à chaque veille | Le sauvegarder en flash ou le recopier sur le téléphone |
+| **Journal chaîné** | En RAM, il serait effacé à chaque veille | Sauvegarde en flash à la mise en veille écrite dans `stockage.cpp` : à essayer sur la carte |
 | **Boîtier imprimé** | Étanchéité, son du buzzer, portée radio (§ 4.7) | Pièce `essai_joint`, bulles puis immersion 1 m 30 min, mesure du RSSI boîtier fermé |
 
 ---
@@ -1375,7 +1377,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Bluefy (iPhone) | Application Web Bluetooth sur mon téléphone |
 | git, GitHub, GitHub Pages | Historique, sauvegarde, publication en HTTPS |
 | GitHub Actions | Tests JavaScript et C++ lancés à chaque envoi de code, sur une machine Linux avec g++ |
-| OpenSCAD | Modèle 3D paramétré du boîtier (pas encore installé sur le PC de travail : modèle vérifié par des scripts, jamais rendu) |
+| OpenSCAD 2021.01 | Modèle 3D paramétré du boîtier, rendu complet et export STL |
 | Arduino IDE 2 (ou PlatformIO) | Compilation et téléversement du firmware, à la réception de la carte |
 | Assistant de programmation (Claude Code, Anthropic) | Écriture d'une grande partie du code et des documents à partir de mes décisions ; les commits concernés portent la mention « Co-Authored-By » |
 | Oscilloscope, multimètre, fer à souder, imprimante 3D | Mesures, montage et boîtier (à la réception du matériel) |
@@ -1393,7 +1395,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | Défauts invisibles aux tests unitaires | Simulation d'une semaine complète et campagnes de décalages |
 | Composants oubliés dans la commande | Identifiés en dessinant le schéma électrique ; liste prête pour une commande complémentaire |
 | Pas de compilateur C++ capable de lancer les tests sur mon PC | Tests C++ exécutés par GitHub Actions |
-| OpenSCAD absent du PC | Scripts Node.js de vérification de la syntaxe et des cotes, aperçu coté en SVG ; rendu et impression à faire |
+| OpenSCAD absent du PC au début | Scripts Node.js de vérification de la syntaxe et des cotes, aperçu coté en SVG ; puis installation d'OpenSCAD, rendu (un défaut corrigé) et export STL. Impression à faire |
 | Cotes de l'écran différentes selon les sites | Relevé sur le plan officiel du fabricant (WeActStudio) |
 
 ---
