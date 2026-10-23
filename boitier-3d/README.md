@@ -216,7 +216,7 @@ En plus du matériel déjà commandé (`docs/cahier-des-charges.md` § 6).
 7. **Câble du reed.** L'enfiler dans le passe-fil (en mouillant d'eau savonneuse), poser un collier serre-câble à l'intérieur, puis remplir le cône extérieur de silicone.
 8. **Buzzer.** Le coucher dans ses deux selles, face contre la paroi amincie, et le tenir par un point de colle.
 9. **XIAO et plaquette.**
-   - Poser la XIAO sur son berceau, avec du Kapton dessous. La prise USB-C est tournée vers l'intérieur (côté plaquette) : on peut la reprogrammer en soulevant la batterie, ou mettre à jour le programme par Bluetooth.
+   - Poser la XIAO sur son berceau, avec du Kapton dessous. La prise USB-C est tournée vers l'intérieur (côté plaquette) : on peut la reprogrammer en soulevant la batterie. Il n'y a volontairement pas de mise à jour par Bluetooth : elle se fait par USB, avec un accès physique (voir l'analyse de risques).
    - Coller la plaquette des MOSFET et des résistances à droite de la XIAO, avec de la mousse double face.
 10. **Batterie.** Kapton dessous, mousse double face sur les piliers. La carte de protection va du côté des fils.
 11. **Couvercle.**
