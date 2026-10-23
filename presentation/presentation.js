@@ -9,7 +9,7 @@
 // 2. Navigation : flèches, espace, Page préc./suiv., Début/Fin, clic,
 //    glissement au doigt. L'adresse garde la diapositive courante (#7).
 // 3. Écrans e-paper : dessinés par les VRAIS fichiers du projet
-//    (police5x7.js, epaper.js, ecran.js, alertes.js), c'est-à-dire le
+//    (police5x7.js, epaper.js, ecran.js, alertes.js, fuite.js), c'est-à-dire le
 //    code qui sera traduit dans le firmware du boîtier.
 // 4. Notes d'orateur : attribut data-notes de chaque diapositive,
 //    affichées seulement à la demande (touche N).
@@ -236,6 +236,16 @@
     suspect: function () {
       var v = vueDeBase();
       v.roues.AV = { etat: "INTRUSION", pressionBar: null };
+      return v;
+    },
+    // Page 2 : statistiques du trajet + prévision du regonflage
+    // (exemple « REGONFLER AV 12J  AR 15J » de la documentation)
+    trajet: function () {
+      var v = vueDeBase();
+      v.page = 1;
+      v.moyenneKmh = 18.6; v.maxKmh = 34.2; v.dureeRoulageS = 2388;
+      v.roues.AV.joursRegonflage = 12;
+      v.roues.AR.joursRegonflage = 15;
       return v;
     }
   };

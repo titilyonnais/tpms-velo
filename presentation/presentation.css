@@ -105,6 +105,9 @@ b, strong { font-weight: 600; }
 .g3 { grid-template-columns: repeat(3, 1fr); }
 .g-texte-visuel { grid-template-columns: 1fr 520px; align-items: start; gap: 48px; }
 .g-large-etroit { grid-template-columns: 1.45fr 1fr; gap: 40px; align-items: start; }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+.g-apercu { grid-template-columns: 660px 1fr; gap: 40px; align-items: start; }
+.g-prevision { grid-template-columns: 1fr 372px 350px; gap: 32px; align-items: start; }
 
 /* ---------- Cartes ---------- */
 .carte {
@@ -294,6 +297,8 @@ canvas.ecran {
 .tests-barres .barre-ligne { grid-template-columns: 300px 1fr 64px; }
 .tests-barres .barre { height: 26px; top: 4px; background: var(--accent); border-radius: 6px; }
 .tests-barres .total { font-family: var(--mono); font-size: 22px; text-align: right; }
+.tests-barres .cpp { border-top: 1px solid var(--bord); padding-top: 14px; }
+.tests-barres .cpp .barre { background: var(--ok); }
 
 /* ---------- Semaine type ---------- */
 .semaine { display: grid; grid-template-columns: 70px 1fr; row-gap: 12px; font-size: 18px; }
@@ -329,6 +334,32 @@ svg.schema text { font-family: var(--police); fill: var(--texte); }
 svg.schema .mono { font-family: var(--mono); }
 .image-schema { background: #fff; border-radius: var(--rayon); padding: 10px; }
 .image-schema img { display: block; width: 100%; height: auto; }
+
+/* ---------- Boîtier 3D : aperçu coté (fond noir, déjà au bon style) ---------- */
+.apercu-3d { margin: 0; }
+.cartes-serrees .carte { padding: 16px 24px; }
+.cartes-serrees .chiffre { margin: 0 0 4px; }
+.cartes-serrees h3 { margin-bottom: 6px; }
+.cartes-serrees .etiquette { margin-bottom: 6px; }
+.apercu-3d img { display: block; width: 100%; height: auto; border: 1px solid var(--bord); border-radius: var(--rayon); }
+
+/* ---------- Trame v2 : trois segments proportionnels (18 / 4 / 4 octets) ---------- */
+.trame-v2 { display: flex; gap: 6px; }
+.trame-v2 .seg {
+  border-radius: var(--rayon-petit); padding: 16px 18px; font-size: 18px; line-height: 1.35;
+  color: var(--texte-2); border: 1px solid var(--bord);
+}
+.trame-v2 .seg b { display: block; color: var(--texte); font-size: 21px; margin-bottom: 2px; }
+.trame-v2 .seg-v1  { flex: 18; background: var(--tuile-2); }
+.trame-v2 .seg-cpt { flex: 4; background: var(--attention-doux); border-color: rgba(251, 191, 36, .4); }
+.trame-v2 .seg-sig { flex: 4; background: var(--accent-doux); border-color: rgba(167, 139, 250, .45); }
+
+/* ---------- Pastilles (conditions d'un essai) ---------- */
+.pastilles { display: flex; flex-wrap: wrap; gap: 10px; }
+.pastilles span {
+  font-family: var(--mono); font-size: 17px; color: var(--texte-2);
+  background: var(--tuile); border: 1px solid var(--bord); border-radius: 999px; padding: 6px 14px;
+}
 
 /* ---------- Commandes (hors diapositive) ---------- */
 .commandes {
@@ -367,7 +398,11 @@ svg.schema .mono { font-family: var(--mono); }
   .auteur { font-size: 20px; }
   .champ { font-size: 13px; }
   /* !important : certaines grilles ont leurs colonnes écrites dans la page */
-  .grille, .g2, .g3, .g-texte-visuel, .g-large-etroit, .matrices, .sorties { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  .grille, .g2, .g3, .g4, .g-texte-visuel, .g-large-etroit, .g-apercu, .g-prevision, .matrices, .sorties { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  .trame-v2 { flex-direction: column; }
+  .trame-v2 .seg { font-size: 14px; padding: 10px 12px; }
+  .trame-v2 .seg b { font-size: 15px; }
+  .pastilles span { font-size: 12px; padding: 4px 10px; }
   .carte-formule { flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; }
   .formule { white-space: normal; }
   .grands .chiffre { font-size: 36px; margin: 4px 0 8px; }

@@ -5,7 +5,9 @@ Projet BTS CIEL option IR – Thibault MORRETTON – Épreuve E6 « Valorisation
 Ce document décrit les deux échanges radio du kit :
 
 1. **Boîtier ↔ application** : connexion BLE (GATT) que nous avons spécifiée. Référence : `logique/protocole.js` (format des octets) et `simulateur/boitier/liaison.js` (comportement du boîtier).
-2. **Capteurs → boîtier** : annonces BLE diffusées par les capteurs TPMS du commerce. Format **supposé**, à confirmer à la réception. Référence : `logique/trame.js`.
+2. **Capteurs → boîtier** : annonces BLE diffusées par les capteurs TPMS du commerce. Format **supposé**, à confirmer à la réception. Référence : `logique/trame.js`. Le § 2.7 décrit en plus un format « version 2 » (privé et signé), qui n'est qu'une **proposition** pour une future version du produit : les capteurs du commerce restent en version 1.
+
+Le mode flotte ajoute un troisième échange, boîtier → serveur (lots de mesures en JSON, signés HMAC-SHA256, par HTTP) : il n'utilise pas BLE et son format est décrit dans `serveur/README.md`.
 
 Tous les exemples hexadécimaux ont été calculés en exécutant les fonctions de codage du dépôt avec Node.js. Tous les nombres sur plusieurs octets sont en **little-endian** : l'octet de poids faible est transmis en premier (exemple : 2 105 = 0x0839 s'écrit `39 08`).
 
@@ -133,7 +135,7 @@ Lue par `TPMS.liaisonLireReglages`, écrite par `TPMS.liaisonEcrireReglages` ; f
 | 13-17 | Adresse du capteur AV | 5 octets | identique aux octets 3-7 de la trame TPMS | non contrôlé |
 | 18-22 | Adresse du capteur AR | 5 octets | idem | non contrôlé |
 
-Le seuil de crevaison (0,5 bar), le seuil de fuite (−0,15 bar/h), le délai de perte (60 s en roulant, 600 s à l'arrêt), la fenêtre d'écoute et la période d'écran ne font pas partie de cette caractéristique : ils ne sont pas réglables depuis l'application.
+Le seuil de crevaison (0,5 bar), le seuil de fuite (−0,15 bar/h), le délai de perte (60 s au-dessus de 10 km/h, 600 s en dessous et à l'arrêt), la fenêtre d'écoute et la période d'écran ne font pas partie de cette caractéristique : ils ne sont pas réglables depuis l'application.
 
 **Contrôle à l'écriture.** Le boîtier ne fait pas confiance aveuglément à ce qu'on lui écrit, même sur un lien chiffré : `TPMS.verifierReglages` (`logique/protocole.js`) renvoie la raison du refus si une valeur est hors plage, et rien n'est appliqué. L'application fait le même contrôle avant d'envoyer (`app/app.js`). Si l'adresse d'un capteur change, le boîtier oublie tout ce qu'il savait de l'ancien (`TPMS.creerRoue`).
 
@@ -320,7 +322,7 @@ Ces deux exemples sont vérifiés par les tests « Trames » de `simulateur/test
 ### 2.5 Ce que ce format implique pour la sécurité
 
 - Aucun champ de **compteur** ni de **signature** : une trame ne peut pas être authentifiée, et une trame rejouée est identique à l'originale.
-- L'**adresse fixe** (octets 3-7) est transmise dans chaque trame : elle permet de reconnaître le vélo.
+- L'**adresse fixe** (octets 3-7) est transmise dans chaque trame : elle permet de reconnaître le vélo, et de le suivre de récepteur en récepteur (pistage, § 6.9 de `analyse-de-risques.md`).
 - Le numéro de capteur (octet 2) n'identifie pas un vélo : le capteur n° 1 d'un autre vélo porte le même numéro. D'où la **liste blanche par adresse** (`TPMS.positionCapteur`).
 
 Ces points sont développés dans `analyse-de-risques.md`.
@@ -328,4 +330,48 @@ Ces points sont développés dans `analyse-de-risques.md`.
 ### 2.6 À prévoir dans le firmware
 
 - Une annonce BLE est émise sur 3 canaux en quelques millisecondes : le boîtier peut recevoir 3 copies identiques. Il faudra ignorer les copies reçues à moins de 100 ms d'écart, sinon la protection « rythme » (`TPMS.controlerRythme`) les prendrait pour un second émetteur.
-- L'intervalle d'annonce réel (supposé de 3 s) devra être mesuré : la protection « rythme » considère comme anormales deux trames de la même adresse à moins de 2 s d'écart (`TPMS.RYTHME_MIN_MS`).
+- L'intervalle d'annonce réel (supposé de 3 s) devra être mesuré : la protection « rythme » considère comme anormales deux trames de la même adresse à moins de 2 s d'écart (`TPMS.RYTHME_MIN_MS`), sauf si la pression baisse (rafale d'une vraie crevaison).
+
+### 2.7 Proposition pour une version 2 : trame privée et signée (26 octets)
+
+**Statut : proposition, simulée seulement.** Les capteurs du commerce ne peuvent pas émettre ce format, car leur programme n'est pas modifiable. Il faudrait des capteurs dont nous écrivons le programme. Le format sert à montrer, dans le simulateur, ce qu'apporterait une version 2 du produit contre le pistage, l'usurpation et le rejeu (`analyse-de-risques.md`, § 5.5). Référence : `logique/trame2.js`, traduit dans `firmware/tpms_boitier/src/logique/trame2.cpp`.
+
+**Clé.** Chaque capteur v2 a une clé secrète de 16 octets, partagée avec le boîtier à l'appairage (par exemple par un QR code dans la boîte). Cette clé ne fait pas partie de la caractéristique REGLAGES ; sa transmission au boîtier reste à spécifier.
+
+**Format :**
+
+| Octets | Champ | Codage |
+|---|---|---|
+| 0-1 | Identifiant fabricant | Comme la v1 (`00 01`) |
+| 2 | Numéro du capteur | `0xC0` = capteur 1, `0xC1` = capteur 2 : `0xC0 + numéro − 1` (le bit de poids `0x40` distingue la v2 de la v1) |
+| 3-7 | Adresse privée | 2 octets tirés au hasard, puis les 3 premiers octets de HMAC-SHA256(clé, `01` ‖ ces 2 octets). Nouvelle adresse toutes les 15 min (`TPMS.ROTATION_ADRESSE_MS`) |
+| 8-17 | Pression, température, pile, alarme | Comme la v1 (octets 8 à 17 du § 2.2), **en clair** |
+| 18-21 | Compteur | uint32 little-endian, +1 à chaque trame |
+| 22-25 | Signature | 4 premiers octets de HMAC-SHA256(clé, `02` ‖ octets 0 à 21) |
+
+La trame fait 26 octets. Avec les 2 octets d'en-tête du champ « manufacturer data », elle tient dans une annonce BLE classique de 31 octets.
+
+**Ce que fait le boîtier** (branche « capteurs v2 » de `TPMS.boitierRecevoirTrame`) :
+1. il recalcule le HMAC de l'adresse avec la clé de chaque capteur appairé (`TPMS.adresseResolue`) : c'est la même idée que les « adresses privées résolubles » de la norme Bluetooth, qui utilisent AES. Une adresse qui ne correspond à aucune clé est « inconnue » ;
+2. il vérifie la signature (`TPMS.signatureValide`) : sinon, trame refusée « mal signée (usurpation ?) ». Sans la clé, un pirate a 1 chance sur 2³² (environ 4 milliards) par essai de deviner une signature valide ;
+3. il vérifie que le compteur est plus grand que le dernier accepté pour ce capteur : sinon, trame refusée « rejouée (compteur déjà vu) » ;
+4. les trames en clair (v1) sont ignorées, et le contrôle du rythme n'est plus nécessaire : l'origine de la trame est prouvée par la signature.
+
+**Exemple** (calculé avec `TPMS.encoderTrameV2`) : clé `00 01 02 … 0F`, octets tirés au hasard `3A 7C`, capteur avant, 2,1 bar, 20,5 °C, pile 95 %, compteur 1 234.
+
+```
+00 01 C0 3A 7C 1C 42 B8 50 34 03 00 02 08 00 00 5F 00 D2 04 00 00 E4 26 0B 27
+```
+
+| Octets | Hexa | Valeur décodée |
+|---|---|---|
+| 0-1 | `00 01` | identifiant fabricant |
+| 2 | `C0` | capteur n° 1, version 2 |
+| 3-7 | `3A 7C 1C 42 B8` | adresse privée : `3A 7C` au hasard, `1C 42 B8` = début de HMAC(clé, `01 3A 7C`) |
+| 8-17 | `50 34 03 00 02 08 00 00 5F 00` | 2,1 bar, 20,50 °C, pile 95 %, pas d'alarme (comme l'exemple du § 2.3) |
+| 18-21 | `D2 04 00 00` | 0x04D2 = compteur 1 234 |
+| 22-25 | `E4 26 0B 27` | signature |
+
+Changer un seul bit de cette trame rend la signature fausse, et une autre clé ne reconnaît pas l'adresse (tests « v2 » de `simulateur/tests/tests.js`, 12 tests).
+
+**Limites.** La signature protège l'intégrité et l'origine, pas la confidentialité : pression, température et niveau de pile restent lisibles. Le dernier compteur accepté pour chaque capteur est gardé en RAM : la veille du boîtier (System OFF) l'efface, et au réveil la première trame rejouée serait acceptée. Remédiation proposée, non implémentée : sauvegarder ce compteur en mémoire flash à la mise en veille, avec les réglages (qui contiennent déjà les clés) et le trajet, puis le relire au réveil. Enfin, le firmware actuel ne transmet à la logique que les annonces de 18 octets (`firmware/README.md`).

@@ -4,6 +4,8 @@ Programme Arduino du **Seeed XIAO nRF52840**, la carte du boîtier de guidon.
 
 Il est écrit **avant** l'arrivée du matériel. Il n'a donc jamais été compilé avec le vrai cœur Arduino de la carte. Tout ce qui reste incertain est marqué `// À VÉRIFIER :` dans le code et repris dans la liste à la fin de ce document.
 
+La partie **logique** (`src/logique/`), en revanche, est compilée et testée sur un ordinateur : 109 tests, lancés automatiquement par GitHub Actions à chaque push (voir « Tester la logique sur PC »).
+
 ## Organisation
 
 Le firmware est organisé comme le simulateur : la **logique** est séparée du **matériel**.
@@ -12,6 +14,7 @@ Le firmware est organisé comme le simulateur : la **logique** est séparée du 
 firmware/
   README.md            ce document
   platformio.ini       facultatif : compilation avec PlatformIO
+  tests_pc/main.cpp    lance les tests de la logique C++ sur un ordinateur
   tpms_boitier/
     tpms_boitier.ino   setup() et loop() : relient la logique au matériel
     config.h           broches et constantes matérielles
@@ -28,8 +31,11 @@ Chaque fichier de `src/logique/` indique en tête le fichier JS dont il est la t
 | C++ (`src/logique/`)             | JavaScript                                   |
 |----------------------------------|----------------------------------------------|
 | `trame`                          | `logique/trame.js`                           |
+| `trame2`                         | `logique/trame2.js` (capteurs « version 2 » : **proposition**, voir `docs/protocole-ble.md`, § 2.7) |
+| `sha256`                         | `logique/sha256.js` (SHA-256 et HMAC-SHA256) |
+| `journal`                        | `logique/journal.js` (journal de sécurité chaîné) |
 | `vitesse`                        | `logique/vitesse.js`                         |
-| `fuite`                          | `logique/fuite.js`                           |
+| `fuite`                          | `logique/fuite.js` (fuite lente et prévision du regonflage) |
 | `alertes`                        | `logique/alertes.js`                         |
 | `securite`                       | `logique/securite.js`                        |
 | `protocole`                      | `logique/protocole.js` (sans `decoderMesures`, qui ne sert qu'à l'application) |
@@ -39,7 +45,20 @@ Chaque fichier de `src/logique/` indique en tête le fichier JS dont il est la t
 | `outils`                         | `Math.round` et `toFixed` du JavaScript      |
 | `tests_logique`                  | une partie de `simulateur/tests/tests.js`    |
 
-`logique/energie.js` n'est pas traduit, parce que le bilan énergétique sert au dossier et pas au boîtier.
+`logique/energie.js` n'est pas traduit, parce que le bilan énergétique sert au dossier et pas au boîtier. `logique/statistiques.js` et `logique/conseil.js` non plus : ils servent au simulateur et à l'application.
+
+## Tester la logique sur PC (sans la carte)
+
+`src/logique/` n'utilise que du C++ standard. On peut donc la compiler pour un ordinateur et lancer les mêmes tests que ceux que la carte rejoue au démarrage avec `AUTOTEST 1` (`lancerTestsLogique`, dans `tests_logique.cpp`). Sur la carte, c'est le `.ino` qui affiche le résultat sur le moniteur série ; sur PC, c'est `tests_pc/main.cpp`, qui renvoie le code de sortie 1 si un test échoue.
+
+Depuis la racine du dépôt, avec g++ :
+
+```
+g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
+./tests_pc
+```
+
+Résultat attendu : `109 reussis, 0 en echec`. C'est la commande lancée par GitHub Actions à chaque push (`.github/workflows/tests.yml`, tâche « Logique C++ du firmware ») ; le badge « Tests » du README de la racine passe au rouge si un test échoue. Avant, la traduction C++ était seulement compilée ; elle est maintenant exécutée sur un vrai processeur.
 
 La table de la police a été recopiée automatiquement depuis `police5x7.js`. L'écran réel est donc identique à celui du simulateur, au pixel près.
 
@@ -115,6 +134,10 @@ Le reed relie D4 à GND quand l'aimant passe. Si le vélo s'arrête **avec l'aim
 - **Tâche de fond pour la LED et le buzzer.** Un rafraîchissement complet de l'e-paper bloque `loop()` jusqu'à 2 s. Une petite tâche FreeRTOS fait clignoter la LED et biper le buzzer, pour que les bips gardent leur durée.
 - **Veille = System OFF.** La carte consomme alors environ 5 µA, et seuls le reed et les boutons peuvent la réveiller. Le réveil est un redémarrage : les réglages et le trajet sont sauvegardés en flash (LittleFS) avant l'extinction, puis relus au démarrage.
 - **Écoute par fenêtres.** Le scanner BLE est démarré et arrêté selon `boitierEcoute()` : 3 s d'écoute toutes les 5 s, à une position qui change à chaque période, et écoute continue pendant 15 s après une trame douteuse (`boitierEcouteRenforcee()`). Les copies d'une même annonce reçues à moins de 100 ms d'écart sont ignorées. Sans ce filtre, le contrôle du rythme les prendrait pour un second émetteur.
+- **Délai de perte d'un capteur.** 60 s sans trame quand le vélo roule à plus de 10 km/h (`VITESSE_ROULAGE_SURE_KMH`), 10 min en dessous et à l'arrêt. Sous ce seuil, un capteur qui ne sent plus la rotation (montée lente) n'annonce plus qu'une fois par minute : avec 60 s, il y avait de fausses alertes « capteur perdu » (`docs/analyse-de-risques.md`, § 6.7). Contrepartie : un vrai capteur perdu à moins de 10 km/h est signalé en 10 min.
+- **Hystérésis des alertes** (`alertes`). Une alerte « pression basse » ne s'éteint qu'au-dessus du seuil bas + 0,05 bar (`HYSTERESIS_ALERTE_BAR`), et l'inverse pour la pression haute : une pression qui oscille autour du seuil la nuit ne fait plus biper le boîtier en boucle.
+- **Journal de sécurité chaîné** (`journal`, `sha256`). Chaque ligne du journal du boîtier est recopiée avec l'empreinte SHA-256 de la précédente : une ligne modifiée se voit. 64 lignes de 234 octets, soit environ 15 Ko de RAM sur 256 Ko.
+- **Radio saturée.** Plus de 50 annonces inconnues par seconde pendant 5 s : « SATURE » s'affiche dans la barre d'état de l'écran, sans bip, et le journal le note.
 - **Sécurité de la liaison avec l'application.**
   - L'appairage se fait en LE Secure Connections avec un code à 6 chiffres. Ce code est tiré par la pile BLE et affiché sur l'e-paper.
   - Les trois caractéristiques ont la permission `SECMODE_ENC_WITH_MITM` : la pile refuse tout accès sans lien chiffré et authentifié par le code. Notre logique le revérifie, par défense en profondeur.
@@ -130,7 +153,8 @@ Le reed relie D4 à GND quand l'aimant passe. Si le vélo s'arrête **avec l'aim
 | La veille garde tout en mémoire | Après la veille, les pressions sont en « EN ATTENTE » jusqu'à la 1re trame (5 s au plus). Le trajet et les réglages sont relus en flash | Le System OFF efface la RAM |
 | Le code d'appairage est tiré par `Math.random` et n'est pas remplacé tant qu'il est valide | Le code est tiré par la pile BLE, une fois par tentative. Le dernier reçu est toujours affiché | C'est la pile qui fixe le code ; la limite à une connexion empêche un tiers de le changer |
 | Un code faux laisse le même code affiché | Un échec efface le code, et la tentative suivante en aura un nouveau | Fonctionnement de BLE |
-| Les trames de toute longueur sont comptées « invalides » | Seules les annonces de 18 octets sont transmises à la logique | Il y a des dizaines d'objets BLE autour de nous |
+| Les trames de toute longueur sont comptées « invalides » | Seules les annonces de 18 octets sont transmises à la logique | Il y a des dizaines d'objets BLE autour de nous. Pour des capteurs « version 2 » (proposition), il faudrait aussi laisser passer les annonces de 26 octets (`capteurs_ble.cpp`) |
+| La veille garde le journal chaîné et le dernier compteur des capteurs v2 | Le System OFF les efface (seuls les réglages, dont les clés v2, et le trajet sont sauvegardés en flash) | À traiter, sinon le journal repart de zéro et, avec des capteurs v2, la première trame rejouée après un réveil serait acceptée. Remédiation proposée (non implémentée) : dans `stockage.cpp`, sauvegarder en flash le dernier compteur accepté de chaque capteur (`dernierCompteur`, `compteurConnu`) à la mise en veille, avec les réglages et le trajet, et le relire au réveil |
 | Le 1er affichage est un rafraîchissement partiel | Le 1er affichage après l'allumage est complet | L'écran a perdu l'image précédente |
 | Nombres en `double` | Nombres en `float` | Le nRF52840 calcule les `float` en matériel. Les tolérances des tests embarqués sont un peu plus larges |
 
@@ -151,6 +175,7 @@ Le reed relie D4 à GND quand l'aimant passe. Si le vélo s'arrête **avec l'aim
 - Les adresses des capteurs (`boitier.cpp`) sont pour l'instant celles du simulateur.
 - Le rythme d'émission des capteurs est supposé de 3 s (`RYTHME_MIN_MS` = 2000 dans `securite.h`).
 - Il faut aussi vérifier la plage de pression maximale des capteurs.
+- La vitesse à partir de laquelle les capteurs détectent la rotation est inconnue (4,4 km/h dans le simulateur) : vérifier qu'elle reste sous `VITESSE_ROULAGE_SURE_KMH` = 10 km/h.
 
 **Bluefruit (noms exacts des fonctions, à confirmer à la première compilation)**
 - `Bluefruit.configPrphConn`, `begin(1, 1)` (le scan doit fonctionner avec ce réglage).

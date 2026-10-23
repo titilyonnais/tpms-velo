@@ -81,4 +81,4 @@ Corps : `{ "mesures": [ { "t", "pAv", "pAr", "tAv", "tAr", "pileAv", "pileAr", "
 - **Lecture sans compte** : `GET /api/...` n'exige pas d'identification ; il faudrait un compte « technicien » et un compte « gestionnaire ».
 - La limitation de débit est en mémoire (remise à zéro au redémarrage) et ne vaut que pour un seul serveur.
 - Le boîtier réel n'a pas de modem : on suppose une passerelle dans chaque station (ou un module LTE-M) ; le format des envois est indépendant de ce choix.
-- Une alerte « pression basse » peut se répéter quand la pression oscille autour du seuil la nuit (le boîtier n'a pas d'hystérésis) : défaut révélé par la simulation de la flotte.
+- Défaut révélé par la simulation de la flotte, puis corrigé : une alerte « pression basse » se rallumait en boucle quand la pression oscillait autour du seuil la nuit. Le boîtier applique désormais une hystérésis de 0,05 bar (`TPMS.HYSTERESIS_ALERTE_BAR` dans `logique/alertes.js`, et en C++).
