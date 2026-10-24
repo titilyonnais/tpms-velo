@@ -120,12 +120,20 @@ float joursAvantSeuil(float pressionBar, float penteBarJour, float seuilBasBar) 
   return jours < 0.0f ? 0.0f : jours;
 }
 
-float predireRegonflage(const Releves* r, float seuilBasBar) {
+// Traduction de TPMS.predireRegonflage (logique/fuite.js) : les relevés
+// sont en pression du capteur ramenée à 20 °C, le seuil en pression
+// manomètre à la température du moment → on convertit le seuil.
+float predireRegonflage(const Releves* r, float seuilBasBar, float correctionBar,
+                        float temperatureC, int32_t maintenantMs) {
   int n = r->n;
   if (n < RELEVES_NB_MIN) return JOURS_INCONNU;
   if (r->tMs[n - 1] - r->tMs[0] < RELEVES_DUREE_MIN_MS) return JOURS_INCONNU;
   float penteJour = penteMoindresCarresParHeure(r->tMs, r->pression, n) * 24.0f;
-  return joursAvantSeuil(r->pression[n - 1], penteJour, seuilBasBar);
+  float seuilComp = pressionCompenseeBar(seuilBasBar - correctionBar, temperatureC);
+  float jours = joursAvantSeuil(r->pression[n - 1], penteJour, seuilComp);
+  if (isinf(jours)) return jours;
+  jours -= (float)(maintenantMs - r->tMs[n - 1]) / 86400000.0f;
+  return jours < 0.0f ? 0.0f : jours;
 }
 
 void texteJours(float jours, char* texte) {

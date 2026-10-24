@@ -198,8 +198,12 @@ function tauxReception(canal, emetteur, recepteur, nb, extra) {
     pq.length === 3 && pq[0].canalBle === 37 && pq[1].canalBle === 38 && pq[2].canalBle === 39);
   verifier("événement : paquets successifs sans chevauchement",
     pq[0].finMs <= pq[1].debutMs && pq[1].finMs <= pq[2].debutMs);
-  var retard = pq[0].debutMs - 1000;
-  verifier("advDelay tiré entre 0 et 10 ms", retard >= 0 && retard < 10, retard);
+  // Par défaut, la radio n'ajoute PAS d'advDelay : le capteur l'a déjà
+  // tiré en programmant son annonce (monde/capteur.js). Sinon il compterait double.
+  verifier("advDelay : pas ajouté une 2e fois par la radio (déjà dans l'horaire du capteur)", pq[0].debutMs === 1000, pq[0].debutMs);
+  var canalDelay = TPMS.creerCanalRadio({ environnement: "ville", graine: 4, advDelay: true });
+  var retard = TPMS.radioPaquetsAnnonce(canalDelay, annonce("p", 1000, noeud("c", 0, 0)))[0].debutMs - 1000;
+  verifier("advDelay (émetteur qui ne le tire pas lui-même) : entre 0 et 10 ms", retard >= 0 && retard < 10, retard);
   verifier("événement complet en moins de 2 ms", pq[2].finMs - pq[0].debutMs < 2, pq[2].finMs - pq[0].debutMs);
 
   var sc = { node: noeud("b", 1, 0), ecoute: function () { return true; }, scanIntervalMs: 100 };
@@ -269,13 +273,28 @@ function tauxReception(canal, emetteur, recepteur, nb, extra) {
     rc[0].recu && rc[0].raison === "ok", rc[0].raison);
   verifier("effet de capture : le plus faible est perdu par collision", rc[1].raison === "collision", rc[1].raison);
 
+  // Capture réussie avec un interférent seulement 6 à 12 dB plus faible
+  // (à 2-3 m) : le paquet capturé est reçu, l'interférent ne compte plus
+  // dans le bruit (sinon un RSB de 6 dB rendait la capture inutile).
+  var captures = 0, recusApresCapture = 0;
+  [2, 3].forEach(function (dist) {
+    for (var k = 0; k < 150; k++) {
+      var rk = TPMS.radioResoudre(canal, [annonce("F" + dist + "-" + k, 10000 + k * 1000, c1, 0, 0),
+        annonce("f" + dist + "-" + k, 10000 + k * 1000, noeud("c4", dist, 0), 0, 0)], sc);
+      var p0 = rk[0].paquets[0];
+      if (p0.raison !== "collision") { captures++; if (p0.raison === "ok") recusApresCapture++; }
+    }
+  });
+  verifier("effet de capture (≥ 6 dB) : le paquet capturé est reçu (≥ 95 %)",
+    captures > 100 && recusApresCapture / captures >= 0.95, recusApresCapture + "/" + captures);
+
   // Décalés de 5 ms : plus de chevauchement, les deux passent.
   var rd = TPMS.radioResoudre(canal, [annonce("A", 3000, c1, 0, 0), annonce("B", 3005, c2, 0, 0)], sc);
   verifier("annonces décalées de 5 ms : pas de collision", rd[0].recu && rd[1].recu, rd[0].raison + "/" + rd[1].raison);
 
   // Avec l'advDelay de la norme, deux capteurs réglés au même instant
   // ne se percutent presque jamais.
-  var canalAvecDelay = TPMS.creerCanalRadio({ environnement: "campagne", graine: 9, wifi: false });
+  var canalAvecDelay = TPMS.creerCanalRadio({ environnement: "campagne", graine: 9, wifi: false, advDelay: true });
   var collisions = 0;
   for (var k = 0; k < 200; k++) {
     var rr = TPMS.radioResoudre(canalAvecDelay, [annonce("A" + k, k * 3000, c1), annonce("B" + k, k * 3000, c2)], sc);

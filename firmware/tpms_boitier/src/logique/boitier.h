@@ -203,7 +203,8 @@ void boitierAction(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs)
 
 // Les valeurs à afficher, préparées pour ecran.cpp.
 void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue);
-void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue);
+// correctionBar et maintenantMs servent à la prévision du regonflage.
+void vueRoue(const Roue* roue, float seuilBasBar, float correctionBar, int32_t maintenantMs, VueRoue* vue);
 
 // Appelée une fois par seconde.
 // Retourne les sorties à piloter : LED d'alerte, bip, LED d'éclairage,

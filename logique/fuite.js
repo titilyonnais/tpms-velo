@@ -160,12 +160,31 @@ TPMS.joursAvantSeuil = function (pressionBar, penteBarJour, seuilBasBar) {
 
 // Prévision à partir des relevés du boîtier.
 // Retourne null tant qu'il n'y a pas assez de recul.
-TPMS.predireRegonflage = function (r, seuilBasBar) {
+//
+// Attention aux unités : les relevés sont des pressions DU CAPTEUR
+// ramenées à 20 °C, alors que le seuil bas est réglé en pression
+// « manomètre » (corrigée de l'altitude, voir barometre.js) à la
+// température du moment. On ramène donc le seuil dans l'unité des relevés :
+//   seuil côté capteur   = seuil bas − correction d'altitude
+//   seuil ramené à 20 °C = pressionCompenseeBar(seuil côté capteur, T)
+// (T : température actuelle du capteur.) Exemple : par 5 °C, 1,8 bar au
+// manomètre valent 1,9 bar « à 20 °C » : le seuil arrive plus tôt.
+// Enfin, la droite part du DERNIER relevé (au plus un toutes les 3 h) :
+// on retire le temps écoulé depuis, sans descendre sous 0.
+//
+// correctionBar : correction d'altitude du baromètre (0 sans baromètre)
+// temperatureC  : température actuelle du capteur
+// maintenantMs  : instant de la prévision
+TPMS.predireRegonflage = function (r, seuilBasBar, correctionBar, temperatureC, maintenantMs) {
   var n = r.tMs.length;
   if (n < TPMS.RELEVES_NB_MIN) return null;
   if (r.tMs[n - 1] - r.tMs[0] < TPMS.RELEVES_DUREE_MIN_MS) return null;
   var penteJour = TPMS.penteMoindresCarresParHeure(r.tMs, r.pression) * 24;
-  return TPMS.joursAvantSeuil(r.pression[n - 1], penteJour, seuilBasBar);
+  var seuilComp = TPMS.pressionCompenseeBar(seuilBasBar - correctionBar, temperatureC);
+  var jours = TPMS.joursAvantSeuil(r.pression[n - 1], penteJour, seuilComp);
+  if (jours === Infinity) return Infinity;
+  jours -= (maintenantMs - r.tMs[n - 1]) / 86400000;
+  return jours < 0 ? 0 : jours;
 };
 
 // Texte court pour l'écran : "--" (pas encore de prévision), "12J", ">60J".

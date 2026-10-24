@@ -139,7 +139,7 @@ static void testsFuite() {
   static Releves r;
   creerReleves(&r);
   for (int k = 0; k <= 8; k++) relevesAjouter(&r, k * 43200000L, 2.2f - 0.03f * k / 2.0f);
-  float jours = predireRegonflage(&r, 1.8f);
+  float jours = predireRegonflage(&r, 1.8f, 0.0f, 20.0f, 4 * 86400000L);
   verifier("prevision : seuil bas dans 9,3 jours", proche(jours, 9.333f, 0.02f));
   char texte[8];
   texteJours(jours, texte);
@@ -147,6 +147,13 @@ static void testsFuite() {
   texteJours(JOURS_INCONNU, texte);
   verifier("prevision : texte ecran -- sans prevision", strcmp(texte, "--") == 0);
   verifier("prevision : stable -> infini", isinf(joursAvantSeuil(2.2f, 0.0f, 1.8f)));
+  // Seuil ramené à 20 °C et sans la correction d'altitude ; temps écoulé
+  // depuis le dernier relevé retranché (mêmes valeurs que le test JS).
+  float seuilComp = pressionCompenseeBar(1.8f - 0.17f, 5.0f);
+  float attendu = (2.08f - seuilComp) / 0.03f - 2.0f;
+  verifier("prevision : seuil compense (altitude, 5 C) et temps ecoule retranche",
+           proche(predireRegonflage(&r, 1.8f, 0.17f, 5.0f, 6 * 86400000L), attendu, 0.02f));
+  verifier("prevision : jamais sous 0 jour", predireRegonflage(&r, 1.8f, 0.0f, 20.0f, 20 * 86400000L) == 0.0f);
   relevesAjouter(&r, 5 * 86400000L, 2.5f);
   verifier("prevision : regonflage -> releves effaces", r.n == 1);
 
@@ -346,7 +353,7 @@ static void testsSecurite() {
   verifier("pirate + toutes protections : derniere valeur de confiance gardee",
            proche(bt.roues[POS_AV].mesure.pressionBar, 2.2f, 1e-6f));
   VueRoue vueAV;
-  vueRoue(&bt.roues[POS_AV], bt.reglages.seuils.roue[POS_AV].basBar, &vueAV);
+  vueRoue(&bt.roues[POS_AV], bt.reglages.seuils.roue[POS_AV].basBar, 0.0f, 0, &vueAV);
   verifier("signal suspect : pression non affichee (-.--)", vueAV.connue == false);
 
   // En cas de doute sur l'émetteur, la 3e trame concordante ne confirme pas.
@@ -580,6 +587,18 @@ static void testsBarometre() {
   verifier("grand froid : reveil par le 5 V, recoupe, radio coupee",
            !bt.veille && boitierMiseAJour(&bt, bt.reglages.delaiVeilleMs + 5000).coupureCharge &&
            !boitierEcoute(&bt, bt.reglages.delaiVeilleMs + 5000));
+
+  // Écoute par fenêtres : aucun instant du cycle oublié (chaque instant
+  // écouté environ 60 % des périodes, comme en JS).
+  creerBoitier(&bt);
+  int32_t periode = bt.reglages.ecoutePeriodeMs;
+  float pire = 1.0f;
+  for (int32_t dans = 0; dans < periode; dans += 250) {
+    int ecoutes = 0;
+    for (int32_t cycle = 0; cycle < 200; cycle++) if (boitierEcoute(&bt, cycle * periode + dans)) ecoutes++;
+    if (ecoutes / 200.0f < pire) pire = ecoutes / 200.0f;
+  }
+  verifier("ecoute : aucune zone morte dans le cycle (>= 50 % des periodes)", pire >= 0.5f);
 
   // Deux boutons sur D5 (tirage 11 à 16 kΩ, R12 = 2,2 kΩ).
   verifier("boutons : aucun, SW1, SW2 (tirages extremes)",

@@ -13,7 +13,7 @@ Le kit comprend trois parties matérielles et logicielles :
 | Partie | Matériel | Rôle | Programme |
 |---|---|---|---|
 | Capteurs de roue | 2 capteurs TPMS BLE du commerce, vissés sur les valves Schrader | Mesurer pression, température et niveau de pile, puis les diffuser en annonces BLE (en clair) | Programme du fabricant, non modifiable |
-| Boîtier de guidon | Seeed XIAO nRF52840, écran e-paper 1,54″ 200×200 (SSD1681), baromètre BMP280 sous un évent à membrane, LiPo 500 mAh avec coupure de la recharge par grand froid, reed + aimant, 2 boutons sur une seule broche, buzzer, LED | Recevoir les trames, corriger l'erreur d'altitude des capteurs, calculer vitesse/distance, déclencher les alertes, afficher, dialoguer avec l'application, protéger la batterie | `firmware/` (traduction C++ de la logique, testée sur PC par 136 tests ; à essayer sur la carte à la réception du matériel) |
+| Boîtier de guidon | Seeed XIAO nRF52840, écran e-paper 1,54″ 200×200 (SSD1681), baromètre BMP280 sous un évent à membrane, LiPo 500 mAh avec coupure de la recharge par grand froid, reed + aimant, 2 boutons sur une seule broche, buzzer, LED | Recevoir les trames, corriger l'erreur d'altitude des capteurs, calculer vitesse/distance, déclencher les alertes, afficher, dialoguer avec l'application, protéger la batterie | `firmware/` (traduction C++ de la logique, testée sur PC par 139 tests ; à essayer sur la carte à la réception du matériel) |
 | Application | Téléphone ou PC : Chrome (PC, Android) ou Bluefy (iPhone) | Affichage des mesures, réglages, historique des pressions, détection de fuite très lente | `app/` (en cours) |
 
 Le téléphone de Thibault est un iPhone. Safari n'implémente pas Web Bluetooth ; l'application web sera donc utilisée sur iPhone avec le navigateur gratuit **Bluefy**, qui implémente Web Bluetooth, et sur PC ou Android avec **Chrome**. Une application Flutter a été écartée parce que compiler pour iOS exige un Mac.
@@ -340,19 +340,20 @@ Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/f
 
 ### Tests
 
-Les tests JavaScript sont répartis en 8 suites, 717 au total, tous réussis :
+Les tests JavaScript sont répartis en 9 suites, 776 au total, tous réussis :
 
 | Suite | Fichier | Nombre |
 |---|---|---|
-| Logique et boîtier | `tests.js` | 208 |
-| Pneu, météo et capteur | `pneu.tests.js` | 72 |
+| Logique et boîtier | `tests.js` | 214 |
+| Pneu, météo et capteur | `pneu.tests.js` | 74 |
 | Vélo et parcours | `velo.tests.js` | 62 |
-| Radio | `radio.tests.js` | 62 |
-| Électronique (dont deux boutons sur D5 et coupure de la recharge) | `electronique.tests.js` | 86 |
-| Monde complet, de bout en bout | `moteur.tests.js` | 45 |
+| Radio | `radio.tests.js` | 64 |
+| Électronique (dont deux boutons sur D5 et coupure de la recharge) | `electronique.tests.js` | 89 |
+| Monde complet, de bout en bout | `moteur.tests.js` | 58 |
 | Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD, HTTPS, fichiers secrets jamais servis) | `serveur/serveur.tests.js` | 135 |
-| Version industrielle (client MQTT, SNTP et syslog, entrepôt simulé, réception des lots, API des chariots) | `entrepot/entrepot.tests.js` | 47 |
-| **Total** | | **717** |
+| Version industrielle (client MQTT, SNTP et syslog, entrepôt simulé, réception des lots, API des chariots) | `entrepot/entrepot.tests.js` | 49 |
+| Simulateur de l'usine (fidélité à la maquette, réception, pare-feu, courtier, technicien, 20 essais) | `entrepot/usine.tests.js` | 31 |
+| **Total** | | **776** |
 
 La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage), baromètre avec et sans évent, recharge par grand froid (dehors et à la maison).
 
@@ -397,7 +398,7 @@ Répartition des tests :
 
 ### Tests de la logique C++ sur PC
 
-La logique du boîtier traduite en C++ (`firmware/tpms_boitier/src/logique/`) n'utilise que du C++ standard : on peut donc la compiler et la tester sur un ordinateur, sans la carte. `firmware/tests_pc/main.cpp` appelle les mêmes tests que ceux que la carte rejoue au démarrage (`lancerTestsLogique`, dans `tests_logique.cpp`) : **136 tests**, tous réussis. Depuis la racine du dépôt, avec g++ (sous Linux, comme sur GitHub ; sous Windows il faut installer un compilateur g++, par exemple MinGW, ce qui n'a pas encore été essayé) :
+La logique du boîtier traduite en C++ (`firmware/tpms_boitier/src/logique/`) n'utilise que du C++ standard : on peut donc la compiler et la tester sur un ordinateur, sans la carte. `firmware/tests_pc/main.cpp` appelle les mêmes tests que ceux que la carte rejoue au démarrage (`lancerTestsLogique`, dans `tests_logique.cpp`) : **139 tests**, tous réussis. Depuis la racine du dépôt, avec g++ (sous Linux, comme sur GitHub ; sous Windows il faut installer un compilateur g++, par exemple MinGW, ce qui n'a pas encore été essayé) :
 
 ```
 g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
@@ -412,8 +413,8 @@ Avant, la traduction C++ était seulement compilée (vérification de syntaxe) ;
 
 | Tâche | Ce qu'elle fait |
 |---|---|
-| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (717 tests, dont ceux du serveur et de l'entrepôt) |
-| « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (136 tests) |
+| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (776 tests, dont ceux du serveur, de l'entrepôt et de l'usine) |
+| « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (139 tests) |
 
 Si un seul test échoue, le commit est marqué d'une croix rouge sur GitHub et le badge « Tests » du README passe au rouge. L'historique des exécutions, visible sur GitHub, montre que chaque version du dépôt a passé les tests.
 

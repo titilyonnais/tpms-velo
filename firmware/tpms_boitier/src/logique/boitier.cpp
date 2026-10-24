@@ -144,18 +144,23 @@ static uint32_t melangerEntier(uint32_t x) {
 // Fenêtre d'écoute à position pseudo-aléatoire dans chaque période :
 // évite le verrouillage de phase avec un capteur qui annonce toutes les
 // 60 s (multiple de la période), révélé par la simulation.
+// Décalage tiré dans toute la période et fenêtre qui « fait le tour »
+// (test circulaire) : chaque instant du cycle est écouté 60 % des
+// périodes, sans zone morte en fin de période.
 bool boitierEcoute(const Boitier* b, int32_t maintenantMs) {
   if (b->veille) return false;
   // Posé sur un chargeur dont la recharge est coupée (grand froid) : le
-  // boîtier n'est pas sur le vélo, écouter les capteurs viderait la batterie.
+  // boîtier n'est pas sur le vélo, écouter les capteurs viderait la batterie
+  // (5 mA pendant l'écoute, 3 mA en moyenne, contre 0,02 mA sans).
   if (b->surChargeur && b->blocageCharge != BLOCAGE_AUCUN) return false;
   if (maintenantMs < b->ecouteContinueJusquaMs) return true;   // écoute renforcée
   int32_t periode = b->reglages.ecoutePeriodeMs, fenetre = b->reglages.ecouteFenetreMs;
   if (fenetre >= periode) return true;
   int32_t cycle = maintenantMs / periode;
-  int32_t decalage = (int32_t)(melangerEntier((uint32_t)cycle) % (uint32_t)(periode - fenetre));
+  int32_t decalage = (int32_t)(melangerEntier((uint32_t)cycle) % (uint32_t)periode);
   int32_t dansCycle = maintenantMs - cycle * periode;
-  return dansCycle >= decalage && dansCycle < decalage + fenetre;
+  // Distance (en faisant le tour de la période) depuis le début de la fenêtre.
+  return ((dansCycle - decalage + periode) % periode) < fenetre;
 }
 
 // Écoute renforcée : après une trame douteuse (changement brutal à
@@ -408,8 +413,8 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->confirmation = b->liaison.enAttente ? b->liaison.masqueAttente : 0;
   vue->blocageCharge = texteBlocage(b->blocageCharge);
   vue->correctionBar = b->correctionBar;
-  vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, &vue->roues[POS_AV]);
-  vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, &vue->roues[POS_AR]);
+  vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, b->correctionBar, maintenantMs, &vue->roues[POS_AV]);
+  vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, b->correctionBar, maintenantMs, &vue->roues[POS_AR]);
   vue->vitesseKmh = b->veille ? 0.0f : compteurVitesseKmh(c, maintenantMs);
   vue->distanceKm = compteurDistanceKm(c);
   vue->moyenneKmh = compteurMoyenneKmh(c);
@@ -417,7 +422,7 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->dureeRoulageS = c->tempsRoulageMs / 1000.0f;
 }
 
-void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue) {
+void vueRoue(const Roue* roue, float seuilBasBar, float correctionBar, int32_t maintenantMs, VueRoue* vue) {
   vue->etat = roue->etat;
   // Signal suspect : la dernière valeur a peut-être été fabriquée par le
   // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
@@ -433,7 +438,8 @@ void vueRoue(const Roue* roue, float seuilBasBar, VueRoue* vue) {
   vue->pressionBar = roue->pressionAffichee;
   vue->temperatureC = roue->mesure.temperatureC;
   vue->batteriePct = roue->mesure.batteriePct;
-  vue->joursRegonflage = predireRegonflage(&roue->releves, seuilBasBar);
+  vue->joursRegonflage = predireRegonflage(&roue->releves, seuilBasBar, correctionBar,
+                                           roue->mesure.temperatureC, maintenantMs);
 }
 
 Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {

@@ -460,6 +460,23 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
 
 function nrfOkFinal(v3) { return v3 >= P.nrf.tensionMiniV; }
 
+// « Où part le courant » : seulement les CHARGES, ceux qui consomment
+// vraiment. On ne liste pas BT1 (le total), ni les éléments traversés par
+// le même courant qu'une charge (R1 avec LED1, Q1 avec BZ1, R6/R7 et Q2
+// avec LED2/LED3, R12 avec SW2, D2/J1 avec le chargeur…) : sinon le même
+// courant serait compté deux ou trois fois.
+TPMS.CHARGES_CIRCUIT = ["U1", "U2", "U3", "U4", "LED1", "BZ1", "LED2", "LED3",
+  "S1", "SW1", "SW2", "R4", "R5", "R9", "R10", "R11"];
+
+// Retourne [{ nom, courantA }] du plus gros au plus petit (courants nuls exclus).
+TPMS.circuitCharges = function (resultat) {
+  var c = resultat.courants || {};
+  return TPMS.CHARGES_CIRCUIT
+    .filter(function (nom) { return Math.abs(c[nom] || 0) > 1e-9; })
+    .map(function (nom) { return { nom: nom, courantA: Math.abs(c[nom]) }; })
+    .sort(function (a, b) { return b.courantA - a.courantA; });
+};
+
 // Courant moyen consommé sur la batterie pour une situation « type »
 // (sert aux tests et au document). lipo facultative.
 TPMS.circuitCourantBatterieMa = function (entrees, lipo) {

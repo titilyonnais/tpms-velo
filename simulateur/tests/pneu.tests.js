@@ -278,6 +278,24 @@ function fairevivre(c, pneu, ctx, t0Ms, dureeS, pasS, avantChaquePas) {
   verifier("capteur : intervalles de 3000 à 3010 ms (advDelay BLE), pas tous identiques",
     ecarts.every(function (e) { return e >= 3000 && e <= 3010; }) &&
     ecarts.some(function (e) { return e !== ecarts[0]; }), ecarts.slice(0, 4).map(Math.round).join(","));
+  // Deux capteurs allumés au même instant n'ont pas la même phase de
+  // mesure, et quand la roue repart après un arrêt, ils n'annoncent pas
+  // au même instant (sinon leurs trames se percutent à chaque départ).
+  var pneuA = TPMS.creerPneu({ pressionRelBar: 2.2, temperatureC: 20 });
+  var pneuB = TPMS.creerPneu({ pressionRelBar: 2.4, temperatureC: 20 });
+  var cA = creerCapteurTest({ graine: 11 }), cB = creerCapteurTest({ graine: 12, numero: 2 });
+  var arret = { altitudeM: 0, vitesseMs: 0, temperatureAmbianteC: 20, ensoleillement: 0 };
+  var emA = fairevivre(cA, pneuA, arret, 0, 180, 0.05), emB = fairevivre(cB, pneuB, arret, 0, 180, 0.05);
+  verifier("capteurs : phases de mesure différentes dès l'allumage",
+    Math.abs((cA.prochaineMesureMs % 1000) - (cB.prochaineMesureMs % 1000)) > 1,
+    cA.prochaineMesureMs + " / " + cB.prochaineMesureMs);
+  var nA = emA.length, nB = emB.length;
+  emA = emA.concat(fairevivre(cA, pneuA, ctxRoule, 180000, 1, 0.05));
+  emB = emB.concat(fairevivre(cB, pneuB, ctxRoule, 180000, 1, 0.05));
+  var departA = emA[nA], departB = emB[nB];
+  verifier("capteurs : la roue repart, chacun annonce vite mais pas au même instant",
+    departA && departB && Math.abs(departA.tMs - departB.tMs) > 1,
+    departA && departB ? departA.tMs + " / " + departB.tMs : "pas d'annonce");
   verifier("capteur : émissions datées dans l'intervalle demandé",
     em.every(function (e) { return e.tMs > 0 && e.tMs <= 60000; }));
 

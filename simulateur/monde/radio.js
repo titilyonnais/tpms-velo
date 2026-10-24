@@ -83,6 +83,10 @@ TPMS.BLE_ECART_PAQUETS_MS = 0.2;
 // advDelay : retard aléatoire de 0 à 10 ms ajouté à CHAQUE événement
 // d'annonce [BT Vol 6 Part B §4.4.2.2.1]. Il évite que deux appareils
 // qui émettent au même rythme se percutent à chaque fois.
+// C'est l'ÉMETTEUR qui le tire en programmant son annonce suivante
+// (monde/capteur.js : intervalle + advDelay). La radio ne l'ajoute donc
+// pas une seconde fois, sauf si on le lui demande (option advDelay du
+// canal, pour un émetteur qui ne le tire pas lui-même).
 TPMS.BLE_ADV_DELAY_MAX_MS = 10;
 
 // ---------------------------------------------------------------------
@@ -271,8 +275,9 @@ function cleLien(idA, idB) {
 //   environnement : "ville" | "campagne" | "foret" | "interieur" (défaut "ville")
 //   graine        : nombre, pour un hasard reproductible (défaut 1)
 //   wifi          : false pour couper les interférences Wi-Fi (défaut true)
-//   advDelay      : false pour ne pas ajouter le retard aléatoire de la
-//                   norme (défaut true)
+//   advDelay      : true pour que la radio tire elle-même le retard
+//                   aléatoire de la norme (défaut false : les capteurs
+//                   l'ont déjà mis dans l'heure de leur annonce)
 //   bruitAmbiantDbm : pour remplacer la valeur de l'environnement
 // }
 TPMS.creerCanalRadio = function (options) {
@@ -287,7 +292,7 @@ TPMS.creerCanalRadio = function (options) {
     params: params,
     graine: (options.graine === undefined ? 1 : options.graine) >>> 0,
     wifi: options.wifi !== false,
-    advDelay: options.advDelay !== false,
+    advDelay: options.advDelay === true,
     captureDb: TPMS.RADIO_CAPTURE_DB,
     liens: {}            // état de l'ombrage de chaque lien
   };
@@ -693,13 +698,19 @@ function evaluerPaquet(canal, pq, tous, brouilleurs, recepteur, sens, plancherMw
     if (br.debutMs < pq.finMs && pq.debutMs < br.finMs) brouillageMw += TPMS.dbmEnMw(br.dbmParCanal[pq.canalBle]);
   }
   var wifiMw = wifiPresent ? TPMS.dbmEnMw(wifiDbm) : 0;
-  var autresMw = plancherMw + chevauchementMw + wifiMw;
+  // Capture réussie : le récepteur s'est calé sur le paquet le plus fort,
+  // l'autre ne compte plus comme du bruit (sinon un RSB de 6 dB environ
+  // ferait presque toujours échouer le paquet « capturé »).
+  var autresMw = plancherMw + wifiMw;
   // RSB = signal / (bruit + interférences), en dB = différence des dBm.
   pq.rsbDb = pq.dbm - TPMS.mwEnDbm(autresMw + brouillageMw);
   var tep = TPMS.radioTauxErreurPaquet(pq.rsbDb, pq.nbBits);
   if (tirageErreur < tep) {
-    // Qui est responsable ? Le brouilleur s'il domine le reste.
-    pq.raison = brouillageMw > autresMw ? "brouillee" : "erreur-paquet";
+    // Qui est responsable ? Celui qui domine : le brouilleur, le paquet
+    // qui chevauchait (collision), ou le bruit et le Wi-Fi (erreur-paquet).
+    if (brouillageMw > autresMw && brouillageMw >= chevauchementMw) pq.raison = "brouillee";
+    else if (chevauchementMw > autresMw) pq.raison = "collision";
+    else pq.raison = "erreur-paquet";
   } else {
     pq.raison = "ok";
   }

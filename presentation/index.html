@@ -1051,20 +1051,20 @@
 </section>
 
 <!-- ================================================================ 30 -->
-<section class="diapo" data-notes="717 tests JavaScript en 8 suites et 136 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur ; puis 49 pour la version industrielle : client MQTT octet par octet, passerelles, réception des lots piégés, et les fichiers secrets jamais servis. Le serveur en a 135, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
+<section class="diapo" data-notes="776 tests JavaScript en 9 suites et 139 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur ; puis 49 pour la version industrielle : client MQTT octet par octet, passerelles, réception des lots piégés, et les fichiers secrets jamais servis. Le serveur en a 135, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
   <p class="repere">Vérification</p>
-  <h2><em>717 tests JavaScript et 136 tests C++</em>, relancés par GitHub à chaque push</h2>
+  <h2><em>776 tests JavaScript et 139 tests C++</em>, relancés par GitHub à chaque push</h2>
   <div class="corps grille" style="grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:start;">
     <div class="barres tests-barres" style="gap:16px">
-      <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">208</span></div>
-      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:64.9%"></div></div><span class="total">135</span></div>
-      <div class="barre-ligne"><span class="nom">Électronique</span><div class="piste"><div class="barre" style="width:41.3%"></div></div><span class="total">86</span></div>
-      <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:34.6%"></div></div><span class="total">72</span></div>
+      <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">214</span></div>
+      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:63.1%"></div></div><span class="total">135</span></div>
+      <div class="barre-ligne"><span class="nom">Électronique</span><div class="piste"><div class="barre" style="width:41.6%"></div></div><span class="total">89</span></div>
+      <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:34.6%"></div></div><span class="total">74</span></div>
       <div class="barre-ligne"><span class="nom">Vélo et parcours</span><div class="piste"><div class="barre" style="width:29.8%"></div></div><span class="total">62</span></div>
-      <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:29.8%"></div></div><span class="total">62</span></div>
-      <div class="barre-ligne"><span class="nom">Version industrielle (MQTT, passerelles)</span><div class="piste"><div class="barre" style="width:22.6%"></div></div><span class="total">47</span></div>
-      <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:21.6%"></div></div><span class="total">45</span></div>
-      <div class="barre-ligne cpp"><span class="nom">Logique C++ du firmware</span><div class="piste"><div class="barre" style="width:65.4%"></div></div><span class="total">136</span></div>
+      <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:29.9%"></div></div><span class="total">64</span></div>
+      <div class="barre-ligne"><span class="nom">Version industrielle et simulateur de l'usine</span><div class="piste"><div class="barre" style="width:37.4%"></div></div><span class="total">80</span></div>
+      <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:27.1%"></div></div><span class="total">58</span></div>
+      <div class="barre-ligne cpp"><span class="nom">Logique C++ du firmware</span><div class="piste"><div class="barre" style="width:65%"></div></div><span class="total">139</span></div>
       <pre class="code" style="margin-top:6px">node simulateur/tests/tout.js</pre>
     </div>
     <div class="grille" style="gap:16px">
@@ -1112,7 +1112,7 @@
         <tr><td>Rythme d'annonce</td><td>3 s en roulant, 60 s à l'arrêt ; rotation détectée dès 4,4 km/h</td><td>Mesure ; l'intervalle doit rester au-dessus de 2 s pour le contrôle du rythme</td></tr>
         <tr><td>Consommations</td><td>valeurs de fiches techniques (63,7 j)</td><td>Résistance shunt et oscilloscope</td></tr>
         <tr><td>Appairage sur iPhone</td><td>Bluefy, code à 6 chiffres</td><td>Essai avec l'iPhone et le boîtier réel</td></tr>
-        <tr><td>Firmware</td><td>136 tests C++ exécutés sur PC, jamais sur la carte</td><td>Compilation Arduino, tests de la logique sur le XIAO</td></tr>
+        <tr><td>Firmware</td><td>139 tests C++ exécutés sur PC, jamais sur la carte</td><td>Compilation Arduino, tests de la logique sur le XIAO</td></tr>
         <tr><td>Ajouts du 24/10</td><td>écran sans BUSY : 2,5 s / 0,6 s (× 2 sous 0 °C) ; D5 ≈ 0,48 V avec SW2 ; recharge coupée sous 2 °C</td><td>BUSY à l'oscilloscope au froid avant de couper le fil ; D5 au multimètre ; station météo ; aucun courant de charge au froid</td></tr>
         <tr><td>Boîtier 3D</td><td>10 pièces rendues, sans interférence ; jeux en paramètres ; évent ePTFE</td><td>Pièces test_jeux et essai_joint, impression, essai de l'évent, immersion 30 min à 1 m</td></tr>
         <tr><td>Seuil d'inondation</td><td>50 annonces inconnues par seconde</td><td>Compter les annonces BLE dans une rue fréquentée</td></tr>
@@ -1131,7 +1131,7 @@
   <div class="grille g3" style="gap:22px">
     <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression corrigée et compensée, une prévision de regonflage, la tournée de 20 vélos, et la supervision de 32 pneus de chariots remontés par MQTT.</p></div>
     <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">31 scénarios</div><p class="discret">analysés (kit, serveur, réseau) ; 0 fausse crevaison acceptée sur 300 ; 13 essais réseau sur 13 ; seul le pistage du cycliste reste élevé, d'où la proposition de capteurs v2.</p></div>
-    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés, plus une faille de la maquette ; 717 tests JS et 136 tests C++ relancés à chaque push.</p></div>
+    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés, plus une faille de la maquette ; 776 tests JS et 139 tests C++ relancés à chaque push.</p></div>
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>

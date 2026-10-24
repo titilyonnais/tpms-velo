@@ -201,6 +201,97 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
     maison.a.lipo.etatCharge > 0.6, maison.a.lipo.etatCharge.toFixed(3));
 })();
 
+// 8 quater. Pression « affichée par le boîtier » : c'est celle de l'écran
+// (corrigée de l'altitude, avec hystérésis), pas la valeur brute du capteur.
+(function () {
+  var vraie = TPMS.barometreMesurer;
+  // Baromètre qui lit 846 hPa (1 500 m) : correction de +0,167 bar.
+  TPMS.barometreMesurer = function () { return { pressionHpa: 846, temperatureC: 15 }; };
+  var a = TPMS.creerMonde(options({ graine: 4 }));
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  TPMS.mondeAvancer(a, 180000);
+  TPMS.barometreMesurer = vraie;
+  var roue = a.boitier.roues.AV, dernier = a.enregistrement[a.enregistrement.length - 1];
+  verifier("pression affichée : celle de l'écran (corrigée de l'altitude)",
+    roue.mesure !== null && TPMS.mondePressionAffichee && TPMS.mondePressionAffichee(a, "AV") === roue.pressionAffichee &&
+    roue.pressionAffichee - roue.mesure.pressionBar > 0.1, roue.mesure && roue.pressionAffichee + " / " + roue.mesure.pressionBar);
+  verifier("enregistrement (graphe, CSV) : affAV = pression de l'écran, pas la valeur brute",
+    Math.abs(dernier.affAV - roue.pressionAffichee) < 0.031 && dernier.affAV - roue.mesure.pressionBar > 0.1,
+    dernier.affAV + " / écran " + roue.pressionAffichee + " / capteur " + roue.mesure.pressionBar);
+  roue.etat = "INTRUSION";
+  verifier("pression affichée : rien pendant un signal suspect", !!TPMS.mondePressionAffichee && TPMS.mondePressionAffichee(a, "AV") === null);
+})();
+
+// 8 quinquies. Bilan de la batterie, distance totale, densité de l'air,
+// radio des voisins, portée du pirate, texte de la recharge.
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 6, meteo: "ete_canicule", heureDepartH: 14 }));
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  TPMS.mondeAvancer(a, 300000);
+  var d1 = a.velo.distanceM;
+  // Densité de l'air : ρ = P / (R × T) avec la température du moment.
+  var rho = TPMS.pressionAtmospheriquePa(a.point.altitudeM) / (TPMS.R_SPECIFIQUE_AIR * (a.instant.temperatureC + 273.15));
+  verifier("air : densité calculée avec la température (ρ = P / R·T)",
+    typeof a.densiteAir === "number" && Math.abs(a.densiteAir - rho) < 0.002 && a.densiteAir < 1.2, a.densiteAir + " / " + rho);
+  // Deuxième sortie du planning : velo.distanceM repart de 0, pas le total.
+  TPMS.mondeAction(a, { type: "sortie", parcoursId: "domicile-travail" });
+  TPMS.mondeAvancer(a, 120000);
+  verifier("distance totale : cumul de toutes les sorties",
+    typeof a.distanceTotaleM === "number" && Math.abs(a.distanceTotaleM - (d1 + a.velo.distanceM)) < 1,
+    a.distanceTotaleM + " / " + (d1 + a.velo.distanceM));
+  // Batterie : après une recharge, ce qui a été consommé ne disparaît pas.
+  TPMS.mondeAction(a, { type: "garer" });
+  a.lipo.etatCharge = 0.98;   // batterie entamée par les jours précédents
+  var avant = TPMS.mondeBilanBatterie ? TPMS.mondeBilanBatterie(a) : null;
+  TPMS.mondeAction(a, { type: "recharge", branche: true });
+  verifier("recharge : la notification dit que la LiPo se recharge",
+    TPMS.mondeTexteRecharge && /recharge/.test(TPMS.mondeTexteRecharge(a)), TPMS.mondeTexteRecharge && TPMS.mondeTexteRecharge(a));
+  TPMS.mondeAvancer(a, 3600000);
+  var apres = TPMS.mondeBilanBatterie ? TPMS.mondeBilanBatterie(a) : null;
+  verifier("batterie consommée : cumul de décharge, pas effacé par la recharge",
+    avant && apres && apres.consommeeMAh >= avant.consommeeMAh && apres.consommeeMAh > 0.05 && a.lipo.etatCharge > 0.995,
+    avant && apres && avant.consommeeMAh + " → " + apres.consommeeMAh);
+  var attendu = a.lipo.capaciteMAh * TPMS.LIPO_UTILE / (a.lipo.dechargeMAh / (a.tMs / 3600000)) / 24;
+  verifier("autonomie au rythme actuel : capacité réelle de la LiPo et cumul de décharge",
+    apres && Math.abs(apres.autonomieJours - attendu) < 1e-6, apres && apres.autonomieJours + " / " + attendu);
+  verifier("recharge : batterie pleine → la notification ne parle pas de 100 mA",
+    !/100 mA/.test(TPMS.mondeTexteRecharge(a)), TPMS.mondeTexteRecharge(a));
+  a.boitier.blocageCharge = "FROID";
+  verifier("recharge : coupée par le froid → la notification le dit", /coupée/.test(TPMS.mondeTexteRecharge(a)), TPMS.mondeTexteRecharge(a));
+  // Pirate : portée avec le gain de son antenne (2 dBi).
+  verifier("portée du pirate : gain d'antenne compté",
+    TPMS.mondePorteePirateM && Math.abs(TPMS.mondePorteePirateM(a) -
+      TPMS.radioPorteeM(a.canal, a.pirateMonde.puissanceDbm + TPMS.PIRATE_GAIN_ANTENNE_DBI, -95)) < 1e-9 &&
+      TPMS.PIRATE_GAIN_ANTENNE_DBI === 2);
+})();
+
+// 8 sexies. Trafic radio : chaque voisin garde son identifiant (sinon la
+// vue radio affichait le même RSSI sous tous les voisins).
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 2, vehiculesVoisins: 6 }));
+  a.voisins.forEach(function (v, i) { v.decalageM = 5 + 4 * i; v.vitesseMs = 0; });
+  TPMS.mondeAction(a, { type: "partir", depuisDebut: true });
+  var ids = {};
+  for (var s = 0; s < 120; s++) {
+    TPMS.mondeAvancer(a, 1000);
+    a.trafic.forEach(function (tr) { if (tr.source === "voisin") ids[tr.emetteurId] = true; });
+  }
+  verifier("trafic : l'identifiant de chaque voisin est noté", Object.keys(ids).length >= 2 && !ids.undefined, Object.keys(ids).join(","));
+})();
+
+// 8 septies. Un bip = 3 sons de 120 ms (9 mA·s pour le buzzer, comme
+// dans logique/energie.js), quel que soit le pas de calcul.
+(function () {
+  var a = TPMS.creerMonde(options({ graine: 12 })), b = TPMS.creerMonde(options({ graine: 12 }));
+  TPMS.mondeAvancer(a, 2000);
+  TPMS.mondeAvancer(b, 2000);
+  a.bipDebutMs = a.tMs; a.bipJusquaMs = a.tMs + 750;   // comme appliquerSorties
+  TPMS.mondeAvancer(a, 1000);
+  TPMS.mondeAvancer(b, 1000);
+  var mAs = (a.lipo.dechargeMAh - b.lipo.dechargeMAh) * 3600;   // 1 mAh = 3 600 mA·s
+  verifier("bip : 3 × 120 ms à 25 mA ≈ 9 mA·s tirés de la batterie", Math.abs(mAs - 9) < 0.4, mAs.toFixed(2) + " mA·s");
+})();
+
 // 9. Semaine type : 10 trajets + 2 sorties de week-end + 1 recharge,
 // le boîtier dort entre les sorties, aucune alerte, batterie rechargée.
 (function () {

@@ -57,7 +57,8 @@ TPMS.pressionCorrigeeBar = function (pressionCapteurBar, correctionBar) {
 // dessous, le lithium se dépose en métal sur l'électrode (« plaquage »),
 // la batterie perd de la capacité et peut se mettre en court-circuit
 // interne. Le chargeur BQ25101 du XIAO ne surveille pas la température :
-// c'est le boîtier qui coupe l'entrée de recharge (MOSFET Q3, Q4).
+// c'est le boîtier qui coupe l'entrée de recharge (interrupteur U4
+// TPS22918, commandé par le MOSFET Q3).
 // Marges : BMP280 précis à ±1 °C, et la batterie peut être un peu plus
 // froide que l'air du boîtier → 2 °C au lieu de 0, 43 °C au lieu de 45.
 // Hystérésis de 3 °C : la recharge ne repart qu'à 5 °C (ou sous 40 °C),

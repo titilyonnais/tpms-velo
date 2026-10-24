@@ -11,7 +11,7 @@ Cette fiche sert à **s'entraîner**, pas à être lue devant le jury. Pour chaq
 ## 1. Le projet et la démarche
 
 **Q1. En une phrase, qu'avez-vous fait ?**
-Un système de surveillance de la pression des pneus par capteurs TPMS Bluetooth, appliqué à une **flotte de chariots élévateurs** (passerelles BLE → MQTT, réseau d'usine découpé en zones, supervision), avec un **kit vélo** comme démonstrateur (boîtier à écran e-paper, application) ; et surtout un **simulateur complet** et une **maquette réseau Docker** qui m'ont permis de tout concevoir, tester et attaquer avant d'avoir le matériel : 717 tests JavaScript et 136 tests C++, relancés à chaque envoi de code sur GitHub.
+Un système de surveillance de la pression des pneus par capteurs TPMS Bluetooth, appliqué à une **flotte de chariots élévateurs** (passerelles BLE → MQTT, réseau d'usine découpé en zones, supervision), avec un **kit vélo** comme démonstrateur (boîtier à écran e-paper, application) ; et surtout un **simulateur complet** et une **maquette réseau Docker** qui m'ont permis de tout concevoir, tester et attaquer avant d'avoir le matériel : 776 tests JavaScript et 139 tests C++, relancés à chaque envoi de code sur GitHub.
 → rapport § 1.6 et § 3.
 
 **Q2. Pourquoi un simulateur plutôt qu'attendre le matériel ?**

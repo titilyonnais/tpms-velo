@@ -68,7 +68,7 @@ Calculé avec `TPMS.consoInstantaneeMa` :
 | **Hystérésis** de 0,03 bar sur la pression affichée | `TPMS.HYSTERESIS_AFFICHAGE_BAR` | Le bruit du capteur (±0,01 bar) ne provoque pas de rafraîchissement |
 | **Veille** après 5 min sans tour de roue ni appui | `delaiVeilleMs` ; `TPMS.boitierMiseAJour` | Le boîtier passe à 5 µA ; réveil par la roue, un bouton ou l'arrivée du 5 V du chargeur |
 | **Baromètre** lu toutes les 10 s seulement, boîtier éveillé | `TPMS.PERIODE_BAROMETRE_MS` | ≈ 0,4 µA en moyenne, 0,1 µA en veille (§ 3.5) |
-| **Pas d'écoute radio sur un chargeur bloqué** par le froid | `TPMS.boitierEcoute` (`surChargeur`) | 0,05 mA au lieu de 3 mA tant que la recharge est coupée (§ 4.7) |
+| **Pas d'écoute radio sur un chargeur bloqué** par le froid | `TPMS.boitierEcoute` (`surChargeur`) | 0,024 mA au lieu de 3 mA tant que la recharge est coupée (R11 = 1 MΩ, § 4.7) |
 
 ---
 
@@ -116,7 +116,7 @@ Deux postes représentent à eux seuls 85 % de la consommation : **l'écoute rad
 
 ### 3.4 Pourquoi une fenêtre de 3 s plutôt que 2 s
 
-La fenêtre de 2 s donnait 76,3 jours. Mais la fenêtre doit maintenant changer de position d'une période à l'autre (voir § 4.1), et avec 2 s à position variable, le pire délai d'alerte d'une crevaison montait à 34 s. On accepte donc de perdre 12,6 jours d'autonomie (1,167 mAh/jour de plus) parce que la fenêtre de 3 s, avec l'écoute renforcée, ramène ce pire délai à 9 s (mesures détaillées au § 6.5 de `analyse-de-risques.md`). Une fenêtre de 3 s dure au moins une période d'annonce d'un capteur en roulage (3 s) : chaque fenêtre entend donc forcément le capteur.
+La fenêtre de 2 s donnait 76,3 jours. Mais la fenêtre doit maintenant changer de position d'une période à l'autre (voir § 4.1), et avec 2 s à position variable, le pire délai d'alerte d'une crevaison montait à 34 s. On accepte donc de perdre 12,6 jours d'autonomie (1,167 mAh/jour de plus) parce que la fenêtre de 3 s, avec l'écoute renforcée, ramène ce pire délai à 9 s (mesures détaillées au § 6.5 de `analyse-de-risques.md`). Une fenêtre de 3 s dure presque une période d'annonce d'un capteur en roulage : chaque fenêtre entend donc le capteur dans la quasi-totalité des cas. Pas toujours : l'intervalle réel entre deux annonces vaut 3 000 ms **plus** 0 à 10 ms (advDelay de la norme BLE), un peu plus que la fenêtre. Une annonce peut tomber juste avant l'ouverture et la suivante juste après la fermeture : environ 0,3 % des fenêtres au plus (quelques millisecondes sur 3 000) ne reçoivent rien. La fenêtre suivante rattrape ce ratage.
 
 L'écoute renforcée (15 s de radio continue après une trame douteuse) n'est pas comptée dans ce bilan : elle ne se déclenche que lors d'un événement rare (crevaison, regonflage, attaque). Une écoute renforcée coûte au plus 15 s × 5 mA × 40 % (part du temps où la radio aurait été coupée) = 30 mA·s ≈ 0,008 mAh, soit environ 0,1 % de la journée type.
 
@@ -285,14 +285,14 @@ C'est **environ 50 fois** le courant de veille (0,255 mA au lieu de 0,005 mA) :
 
 | Situation | Courant en veille | Batterie de 450 mAh vidée en… |
 |---|---|---|
-| Veille normale | 0,005 mA | 3 750 jours en théorie (l'autodécharge de la LiPo, non modélisée, sera alors le vrai facteur limitant) |
+| Veille normale | 0,005 mA | 3 750 jours en théorie (l'autodécharge de la LiPo, environ 3 % par mois, sera alors le vrai facteur limitant : elle n'est pas dans `energie.js`, mais le simulateur la compte, `simulateur/monde/lipo.js`) |
 | Veille, reed resté fermé | 0,255 mA | 73,5 jours |
 | Journée type + reed fermé 24 h sur 24 | 7,063 + 6,0 = 13,1 mAh/j | 34,4 jours |
 
-L'autonomie reste supérieure à une semaine, mais elle est **presque divisée par deux** dans le cas de la journée type (34,4 jours au lieu de 63,7). Pistes pour le firmware (non encore réalisées) :
+L'autonomie reste supérieure à une semaine, mais elle serait **presque divisée par deux** dans le cas de la journée type (34,4 jours au lieu de 63,7) sans parade. Parades :
 
-- utiliser une résistance de tirage externe de forte valeur à la place de la résistance interne : avec 1 MΩ, le courant tombe à 3,3 µA ;
-- détecter qu'aucun top n'est arrivé alors que l'entrée reste à 0 depuis plusieurs secondes, puis désactiver la résistance de tirage avant la mise en veille ;
+- **réalisée** (firmware `src/materiel/entrees.cpp`, simulée par `gererReed` dans `simulateur/moteur.js`) : reed fermé depuis plus de 3 s → le programme coupe la résistance de tirage ; une fois par seconde il la rebranche 50 µs pour voir si le reed s'est rouvert. Le courant perdu devient négligeable ;
+- possible en option (`REED_PULLUP_INTERNE = false` dans `firmware/tpms_boitier/config.h`) : une résistance de tirage externe de 1 MΩ à la place de la résistance interne : le courant tombe à 3,3 µA ;
 - à vérifier sur le nRF52840 : le réveil depuis la veille se fait sur un **niveau** de l'entrée. Si le reed est fermé au moment de la mise en veille, il faudra configurer le réveil sur le niveau opposé, sinon le boîtier risque de se réveiller aussitôt.
 
 ---
@@ -300,7 +300,7 @@ L'autonomie reste supérieure à une semaine, mais elle est **presque divisée p
 ## 7. Limites du modèle
 
 - Les consommations sont des valeurs de fiches techniques ou des estimations, pas des mesures.
-- Ne sont pas modélisés : l'autodécharge de la LiPo, le courant de repos du régulateur et du circuit de charge de la carte XIAO, un éventuel pont diviseur de mesure de la tension batterie, la consommation de l'écran au repos s'il n'est pas mis hors tension.
+- Ne sont pas modélisés dans `energie.js` (le simulateur, lui, compte l'autodécharge de la LiPo et son circuit de protection, § 4.6) : l'autodécharge de la LiPo, le courant de repos du régulateur et du circuit de charge de la carte XIAO, un éventuel pont diviseur de mesure de la tension batterie, la consommation de l'écran au repos s'il n'est pas mis hors tension.
 - En roulant, le modèle suppose que l'écran change toutes les 2 s (hypothèse pessimiste).
 - Le modèle de journée ne compte pas le cas du reed resté fermé (traité à part au § 6), ni l'écoute renforcée (négligeable, § 3.4).
 - Postes du 24/10/2026 absents de `energie.js`, comptés seulement par le circuit simulé : le baromètre BMP280 (0,003 mAh/jour, § 3.5) et R11 pendant une coupure de recharge (3,3 µA, § 4.7). Ils ne changent pas l'autonomie annoncée.

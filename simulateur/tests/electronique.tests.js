@@ -392,6 +392,25 @@ var ETATS = {
 })();
 
 // ---------------------------------------------------------------------
+// « Où part le courant » : chaque courant compté une seule fois
+// ---------------------------------------------------------------------
+(function () {
+  var e = TPMS.circuitResoudre({ cpuActif: true, radioReception: true, eclairage: true, buzzer: true, ledAlerte: true },
+    TPMS.creerLipo({ etatCharge: 0.8 }));
+  var charges = TPMS.circuitCharges ? TPMS.circuitCharges(e) : [];
+  var noms = charges.map(function (x) { return x.nom; });
+  verifier("courants : la liste ne contient ni le total BT1 ni les éléments en série (Q1, Q2, R1, R6, R7)",
+    noms.length > 0 && ["BT1", "Q1", "Q2", "R1", "R6", "R7", "R12", "D2", "J1"].every(function (n) { return noms.indexOf(n) < 0; }),
+    noms.join(","));
+  var somme = charges.reduce(function (s, x) { return s + x.courantA; }, 0);
+  verifier("courants : la somme des charges ne dépasse pas le courant de la batterie (pas de double compte)",
+    somme <= e.courantBatterieA * 1.001 && somme > 0.95 * e.courantBatterieA,
+    ma(somme) + " pour " + ma(e.courantBatterieA));
+  verifier("courants : LED blanches, buzzer et nRF52840 en tête de liste",
+    noms.slice(0, 4).indexOf("BZ1") >= 0 && noms.indexOf("LED2") >= 0 && noms.indexOf("U1") >= 0, noms.join(","));
+})();
+
+// ---------------------------------------------------------------------
 // Bilan
 // ---------------------------------------------------------------------
 resultats.lignes.push("");

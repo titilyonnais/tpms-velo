@@ -20,8 +20,8 @@
 // et lui soustrait une pression atmosphérique FIXE de 1013,25 hPa, car il
 // ne connaît pas l'altitude. En montagne, l'air extérieur pèse moins :
 // à 1500 m (846 hPa) le capteur annonce ≈ 0,17 bar de MOINS que ce que
-// lirait un manomètre sur place. Le boîtier pourrait corriger avec un
-// baromètre... qu'il n'a pas.
+// lirait un manomètre sur place. Le boîtier corrige cet écart grâce à
+// son baromètre BMP280 (logique/barometre.js, monde/barometre.js).
 // =====================================================================
 var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
@@ -273,6 +273,13 @@ TPMS.capteurTPMSAnnoncer = function (c, t, emissions) {
   c.prochaineAnnonceMs = t + intervalle + c.alea() * TPMS.CAPTEUR.advDelayMaxMs;
 };
 
+// Premier instant de la suite t, t + période, t + 2·période… qui soit
+// après apresMs : l'horloge du capteur garde sa phase.
+TPMS.capteurInstantSuivant = function (t, apresMs, periodeMs) {
+  if (t > apresMs) return t;
+  return t + (Math.floor((apresMs - t) / periodeMs) + 1) * periodeMs;
+};
+
 // ---------------------------------------------------------------------
 // Faire vivre le capteur pendant l'intervalle ]tMs − dtS·1000, tMs].
 // ctx = { altitudeM, vitesseMs, temperatureAmbianteC, ensoleillement }
@@ -312,23 +319,29 @@ TPMS.capteurTPMSAvancer = function (c, tMs, dtS, pneu, ctx) {
   //    si la pile se réchauffe).
   var pileOk = c.pileTensionChargeV >= TPMS.PILE.tensionMinV;
 
-  // Premier appel : mesure immédiate, première annonce à un instant au
-  // hasard (deux capteurs allumés ensemble ne parlent pas en même temps).
+  // Premier appel : chaque capteur a sa propre PHASE de mesure (son
+  // horloge démarre à un instant quelconque de la seconde), et sa première
+  // annonce tombe à un instant au hasard : deux capteurs allumés ensemble
+  // ne mesurent pas et ne parlent pas en même temps.
   if (c.prochaineMesureMs === null) {
-    c.prochaineMesureMs = tDebut + 1;
+    c.prochaineMesureMs = tDebut + 1 + c.alea() * k.periodeMesureMs;
     c.prochaineAnnonceMs = tDebut + 1 + c.alea() * c.intervalleRoulageMs;
   }
   if (!pileOk) {
     c.actif = false;
-    // Rien ne se passe ; on recale l'horaire pour repartir proprement.
-    c.prochaineMesureMs = Math.max(c.prochaineMesureMs, tMs + 1);
-    c.prochaineAnnonceMs = Math.max(c.prochaineAnnonceMs, tMs + 1);
+    // Rien ne se passe ; on recale l'horaire pour repartir proprement,
+    // en gardant la phase propre du capteur (multiples de la période).
+    c.prochaineMesureMs = TPMS.capteurInstantSuivant(c.prochaineMesureMs, tMs, k.periodeMesureMs);
+    c.prochaineAnnonceMs = Math.max(c.prochaineAnnonceMs, c.prochaineMesureMs);
     return emissions;
   }
-  // La roue se met à tourner : on n'attend pas la fin des 60 s.
+  // La roue se met à tourner : on n'attend pas la fin des 60 s. Le
+  // capteur annonce à sa prochaine mesure (sa phase à lui) : si les deux
+  // roues repartent dans le même pas de calcul, leurs annonces ne
+  // tombent pas au même instant.
   if (c.enRoulage && !etaitEnRoulage && c.derniereAnnonceMs !== null) {
     c.prochaineAnnonceMs = Math.min(c.prochaineAnnonceMs,
-      Math.max(c.derniereAnnonceMs + c.intervalleRoulageMs, tDebut + 1));
+      Math.max(c.derniereAnnonceMs + c.intervalleRoulageMs, c.prochaineMesureMs));
   }
 
   // 5. Événements de l'intervalle, dans l'ordre chronologique.

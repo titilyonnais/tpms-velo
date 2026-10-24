@@ -547,7 +547,7 @@ Choix principaux :
 - **Copies d'annonce ignorées** : une annonce BLE est émise sur 3 canaux en quelques millisecondes ; le firmware ignore les copies reçues à moins de 100 ms d'écart, sinon le contrôle du rythme les prendrait pour un second émetteur.
 - **Tests embarqués** : avec `AUTOTEST 1`, les tests de la logique sont rejoués sur la carte au démarrage.
 
-**État de vérification.** La logique C++ (`src/logique/`, 18 fichiers `.cpp`, dont `sha256.cpp`, `journal.cpp` et `trame2.cpp` ajoutés le 23/10/2026, `barometre.cpp` et `boutons.cpp` le 24/10/2026) est compilée avec g++ sur PC et ses **136 tests sont exécutés** à chaque envoi de code par GitHub Actions (§ 8.1). Jusqu'au 22/10/2026, je ne pouvais que vérifier sa syntaxe avec le compilateur pour ESP32 installé sur mon PC : les tests C++ n'avaient jamais tourné. Le programme complet n'a en revanche **jamais été compilé avec le cœur Arduino de Seeed ni chargé sur la carte**, puisque je ne l'ai pas encore. Les points incertains sont marqués `// À VÉRIFIER :` dans le code et listés dans [../firmware/README.md](../firmware/README.md).
+**État de vérification.** La logique C++ (`src/logique/`, 18 fichiers `.cpp`, dont `sha256.cpp`, `journal.cpp` et `trame2.cpp` ajoutés le 23/10/2026, `barometre.cpp` et `boutons.cpp` le 24/10/2026) est compilée avec g++ sur PC et ses **139 tests sont exécutés** à chaque envoi de code par GitHub Actions (§ 8.1). Jusqu'au 22/10/2026, je ne pouvais que vérifier sa syntaxe avec le compilateur pour ESP32 installé sur mon PC : les tests C++ n'avaient jamais tourné. Le programme complet n'a en revanche **jamais été compilé avec le cœur Arduino de Seeed ni chargé sur la carte**, puisque je ne l'ai pas encore. Les points incertains sont marqués `// À VÉRIFIER :` dans le code et listés dans [../firmware/README.md](../firmware/README.md).
 
 ### 4.7 Le boîtier imprimé en 3D
 
@@ -1424,21 +1424,22 @@ Les valeurs mesurées remplaceront les hypothèses de `logique/energie.js` ; le 
 
 ### 8.1 Les tests automatiques
 
-Le dépôt contient **717 tests JavaScript en 8 suites** et **136 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte, puis 49 tests JavaScript pour la version industrielle). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
+Le dépôt contient **776 tests JavaScript en 9 suites** et **139 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte, puis 49 pour la version industrielle, 31 pour le simulateur de l'usine, et 28 JavaScript et 3 C++ pour les défauts du simulateur du vélo trouvés par l'audit des valeurs affichées). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
 
 | Suite | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|---|
-| Logique et boîtier | `tests.js` | 208 | Trames, vitesse et distance, fuite lente, prévision du regonflage (9), statistiques (8), pression conseillée (5), alertes et hystérésis, délais de perte, boîtier complet, sécurité et scénarios pirate, inondation (3), SHA-256, HMAC et journal chaîné, capteurs v2 (12), protocole boîtier ↔ application (séquence sur 1 octet, correction d'altitude, recharge coupée), appairage par code et homme du milieu, confirmation par bouton des changements sensibles (20), correction d'altitude, recharge par grand froid, deux boutons sur une broche, attente de l'écran sans BUSY, énergie, écran |
-| Pneu, météo, capteur | `pneu.tests.js` | 72 | Atmosphère et météo, loi des gaz, altitude, échauffement (soleil, freinage), crevaisons, fuite lente, perméation, mesure du capteur |
+| Logique et boîtier | `tests.js` | 214 | Trames, vitesse et distance, fuite lente, prévision du regonflage (9), statistiques (8), pression conseillée (5), alertes et hystérésis, délais de perte, boîtier complet, sécurité et scénarios pirate, inondation (3), SHA-256, HMAC et journal chaîné, capteurs v2 (12), protocole boîtier ↔ application (séquence sur 1 octet, correction d'altitude, recharge coupée), appairage par code et homme du milieu, confirmation par bouton des changements sensibles (20), correction d'altitude, recharge par grand froid, deux boutons sur une broche, attente de l'écran sans BUSY, énergie, écran |
+| Pneu, météo, capteur | `pneu.tests.js` | 74 | Atmosphère et météo, loi des gaz, altitude, échauffement (soleil, freinage), crevaisons, fuite lente, perméation, mesure du capteur |
 | Vélo et parcours | `velo.tests.js` | 62 | Parcours (longueurs, dénivelés, revêtements, feux), vitesse selon la puissance, la pente, le vent et la pression |
-| Radio | `radio.tests.js` | 62 | Affaiblissement et portée, masquage par la jante, paquets sur les canaux 37/38/39, fenêtre d'écoute, collisions |
-| Électronique | `electronique.tests.js` | 86 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près ; boutons sur D5 (SW2 à ≈ 0,48 V à travers R12), coupure de la recharge par U4 et Q3, relâchée d'elle-même carte éteinte (R11) |
-| Monde complet | `moteur.tests.js` | 45 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 ; baromètre avec évent, sans évent et absent ; recharge par grand froid dehors, puis à la maison |
+| Radio | `radio.tests.js` | 64 | Affaiblissement et portée, masquage par la jante, paquets sur les canaux 37/38/39, fenêtre d'écoute, collisions |
+| Électronique | `electronique.tests.js` | 89 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près ; boutons sur D5 (SW2 à ≈ 0,48 V à travers R12), coupure de la recharge par U4 et Q3, relâchée d'elle-même carte éteinte (R11) |
+| Monde complet | `moteur.tests.js` | 58 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 ; baromètre avec évent, sans évent et absent ; recharge par grand froid dehors, puis à la maison |
 | Serveur de flotte | `serveur/serveur.tests.js` | 135 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; connexion par mot de passe (compte inconnu traité comme un mot de passe faux), sessions qui expirent (15 min d'inactivité, 8 h au plus, 3 par compte), vraie déconnexion, rôles ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) ; certificats, clés et journaux de l'entrepôt jamais servis, même en majuscules |
-| Version industrielle | `entrepot/entrepot.tests.js` | 47 | Client MQTT octet par octet (longueur restante, CONNECT, PUBLISH, SUBSCRIBE, testament) et contre un faux courtier ; SNTP et syslog ; entrepôt simulé (zones, fuites, regonflage du matin, nuit aux quais, portée radio) ; réception des lots : zone de la meilleure réception, dédoublonnage, une mesure par minute, lots piégés (sujet ≠ contenu, futur, rejeu, injection), liste blanche, vraisemblance, crevaison, testament ; logique de réception seule (comme dans le navigateur) ; API des chariots réservée aux sessions |
-| **Total JavaScript** | | **717** | |
+| Version industrielle | `entrepot/entrepot.tests.js` | 49 | Client MQTT octet par octet (longueur restante, CONNECT, PUBLISH, SUBSCRIBE, testament) et contre un faux courtier ; SNTP et syslog ; entrepôt simulé (zones, fuites, regonflage du matin, nuit aux quais, portée radio) ; réception des lots : zone de la meilleure réception, dédoublonnage, une mesure par minute, lots piégés (sujet ≠ contenu, futur, rejeu, injection), liste blanche, vraisemblance, crevaison, testament ; logique de réception seule (comme dans le navigateur) ; API des chariots réservée aux sessions |
+| Simulateur de l'usine | `entrepot/usine.tests.js` | 31 | Fidélité à la maquette (règles de `regles.nft`, droits de `courtier/acl`, fichiers interdits du serveur, tailles des paquets MQTT, heure de Paris) ; réception (dédoublonnage, zone, capteur perdu, pression à 20 °C, fuite lente) ; pare-feu à états ; technicien ; les 20 essais |
+| **Total JavaScript** | | **776** | |
 
-**Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **136 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
+**Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **139 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
 
 1. toutes les suites JavaScript, avec Node 24 ;
 2. la compilation de la logique C++ avec g++ (C++11, avertissements activés) et l'exécution de ses tests (`firmware/tests_pc/main.cpp`).
@@ -1504,6 +1505,23 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 - **Accélération ×3 600** : en roulant, le calcul plafonne entre ×1 400 et ×2 700 selon la machine, ce que la barre du haut affiche ; vélo garé, c'est beaucoup plus rapide ;
 - l'**application** dans la page « Application », reliée au boîtier simulé : appairage par code, lecture et écriture des réglages, notifications.
 
+### 8.4 bis L'audit des valeurs affichées (24/10/2026)
+
+Une fois les simulateurs écrits, j'ai fait vérifier **chaque valeur affichée** : recalcul à la main (lois physiques, fiches techniques) et exécution de scénarios dans Node, page par page. Cet audit a trouvé des défauts que les tests ne voyaient pas, parce qu'ils portaient sur ce que l'interface **montre**, pas sur la logique seule. Tous sont corrigés et couverts par un test.
+
+| Où | Défaut | Correction |
+|---|---|---|
+| Pneus, données, CSV | La pression « affichée par le boîtier » était la valeur brute du capteur, sans la correction d'altitude que l'écran applique (0,08 bar d'écart au col) | La même valeur que l'écran ; la valeur brute garde sa ligne « Capteur annonce » |
+| Écran, prévision | « Regonfler dans N jours » comparait un relevé ramené à 20 °C à un seuil « manomètre » à la température du moment, sans retrancher le temps écoulé depuis le relevé : 41 jours annoncés au lieu de 25 en hiver | Seuil ramené dans l'unité des relevés, temps écoulé retranché ; reporté en C++ |
+| Boîtier | La fenêtre d'écoute ne couvrait jamais la fin de chaque période : un capteur à une annonce par minute pouvait y rester calé et passer pour « perdu » en montée lente | Décalage tiré dans toute la période, fenêtre qui « fait le tour » ; reporté en C++ |
+| Capteurs | Les deux capteurs émettaient au même instant (même phase), et se perdaient donc ensemble | Phase propre à chaque capteur |
+| Batterie | Autonomie et consommation fausses après une recharge (1 209 jours affichés) | Cumul de la décharge, capacité réelle de la cellule |
+| Vélo | Densité de l'air sans la température (±7 % de traînée) | ρ = P / (R × T) |
+| Radio | Même puissance affichée sous tous les vélos voisins ; portée du pirate sans son gain d'antenne ; effet de capture de 6 dB inopérant ; retard aléatoire de la norme ajouté deux fois | Corrigés ; tests dans `radio.tests.js` |
+| Électronique | « Où part le courant » comptait la batterie et les éléments en série en double ; bip de 400 ms au lieu de 3 × 120 ms | Seulement les charges ; bip exact (9 mA·s) |
+
+Le même audit, sur la version industrielle, a mené aux corrections du § 10.9.
+
 ### 8.5 État des exigences
 
 | Exigence | État |
@@ -1519,7 +1537,7 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
 | ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7), évent à membrane compris ; non vérifiables avant l'impression et l'essai |
-| ENF-08 à ENF-11 (logiciel) | Vérifiées (717 tests JavaScript, 136 tests C++, lancés à chaque envoi de code ; aucune installation) |
+| ENF-08 à ENF-11 (logiciel) | Vérifiées (776 tests JavaScript, 139 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
 | ENF-31 (confirmation par bouton) | Vérifiée par 20 tests JavaScript et 11 tests C++ ; à essayer avec la vraie radio et Bluefy |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
@@ -1641,7 +1659,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 14:39 – 14:44 | `0d70b19`, `1d64634` | Démonstration des essais de sécurité ; faille trouvée et corrigée (clé privée du courtier servie par la supervision) |
 | 14:51 | `e7074be` | Supervision de l'entrepôt (`flotte/chariots.html`) et logique de réception partagée ; 717 tests JavaScript |
 
-À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 717 aujourd'hui, auxquels s'ajoutent 136 tests C++.
+À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 776 aujourd'hui, auxquels s'ajoutent 139 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1851,7 +1869,7 @@ C'est la même leçon que pour le vélo (§ 6.8) : **la simulation trouve des d�
 | Objectif | Résultat |
 |---|---|
 | Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique (révision C, avec baromètre et coupure de la recharge), firmware, application et boîtier 3D écrits |
-| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 717 tests JavaScript et 136 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 776 tests JavaScript et 139 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
 | Donner au projet une dimension industrielle et réseau | Flotte de chariots élévateurs : passerelles BLE → MQTT (client écrit sans bibliothèque), réseau d'usine en 4 zones derrière un pare-feu nftables, courtier en TLS mutuel avec droits par sujet, NTP, syslog ; maquette Docker de 10 conteneurs lancée en une commande ; supervision de l'entrepôt ; 13 essais de sécurité sur 13 conformes |
 | Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; correction d'altitude par le baromètre, avec la pression « manomètre » pour l'écran et les alertes et la pression du capteur pour l'historique ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
 | Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur, 8 pour le réseau de l'entrepôt) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; changements sensibles confirmés par un bouton du boîtier ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes par mot de passe et sessions qui expirent, HTTPS en option ; risques résiduels identifiés et justifiés |
@@ -2026,7 +2044,7 @@ Références :
 Depuis la racine du dépôt (Node.js requis) :
 
 ```
-node simulateur/tests/tout.js              # les 717 tests JavaScript, 8 suites
+node simulateur/tests/tout.js              # les 776 tests JavaScript, 9 suites
 node simulateur/tests/tests.js             # suite « logique et boîtier » (208 tests)
 node serveur/serveur.tests.js              # suite « serveur de flotte » (135 tests)
 node entrepot/entrepot.tests.js            # suite « version industrielle » (47 tests)
@@ -2058,7 +2076,7 @@ Tests C++ sur PC (avec g++, comme sur GitHub Actions) :
 
 ```
 g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
-./tests_pc                                 # 136 tests
+./tests_pc                                 # 139 tests
 ```
 
 Simulateur hors ligne : ouvrir `simulateur/index.html` par double-clic. Application avec le vrai boîtier : page servie en HTTPS (GitHub Pages), ouverte dans Chrome ou Bluefy.

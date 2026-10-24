@@ -28,7 +28,7 @@ Capteurs TPMS (4 par chariot) ──BLE──▶ 3 passerelles au plafond (VLAN 
 | Démonstration de sécurité (balayage du bureau vers l'atelier, client sans certificat, certificat volé, fausses données, pannes) | **13 essais sur 13** conformes |
 | Analyse de risques du réseau (EBIOS RM simplifiée) | 8 scénarios ajoutés, aucun ne reste élevé |
 | Page de supervision de l'entrepôt | En ligne, avec un mode démonstration |
-| Tests automatiques | 717 tests JavaScript et 136 tests C++, à chaque envoi de code |
+| Tests automatiques | 776 tests JavaScript et 139 tests C++, à chaque envoi de code |
 
 Une faille a été trouvée dans ma propre maquette (le serveur web donnait la clé privée du courtier), puis corrigée et ajoutée à la démonstration.
 

@@ -112,6 +112,12 @@ TPMS.profilDessiner = function (svg, m) {
 // ---------------------------------------------------------------------
 // Vue radio de dessus : qui émet, d'où, avec quelle puissance reçue
 // ---------------------------------------------------------------------
+// Clé d'un émetteur dans le trafic : "AV", "AR", "pirate", ou l'identifiant
+// du voisin ("voisin3").
+TPMS.cleEmetteurTrafic = function (tr) {
+  return tr.source === "voisin" ? tr.emetteurId : tr.source;
+};
+
 TPMS.vueRadioDessiner = function (svg, m, rayonM) {
   var vb = svg.viewBox.baseVal, L = vb.width, H = vb.height;
   var R = rayonM || 30;
@@ -129,7 +135,7 @@ TPMS.vueRadioDessiner = function (svg, m, rayonM) {
 
   // Portée moyenne du pirate
   if (m.pirate.actif && m.positionPirate) {
-    var portee = TPMS.radioPorteeM(m.canal, m.pirateMonde.puissanceDbm, -95);
+    var portee = TPMS.mondePorteePirateM(m);   // puissance + gain de son antenne
     svg.appendChild(TPMS.svgElement("circle", { cx: X(m.positionPirate.x), cy: Y(m.positionPirate.y), r: Math.min(portee, R * 3) * echelle, class: "portee-pirate" }));
   }
   // Vélo : un trait dans l'axe
@@ -139,11 +145,14 @@ TPMS.vueRadioDessiner = function (svg, m, rayonM) {
     x1: X(b.x + Math.sin(cap) * 0.9), y1: Y(b.y + Math.cos(cap) * 0.9),
     x2: X(b.x - Math.sin(cap) * 0.8), y2: Y(b.y - Math.cos(cap) * 0.8), class: "velo-trait"
   }));
-  // Dernières trames reçues ou perdues : un trait par émetteur
+  // Dernières trames reçues ou perdues : un trait par émetteur. Tous les
+  // voisins ont la source « voisin » : on les distingue par l'identifiant
+  // de l'émetteur (sinon le même RSSI s'affichait sous tous les voisins).
   var vus = {};
   m.trafic.forEach(function (tr) {
-    if (vus[tr.source]) return;
-    vus[tr.source] = tr;
+    var cle = TPMS.cleEmetteurTrafic(tr);
+    if (vus[cle]) return;
+    vus[cle] = tr;
   });
   function emetteur(id, pos, classe, texte) {
     if (!pos) return;
@@ -177,7 +186,7 @@ TPMS.vueRadioDessiner = function (svg, m, rayonM) {
     var pv = TPMS.parcoursPoint(m.prep, Math.max(0, m.velo.distanceM + v.decalageM));
     var xy = TPMS.mondeVersMetres(m, pv.lat, pv.lon);
     if (Math.abs(xy.x - centre.x) < R * 1.2 && Math.abs(xy.y - centre.y) < R * 1.2) {
-      emetteur("voisin", { x: xy.x + v.lateralM, y: xy.y }, "voisin", v.id);
+      emetteur(v.id, { x: xy.x + v.lateralM, y: xy.y }, "voisin", v.id);
     }
   });
   svg.appendChild(TPMS.svgElement("rect", { x: L / 2 - 5, y: H / 2 - 5, width: 10, height: 10, class: "boitier-radio" }));

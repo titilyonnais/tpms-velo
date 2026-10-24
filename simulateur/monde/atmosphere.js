@@ -45,6 +45,14 @@ function pressionSansMemo(h) {
   return TPMS.P_ATM_MER_PA * Math.pow(base, exposant);
 }
 
+// Densité de l'air (kg/m³), loi des gaz parfaits : ρ = P / (R_air × T),
+// avec R_air = R / M_air ≈ 287,05 J/(kg·K) (air sec) et T en kelvins.
+// 1,225 kg/m³ à 15 °C au niveau de la mer ; 1,15 par 35 °C : l'air chaud,
+// moins dense, freine un peu moins le cycliste.
+TPMS.densiteAir = function (pressionPa, temperatureC) {
+  return pressionPa / (TPMS.R_GAZ / TPMS.M_AIR * (temperatureC + 273.15));
+};
+
 // Température à une altitude, connaissant celle d'en bas (même gradient
 // de −6,5 °C/km). Utile pour un col : 20 °C en bas → 10 °C à 1500 m de plus.
 TPMS.temperatureAltitudeC = function (temperatureBasC, deniveleM) {

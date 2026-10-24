@@ -80,6 +80,8 @@ TPMS.creerMonde = function (options) {
     cycliste: TPMS.creerCycliste({ style: o.styleCycliste || styleSelonParcours(parcours.type), graine: graine }),
     enSortie: false,                // false = vélo garé (entre deux sorties)
     departSortieM: 0,
+    distanceTotaleM: 0,             // toutes sorties confondues (velo.distanceM : sortie en cours)
+    densiteAir: TPMS.DENSITE_AIR_STANDARD,   // kg/m³, recalculée à chaque pas
     pneus: {},
     capteurs: {},
     voisins: [],
@@ -425,6 +427,10 @@ function unPas(m, dtS) {
   // cela, garé dans une pente, il repartait seul et réveillait le boîtier
   // toutes les heures — défaut révélé par la simulation d'une semaine).
   var surBequille = !m.enSortie && m.velo.vitesseMs < 0.05;
+  // Densité de l'air du moment : pression de l'altitude ET température
+  // de l'air (ρ = P / R·T). L'air chaud d'été freine moins que l'air froid.
+  m.densiteAir = TPMS.densiteAir(TPMS.pressionAtmospheriquePa(m.point.altitudeM), m.instant.temperatureC);
+  var distanceAvantM = m.velo.distanceM;
   if (surBequille) { m.velo.vitesseMs = 0; m.velo.topsAimant = []; }
   else TPMS.veloAvancer(m.velo, dtS, {
     puissanceW: commande.puissanceW,
@@ -434,8 +440,11 @@ function unPas(m, dtS) {
     revetement: m.point.revetement,
     pressionAVBar: m.pneus.AV.pressionRelBar,
     pressionARBar: m.pneus.AR.pressionRelBar,
-    densiteAir: 1.225 * TPMS.pressionAtmospheriquePa(m.point.altitudeM) / TPMS.P_ATM_MER_PA
+    densiteAir: m.densiteAir
   });
+  // Distance totale : velo.distanceM repart de 0 à chaque sortie du
+  // planning, ce compteur-ci cumule toutes les sorties.
+  m.distanceTotaleM += Math.max(0, m.velo.distanceM - distanceAvantM);
 
   // 3. Pneus
   var ctxPneu = {
@@ -576,6 +585,15 @@ function unPas(m, dtS) {
   }
 }
 
+// Antenne du pirate : petite antenne fouet de 2 dBi (hypothèse).
+TPMS.PIRATE_GAIN_ANTENNE_DBI = 2;
+
+// Portée moyenne du pirate (cercle de la vue radio) : sa puissance PLUS
+// le gain de son antenne (celle du boîtier compte pour 0 dBi).
+TPMS.mondePorteePirateM = function (m) {
+  return TPMS.radioPorteeM(m.canal, m.pirateMonde.puissanceDbm + TPMS.PIRATE_GAIN_ANTENNE_DBI, -95);
+};
+
 // Le pirate : il suit le cycliste (sur un autre vélo, en voiture) ou
 // attend à un endroit du parcours. Il usurpe, rejoue ou brouille.
 function emissionsPirate(m, t, dtS, base, cap, emissions) {
@@ -589,7 +607,7 @@ function emissionsPirate(m, t, dtS, base, cap, emissions) {
     pos = { x: xy.x + 5, y: xy.y, z: 1.0 };
   }
   m.positionPirate = pos;
-  var noeud = { id: "pirate", position: pos, puissanceDbm: pm.puissanceDbm, gainAntenneDbi: 2 };
+  var noeud = { id: "pirate", position: pos, puissanceDbm: pm.puissanceDbm, gainAntenneDbi: TPMS.PIRATE_GAIN_ANTENNE_DBI };
   if (pm.brouillage && p.actif) {
     emissions.push({ id: "brouillage@" + t, source: "pirate", tMs: t - dtS * 500, octets: new Uint8Array(0), type: "brouillage", emetteur: noeud, extraPerteDb: 0 });
   }
@@ -602,9 +620,12 @@ function emissionsPirate(m, t, dtS, base, cap, emissions) {
   };
 
   // Pirate SYNCHRONISÉ (pire cas) : il a appris le rythme du capteur et
-  // émet exactement en même temps que lui, plus fort. Par effet de
-  // capture, le boîtier ne reçoit que la trame du pirate : le rythme
-  // paraît normal et la vraie trame ne passe jamais.
+  // émet exactement en même temps que lui (on suppose qu'il devine même
+  // le retard aléatoire advDelay que le capteur ajoute à chaque annonce).
+  // S'il arrive au boîtier au moins 6 dB plus fort, l'effet de capture
+  // ne laisse passer que sa trame : le rythme paraît normal et la vraie
+  // trame ne passe jamais. Moins fort, les deux trames se percutent et
+  // sont perdues (collision).
   if (p.attaque === "synchro") {
     var visees = emissions.filter(function (e) { return e.source === p.cible && e.type === "annonce"; });
     visees.forEach(function (e) {
@@ -649,6 +670,7 @@ function noterTrafic(m, e, r, verdict) {
   var dec = TPMS.decoderTrame(e.octets) || TPMS.decoderTrameV2(e.octets);
   m.trafic.unshift({
     tMs: e.tMs, source: e.source, octets: e.octets,
+    emetteurId: e.emetteur.id,      // distingue les voisins entre eux (source "voisin" pour tous)
     pressionBar: dec ? dec.pressionBar : null,
     rssiDbm: r.rssiDbm, canalBle: r.canalBle, raison: r.raison, verdict: verdict
   });
@@ -673,7 +695,7 @@ function appliquerSorties(m, s) {
   }
   if (s.bip) {
     m.bipDebutMs = m.tMs;
-    m.bipJusquaMs = m.tMs + 3 * 250;
+    m.bipJusquaMs = m.tMs + TPMS.BIP_NB_SONS * TPMS.BIP_PERIODE_MS;
     m.bipsAJouer++;
   }
   m.ledAlerte = s.ledAlerte;
@@ -681,10 +703,30 @@ function appliquerSorties(m, s) {
   m.coupureCharge = !!s.coupureCharge;
 }
 
+// Un bip d'alerte : 3 sons de 120 ms, un toutes les 250 ms (25 mA × 0,36 s
+// = 9 mA·s, la valeur de logique/energie.js).
+TPMS.BIP_NB_SONS = 3;
+TPMS.BIP_SON_MS = 120;
+TPMS.BIP_PERIODE_MS = 250;
+
+// Durée (en s) pendant laquelle le buzzer sonne entre deMs et aMs. Un pas
+// de calcul (50 ms) ne tombe pas pile sur les 120 ms d'un son : on calcule
+// le recouvrement exact au lieu de regarder seulement la fin du pas (qui
+// donnait 8 pas × 50 ms = 400 ms au lieu de 360 ms).
+function dureeBuzzerS(m, deMs, aMs) {
+  var total = 0;
+  if (deMs >= m.bipJusquaMs) return 0;
+  for (var k = 0; k < TPMS.BIP_NB_SONS; k++) {
+    var debut = m.bipDebutMs + k * TPMS.BIP_PERIODE_MS, fin = debut + TPMS.BIP_SON_MS;
+    total += Math.max(0, Math.min(aMs, fin) - Math.max(deMs, debut));
+  }
+  return total / 1000;
+}
+
 // L'électronique consomme ; la LiPo se vide ou se recharge.
 function electronique(m, t, dtS) {
   var b = m.boitier;
-  var phaseBip = t - m.bipDebutMs;
+  var sonS = m.boitierMort ? 0 : dureeBuzzerS(m, t - dtS * 1000, t);
 
   // Température du boîtier et air autour du baromètre.
   var airAutour = (m.vbusV > 0 && !m.options.rechargeDehors) ? TPMS.TEMPERATURE_MAISON_C : m.instant.temperatureC;
@@ -713,7 +755,7 @@ function electronique(m, t, dtS) {
     ecran: m.boitierMort ? "repos" : (t < m.ecranOccupeJusquaMs ? m.ecranMode : "repos"),
     ledAlerte: !m.boitierMort && (m.ledAlerte === "fixe" || (m.ledAlerte === "clignote" && (t % 1000) < 500)),
     eclairage: !m.boitierMort && b.eclairage && !b.veille,
-    buzzer: !m.boitierMort && t < m.bipJusquaMs && (phaseBip % 250) < 120,
+    buzzer: sonS > 0,
     reedFerme: m.reed.ferme,
     reedPullupActif: m.reed.pullup,
     bouton1: m.boutons[1],
@@ -732,7 +774,15 @@ function electronique(m, t, dtS) {
   var e = m.cleCircuit === cle ? m.electronique : TPMS.circuitResoudre(entrees, m.lipo);
   m.cleCircuit = cle;
   m.electronique = e;
-  TPMS.lipoAvancer(m.lipo, dtS, e.courantBatterieA, m.temperatureBoitierC);
+  if (sonS > 0 && sonS < dtS - 1e-9) {
+    // Le buzzer n'a sonné qu'une partie du pas : on compte les deux morceaux,
+    // l'un avec le buzzer, l'autre sans.
+    var silence = TPMS.circuitResoudre(Object.assign({}, entrees, { buzzer: false }), m.lipo);
+    TPMS.lipoAvancer(m.lipo, dtS - sonS, silence.courantBatterieA, m.temperatureBoitierC);
+    TPMS.lipoAvancer(m.lipo, sonS, e.courantBatterieA, m.temperatureBoitierC);
+  } else {
+    TPMS.lipoAvancer(m.lipo, dtS, e.courantBatterieA, m.temperatureBoitierC);
+  }
 
   // Le boîtier ne connaît sa batterie que par la tension qu'il mesure
   // (une mesure par seconde, comme le firmware).
@@ -777,8 +827,9 @@ function enregistrer(m) {
     temperatureC: m.instant.temperatureC,
     pAV: m.pneus.AV.pressionRelBar, pAR: m.pneus.AR.pressionRelBar,
     tAirAV: m.pneus.AV.temperatureAirC, tAirAR: m.pneus.AR.temperatureAirC,
-    affAV: roueAV.mesure ? roueAV.mesure.pressionBar : null,
-    affAR: roueAR.mesure ? roueAR.mesure.pressionBar : null,
+    // Pression de l'écran du boîtier (corrigée de l'altitude, avec hystérésis)
+    affAV: TPMS.mondePressionAffichee(m, "AV"),
+    affAR: TPMS.mondePressionAffichee(m, "AR"),
     etatAV: roueAV.etat, etatAR: roueAR.etat,
     vbat: m.lipo.tensionV, soc: m.lipo.etatCharge,
     courantMa: m.electronique ? m.electronique.courantBatterieA * 1000 : 0,
@@ -788,6 +839,41 @@ function enregistrer(m) {
   // Mémoire bornée : on garde au plus 200 000 points (plusieurs semaines).
   if (m.enregistrement.length > 200000) m.enregistrement.splice(0, 20000);
 }
+
+// ---------------------------------------------------------------------
+// Valeurs prêtes pour la page (calculées ici pour pouvoir être testées)
+// ---------------------------------------------------------------------
+// Pression montrée par l'écran du boîtier pour une roue : corrigée de
+// l'altitude, avec hystérésis (boitier.js). null sans mesure, ou pendant
+// un « signal suspect » (l'écran affiche alors -.--).
+TPMS.mondePressionAffichee = function (m, pos) {
+  var roue = m.boitier.roues[pos];
+  if (roue.mesure === null || roue.etat === TPMS.ETAT.INTRUSION) return null;
+  return roue.pressionAffichee;
+};
+
+// Bilan de la batterie du boîtier depuis le début de la simulation.
+// consommeeMAh : tout ce qui a été tiré de la LiPo (compteur cumulé de
+// lipo.js : une recharge ne l'efface pas, contrairement à (1 − charge) × 500).
+// autonomieJours : capacité utile de CETTE cellule / consommation moyenne.
+TPMS.mondeBilanBatterie = function (m) {
+  var heures = m.tMs / 3600000;
+  var moyenneMa = heures > 0.05 ? m.lipo.dechargeMAh / heures : 0;
+  return {
+    consommeeMAh: m.lipo.dechargeMAh,
+    moyenneMa: moyenneMa,
+    autonomieJours: moyenneMa > 0 ? m.lipo.capaciteMAh * TPMS.LIPO_UTILE / moyenneMa / 24 : null
+  };
+};
+
+// Texte de la notification « Chargeur branché » : la LiPo ne se recharge
+// pas si le boîtier coupe la recharge (froid, chaleur) ou si elle est pleine.
+TPMS.mondeTexteRecharge = function (m) {
+  var blocage = m.boitier.blocageCharge;
+  if (blocage !== "") return "Recharge coupée par le boîtier : trop " + (blocage === "FROID" ? "froid" : "chaud") + " pour la LiPo.";
+  if (m.lipo.etatCharge >= 0.995) return "La LiPo est déjà pleine : le chargeur n'alimente que le boîtier.";
+  return "La LiPo se recharge à 100 mA.";
+};
 
 // Export CSV de l'enregistrement.
 TPMS.mondeExportCsv = function (m) {

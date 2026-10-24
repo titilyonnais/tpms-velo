@@ -157,27 +157,34 @@ TPMS.boitierJournalRefus = function (b, roue, maintenantMs, texte) {
 };
 
 // La radio écoute-t-elle à cet instant ?
-// Elle est allumée pendant les fenetreMs premières millisecondes de
-// chaque période, et coupée en veille.
+// Elle est allumée fenetreMs millisecondes par période, et coupée en veille.
 // La position de la fenêtre dans chaque période change d'une période à
 // l'autre (pseudo-hasard calculé à partir du numéro de période). Sans cela,
 // un capteur qui annonce toutes les 60 s (multiple des 5 s de la période)
 // tombe toujours au même moment du cycle : s'il tombe hors de la fenêtre,
 // il n'est JAMAIS entendu (verrouillage de phase, défaut révélé par la
 // simulation d'une semaine).
+// Le décalage est tiré dans TOUTE la période [0, période[ et la fenêtre
+// « fait le tour » : si elle dépasse la fin de la période, elle continue
+// au début de cette même période. Ainsi chaque instant du cycle est écouté
+// 60 % des périodes. (Avant, le décalage restait dans [0, période − fenêtre[ :
+// la fin de la période n'était presque jamais écoutée, et un capteur à
+// 1 annonce par minute calé là, en montée lente, passait pour PERDU.)
 TPMS.boitierEcoute = function (b, maintenantMs) {
   if (b.veille) return false;
   // Posé sur un chargeur dont la recharge est coupée (grand froid) : le
   // boîtier n'est pas sur le vélo, écouter les capteurs ne sert à rien
-  // et viderait la batterie (≈ 3 mA en écoute contre 0,02 mA sans).
+  // et viderait la batterie (5 mA pendant l'écoute, soit 3 mA en moyenne
+  // avec la fenêtre de 60 %, contre 0,02 mA sans).
   if (b.surChargeur && b.blocageCharge !== "") return false;
   if (maintenantMs < b.ecouteContinueJusquaMs) return true;   // écoute renforcée
   var periode = b.reglages.ecoutePeriodeMs, fenetre = b.reglages.ecouteFenetreMs;
   if (fenetre >= periode) return true;
   var cycle = Math.floor(maintenantMs / periode);
-  var decalage = TPMS.melangerEntier(cycle) % (periode - fenetre);
+  var decalage = TPMS.melangerEntier(cycle) % periode;
   var dansCycle = maintenantMs - cycle * periode;
-  return dansCycle >= decalage && dansCycle < decalage + fenetre;
+  // Distance (en faisant le tour de la période) depuis le début de la fenêtre.
+  return ((dansCycle - decalage + periode) % periode) < fenetre;
 };
 
 // Écoute renforcée : dès qu'une trame sème le doute (changement brutal à
@@ -432,8 +439,8 @@ TPMS.boitierVue = function (b, maintenantMs) {
     codeAppairage: b.liaison.code,
     confirmation: b.liaison.enAttente !== null ? b.liaison.masqueAttente : 0,   // 0 = rien à confirmer
     radioSaturee: b.radioSaturee,
-    roues: { AV: TPMS.vueRoue(b.roues.AV, b.reglages.seuils.AV.basBar),
-             AR: TPMS.vueRoue(b.roues.AR, b.reglages.seuils.AR.basBar) },
+    roues: { AV: TPMS.vueRoue(b.roues.AV, b.reglages.seuils.AV.basBar, b.correctionBar, maintenantMs),
+             AR: TPMS.vueRoue(b.roues.AR, b.reglages.seuils.AR.basBar, b.correctionBar, maintenantMs) },
     vitesseKmh: b.veille ? 0 : TPMS.compteurVitesseKmh(c, maintenantMs),
     distanceKm: TPMS.compteurDistanceKm(c),
     moyenneKmh: TPMS.compteurMoyenneKmh(c),
@@ -442,7 +449,9 @@ TPMS.boitierVue = function (b, maintenantMs) {
   };
 };
 
-TPMS.vueRoue = function (roue, seuilBasBar) {
+// correctionBar et maintenantMs servent à la prévision du regonflage
+// (seuil ramené dans l'unité des relevés, temps écoulé retranché).
+TPMS.vueRoue = function (roue, seuilBasBar, correctionBar, maintenantMs) {
   // Signal suspect : la dernière valeur a peut-être été fabriquée par le
   // pirate. On n'affiche plus de pression plutôt qu'une valeur douteuse.
   if (roue.mesure === null || roue.etat === TPMS.ETAT.INTRUSION) {
@@ -453,7 +462,8 @@ TPMS.vueRoue = function (roue, seuilBasBar) {
     pressionBar: roue.pressionAffichee,
     temperatureC: roue.mesure.temperatureC,
     batteriePct: roue.mesure.batteriePct,
-    joursRegonflage: TPMS.predireRegonflage(roue.releves, seuilBasBar)   // null = pas encore de prévision
+    joursRegonflage: TPMS.predireRegonflage(roue.releves, seuilBasBar, correctionBar,
+      roue.mesure.temperatureC, maintenantMs)   // null = pas encore de prévision
   };
 };
 

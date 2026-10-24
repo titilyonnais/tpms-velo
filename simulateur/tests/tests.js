@@ -644,18 +644,19 @@ function proche(a, b, tolerance) {
   var r = TPMS.creerReleves();
   for (var k = 0; k <= 8; k++) TPMS.relevesAjouter(r, k * JOUR / 2, 2.2 - 0.03 * k / 2);
   // Après 4 jours : 2,08 bar ; seuil 1,8 → (2,08 − 1,8) / 0,03 = 9,33 jours
-  var jours = TPMS.predireRegonflage(r, 1.8);
+  // (pas de correction d'altitude, 20 °C, prévision faite au moment du dernier relevé)
+  var jours = TPMS.predireRegonflage(r, 1.8, 0, 20, 4 * JOUR);
   verifier("prévision : perte de 0,03 bar/j → seuil bas dans 9,3 jours", proche(jours, 9.333, 0.01), jours);
   verifier("prévision : texte écran « 9J »", TPMS.texteJours(jours) === "9J", TPMS.texteJours(jours));
 
   var court = TPMS.creerReleves();
   for (var i = 0; i < 4; i++) TPMS.relevesAjouter(court, i * 4 * 3600000, 2.2 - 0.01 * i);
-  verifier("prévision : moins de 2 jours de recul → pas de prévision", TPMS.predireRegonflage(court, 1.8) === null);
+  verifier("prévision : moins de 2 jours de recul → pas de prévision", TPMS.predireRegonflage(court, 1.8, 0, 20, 12 * 3600000) === null);
   verifier("prévision : texte écran « -- » sans prévision", TPMS.texteJours(null) === "--");
 
   var stable = TPMS.creerReleves();
   for (var j = 0; j <= 6; j++) TPMS.relevesAjouter(stable, j * JOUR / 2, 2.2 + (j % 2 ? 0.005 : -0.005));
-  var js = TPMS.predireRegonflage(stable, 1.8);
+  var js = TPMS.predireRegonflage(stable, 1.8, 0, 20, 3 * JOUR);
   verifier("prévision : pression stable → infini, texte « >60J »", js === Infinity && TPMS.texteJours(js) === ">60J", js);
 
   verifier("prévision : un relevé à moins de 3 h du précédent est ignoré",
@@ -672,9 +673,52 @@ function proche(a, b, tolerance) {
     TPMS.boitierRecevoirTrame(b, TPMS.encoderTrame({ numero: 1, adresse: [0xEA, 0xCA, 0x3F, 0x1B, 0x07],
       pressionBar: 2.2 - 0.03 * d / 2, temperatureC: 20, batteriePct: 90, alarme: 0 }), t);
   }
-  var vue = TPMS.boitierVue(b, 3 * JOUR);
+  // Dernier relevé à 2,5 j : 2,125 bar → (2,125 − 1,8) / 0,03 = 10,8 j.
+  var vue = TPMS.boitierVue(b, 2.5 * JOUR);
   verifier("prévision : le boîtier prévoit le regonflage de la roue avant (≈ 10,8 j)",
     vue.roues.AV.joursRegonflage !== null && proche(vue.roues.AV.joursRegonflage, 10.83, 0.2), vue.roues.AV.joursRegonflage);
+  // Une demi-journée plus tard, sans nouveau relevé : il reste 0,5 j de moins.
+  var plusTard = TPMS.boitierVue(b, 3 * JOUR);
+  verifier("prévision : le temps écoulé depuis le dernier relevé est retranché (≈ 10,3 j)",
+    plusTard.roues.AV.joursRegonflage !== null && proche(plusTard.roues.AV.joursRegonflage, 10.33, 0.2), plusTard.roues.AV.joursRegonflage);
+  // En altitude (+0,17 bar de correction), le manomètre lit plus haut :
+  // le seuil bas sera atteint plus tard → (2,125 − 1,63) / 0,03 = 16,5 j.
+  b.correctionBar = 0.17;
+  var enAltitude = TPMS.boitierVue(b, 2.5 * JOUR);
+  verifier("prévision : seuil ramené dans l'unité des relevés (correction d'altitude, ≈ 16,5 j)",
+    enAltitude.roues.AV.joursRegonflage !== null && proche(enAltitude.roues.AV.joursRegonflage, 16.5, 0.2), enAltitude.roues.AV.joursRegonflage);
+  b.correctionBar = 0;
+
+  // Le seuil est comparé aux relevés ramenés à 20 °C : par 5 °C, 1,8 bar
+  // au manomètre correspondent à plus de 1,8 bar « à 20 °C ».
+  var r2 = TPMS.creerReleves();
+  for (var q = 0; q <= 8; q++) TPMS.relevesAjouter(r2, q * JOUR / 2, 2.2 - 0.03 * q / 2);
+  var seuilComp = TPMS.pressionCompenseeBar(1.8 - 0.17, 5);
+  var attendu = (2.08 - seuilComp) / 0.03 - 2;   // prévision faite 2 jours après le dernier relevé
+  var froid = TPMS.predireRegonflage(r2, 1.8, 0.17, 5, 6 * JOUR);
+  verifier("prévision : seuil compensé en température et en altitude, temps écoulé retranché (≈ 8,2 j)",
+    proche(froid, attendu, 0.01), froid + " au lieu de " + attendu);
+  verifier("prévision : jamais en dessous de 0 jour", TPMS.predireRegonflage(r2, 1.8, 0, 20, 40 * JOUR) === 0);
+})();
+
+// ---------------------------------------------------------------------
+// Fenêtre d'écoute : pas de zone morte dans le cycle
+// ---------------------------------------------------------------------
+(function () {
+  // Un capteur qui annonce toutes les 60 s (multiple de la période de
+  // 5 s) tombe toujours au même instant du cycle. Il faut que CHAQUE
+  // instant du cycle soit écouté environ 60 % des périodes : sinon un
+  // capteur « mal placé » n'est presque jamais entendu (CAPTEUR PERDU).
+  var b = TPMS.creerBoitier();
+  var P = b.reglages.ecoutePeriodeMs, pire = 1, somme = 0, nb = 0;
+  for (var dans = 0; dans < P; dans += 50) {
+    var ecoutes = 0;
+    for (var cycle = 0; cycle < 400; cycle++) if (TPMS.boitierEcoute(b, cycle * P + dans)) ecoutes++;
+    pire = Math.min(pire, ecoutes / 400);
+    somme += ecoutes / 400; nb++;
+  }
+  verifier("écoute : aucun instant du cycle oublié (chacun écouté ≥ 50 % des périodes)", pire >= 0.5, pire);
+  verifier("écoute : toujours 60 % du temps en moyenne", proche(somme / nb, 0.6, 0.02), somme / nb);
 })();
 
 // ---------------------------------------------------------------------

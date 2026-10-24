@@ -79,12 +79,19 @@
   // -------------------------------------------------------------------
   // Création d'un monde
   // -------------------------------------------------------------------
+  // Nombre saisi dans un champ, ou la valeur par défaut si le champ est
+  // vide ou illisible. (Avec « || 8 », un départ à 0 h devenait 8 h.)
+  function nombreOu(id, defaut) {
+    var v = parseFloat($(id).value);
+    return isNaN(v) ? defaut : v;
+  }
+
   function optionsFormulaire() {
     return {
       graine: parseInt($("cfgGraine").value, 10) || 0,
       parcoursId: $("cfgParcours").value,
       meteo: $("cfgMeteo").value,
-      heureDepartH: parseFloat($("cfgHeure").value) || 8,
+      heureDepartH: nombreOu("cfgHeure", 8),
       chambre: $("cfgChambre").value,
       pressionAVBar: parseFloat($("cfgPAV").value) || 2.2,
       pressionARBar: parseFloat($("cfgPAR").value) || 2.4,
@@ -105,10 +112,17 @@
     vue.rssi = { AV: [], AR: [] };
     vue.echanges = [];
     vue.journal = [];
+    vue.nbAlertes = 0;
     $("carte")._cache = null;
     $("profil")._points = null;
     synchroniserReglages();
     $("titreCarte").textContent = m.parcours.nom;
+    vue.parcoursAffiche = m.parcours.id;
+    // Cible de la pompe : les pressions choisies pour cette simulation.
+    POSITIONS.forEach(function (pos) {
+      var champ = document.querySelector("#detail" + pos + " [data-cible-gonflage]");
+      if (champ) champ.value = pos === "AV" ? m.options.pressionAVBar : m.options.pressionARBar;
+    });
     $("infoMonde").innerHTML = m.parcours.nom + "<br>" + (NOMS_METEO[m.options.meteo] || "") + " · graine " + m.graine;
     $("cadreApp").src = "../app/index.html?transport=simule";
     dessinerCanvas();
@@ -349,7 +363,12 @@
     puce($("puceBoitier"), m.boitierMort ? "Éteint" : (b.veille ? "Veille" : "En marche"),
       m.boitierMort ? "alerte" : (b.veille ? "" : "ok"));
 
-    // Carte
+    // Carte (le planning peut changer de parcours en cours de route : on
+    // remet alors le titre à jour)
+    if (vue.parcoursAffiche !== m.parcours.id) {
+      $("titreCarte").textContent = m.parcours.nom;
+      vue.parcoursAffiche = m.parcours.id;
+    }
     TPMS.carteDessiner($("carte"), m);
     TPMS.profilDessiner($("profil"), m);
 
@@ -384,12 +403,13 @@
     $("jaugeTexte").textContent = b.batteriePct + " %";
     $("jaugeSous").textContent = nombre(m.lipo.tensionV, 2) + " V";
     var courantMa = m.electronique ? m.electronique.courantBatterieA * 1000 : 0;
-    var heures = m.tMs / 3600000;
-    var moyenMa = heures > 0.05 ? ((1 - m.lipo.etatCharge) * TPMS.LIPO_MAH) / heures : 0;
+    // Cumul de décharge et capacité réelle de la cellule (moteur.js) : une
+    // recharge n'efface pas ce qui a été consommé.
+    var bilan = TPMS.mondeBilanBatterie(m);
     $("mesuresBatterie").innerHTML = mesures([
-      ["Courant", (courantMa < 0 ? "charge " : "") + nombre(Math.abs(courantMa), courantMa < 1 ? 3 : 1) + " mA"],
+      ["Courant", (courantMa < 0 ? "charge " : "") + nombre(Math.abs(courantMa), Math.abs(courantMa) < 1 ? 3 : 1) + " mA"],
       ["Charge réelle", nombre(m.lipo.etatCharge * 100, 1) + " %"],
-      ["Autonomie au rythme actuel", moyenMa > 0 ? nombre(TPMS.LIPO_MAH * TPMS.LIPO_UTILE / moyenMa / 24, 0) + " jours" : "–"]
+      ["Autonomie au rythme actuel", bilan.autonomieJours !== null ? nombre(bilan.autonomieJours, 0) + " jours" : "–"]
     ]);
   }
 
@@ -397,8 +417,8 @@
     var b = m.boitier, p = m.pirate;
     var detectee = POSITIONS.some(function (pos) { return b.roues[pos].etat === "INTRUSION"; });
     var trompe = POSITIONS.some(function (pos) {
-      var r = b.roues[pos];
-      return r.mesure && r.etat !== "INTRUSION" && Math.abs(r.mesure.pressionBar - m.pneus[pos].pressionRelBar) > 0.25;
+      var affichee = TPMS.mondePressionAffichee(m, pos);   // ce que montre l'écran
+      return affichee !== null && Math.abs(affichee - m.pneus[pos].pressionRelBar) > 0.25;
     });
     if (!p.actif) { puce($("puceSecurite"), "Aucune attaque", "ok"); }
     else if (trompe) { puce($("puceSecurite"), "Boîtier trompé", "alerte"); }
@@ -436,7 +456,9 @@
   }
   // " · regonfler dans 12 j" quand le boîtier a assez de recul.
   function texteRegonflage(roue, pos) {
-    var jours = TPMS.predireRegonflage(roue.releves, m.boitier.reglages.seuils[pos].basBar);
+    if (roue.mesure === null) return "";
+    var jours = TPMS.predireRegonflage(roue.releves, m.boitier.reglages.seuils[pos].basBar,
+      m.boitier.correctionBar, roue.mesure.temperatureC, m.tMs);
     if (jours === null) return "";
     if (jours === Infinity) return " · pression stable";
     return jours < 1 ? " · regonfler maintenant" : " · regonfler dans " + Math.floor(jours) + " j";
@@ -530,7 +552,8 @@
         roue.etat === "OK" ? "ok" : (roue.etat === "ATTENTE" ? "" : "alerte"));
       var trous = (p.orifices || []).map(function (o) { return o.type + " " + nombre(o.diametreMm, 2) + " mm"; }).join(", ");
       bloc.querySelector("[data-mesures]").innerHTML = mesures([
-        ["Boîtier affiche", roue.mesure && roue.etat !== "INTRUSION" ? nombre(roue.mesure.pressionBar, 2) + " bar" : "–"],
+        ["Boîtier affiche", TPMS.mondePressionAffichee(m, pos) !== null ? nombre(TPMS.mondePressionAffichee(m, pos), 2) + " bar" : "–"],
+        ["Capteur annonce", roue.mesure ? nombre(roue.mesure.pressionBar, 2) + " bar" : "–"],
         ["Pression absolue", nombre(TPMS.pneuPressionAbsoluePa(p) / 1e5, 3) + " bar"],
         ["Air intérieur", nombre(p.temperatureAirC, 1) + " °C"],
         ["Trous", trous || "aucun"],
@@ -666,7 +689,7 @@
     // Vérité
     $("verite").innerHTML = POSITIONS.map(function (pos) {
       var reelle = m.pneus[pos].pressionRelBar, roue = m.boitier.roues[pos];
-      var retenue = roue.mesure ? roue.mesure.pressionBar : null, bilan;
+      var retenue = TPMS.mondePressionAffichee(m, pos), bilan;   // pression de l'écran
       if (roue.etat === TPMS.ETAT.INTRUSION) bilan = '<span class="puce attention">Attaque repérée</span>';
       else if (retenue === null) bilan = '<span class="puce">Pas de mesure</span>';
       else if (Math.abs(reelle - retenue) > 0.25) bilan = '<span class="puce alerte">Boîtier trompé</span>';
@@ -783,7 +806,7 @@
       usurpation: "Le pirate a relevé l'adresse du capteur en écoutant l'air, et diffuse des trames à son nom avec la pression de son choix.",
       rejeu: "Le pirate renvoie à l'identique des trames enregistrées plus tôt, par exemple pneu gonflé pour masquer une crevaison.",
       brouillage: "Le pirate émet en continu sur les canaux d'annonce : près de lui, plus rien n'est reçu.",
-      synchro: "Le pirate a appris le rythme du capteur et émet en même temps que lui. La norme BLE ajoute un délai aléatoire de 0 à 10 ms à chaque annonce : le boîtier reçoit souvent les deux. Seules des trames signées (capteurs v2) l'arrêtent à coup sûr.",
+      synchro: "Le pirate a appris le rythme du capteur et émet exactement en même temps que lui (pire cas : il devine même le délai aléatoire de 0 à 10 ms que la norme BLE ajoute à chaque annonce). S'il arrive au boîtier 6 dB plus fort, seule sa trame passe (effet de capture) et le rythme paraît normal ; sinon les deux trames se percutent et sont perdues. Seules des trames signées (capteurs v2) l'arrêtent à coup sûr.",
       inondation: "500 annonces par seconde à adresses aléatoires : collisions et boîtier débordé. On ne peut pas l'empêcher (c'est de la physique), seulement la détecter : le boîtier affiche SATURE."
     }[a];
   }
@@ -819,13 +842,11 @@
       formatY: function (y) { return nombre(y, 1) + " V"; }
     });
     if (e) {
-      var lignes = Object.keys(e.courants || {})
-        .filter(function (k) { return k.indexOf("U1.") !== 0 && k !== "D5" && Math.abs(e.courants[k]) > 1e-7; })
-        .sort(function (a, b) { return Math.abs(e.courants[b]) - Math.abs(e.courants[a]); }).slice(0, 8)
-        .map(function (k) {
-          var ma = Math.abs(e.courants[k]) * 1000;
-          return { nom: k, valeur: ma, texte: (ma < 0.01 ? nombre(ma * 1000, 1) + " µA" : nombre(ma, 2) + " mA") };
-        });
+      // Seulement les charges (circuit.js) : chaque courant compté une fois.
+      // Sous 1 mA, en µA, comme sur le schéma.
+      var lignes = TPMS.circuitCharges(e).slice(0, 8).map(function (x) {
+        return { nom: x.nom, valeur: x.courantA * 1000, texte: TPMS.schemaTexteCourant(x.courantA) };
+      });
       barres($("barresCourants"), lignes);
       $("alertesCircuit").textContent = (e.alertes || []).join(" · ");
     }
@@ -928,7 +949,7 @@
       ["Téléphone appairé", l.appaire ? "oui" : "non"],
       ["Chiffrement", l.connecte && l.appaire ? "AES-CCM" : "–"],
       ["Code affiché", l.code ? l.code : "–"],
-      ["Notifications", l.sequence]
+      ["Séquence", l.sequence]   // numéro de la dernière notification, sur 1 octet (0 à 255)
     ]);
     var html = "<tr><th>Heure</th><th>Sens</th><th>Quoi</th><th>Octets</th></tr>";
     vue.echanges.forEach(function (x) {
@@ -957,22 +978,21 @@
       formatY: function (y) { return nombre(y, choix.pas < 1 ? 2 : 0) + choix.u; }
     });
     $("legendeDonnees").innerHTML = choix.s.map(function (c) { return '<span class="trait ' + c[1] + '"></span>' + c[2]; }).join(" ");
-    var min = { AV: Infinity, AR: Infinity }, vmax = 0, alertes = 0;
+    var min = { AV: Infinity, AR: Infinity }, vmax = 0;
     e.forEach(function (q) {
       if (q.pAV < min.AV) min.AV = q.pAV;
       if (q.pAR < min.AR) min.AR = q.pAR;
       if (q.vitesseKmh > vmax) vmax = q.vitesseKmh;
     });
-    vue.journal.forEach(function (l) { if (MOTS_ALERTE.test(l.texte)) alertes++; });
     $("resume").innerHTML = mesures([
       ["Temps simulé", nombre(m.tMs / 3600000, 2) + " h"],
-      ["Distance", nombre(m.velo.distanceM / 1000, 2) + " km"],
+      ["Distance totale", nombre(m.distanceTotaleM / 1000, 2) + " km"],
       ["Vitesse maximale", nombre(vmax, 1) + " km/h"],
       ["Pression minimale avant", nombre(min.AV, 2) + " bar"],
       ["Pression minimale arrière", nombre(min.AR, 2) + " bar"],
-      ["Alertes du boîtier", alertes],
+      ["Alertes du boîtier", vue.nbAlertes],
       ["Annonces reçues", m.stats.recues + " sur " + m.stats.emissions],
-      ["Batterie consommée", nombre((1 - m.lipo.etatCharge) * TPMS.LIPO_MAH, 1) + " mAh"],
+      ["Batterie consommée", nombre(TPMS.mondeBilanBatterie(m).consommeeMAh, 1) + " mAh"],
       ["Actions enregistrées", m.actions.length]
     ]);
     $("journal").innerHTML = lignesJournal(200);
@@ -989,7 +1009,10 @@
     while (b.journal.length > 0) {
       var ligne = b.journal.shift();
       vue.journal.unshift(ligne);
-      if (MOTS_ALERTE.test(ligne.texte)) notifier("Le boîtier signale", ligne.texte, "alerte");
+      if (MOTS_ALERTE.test(ligne.texte)) {
+        vue.nbAlertes++;   // compteur cumulé : le journal affiché ne garde que 300 lignes
+        notifier("Le boîtier signale", ligne.texte, "alerte");
+      }
     }
     if (vue.journal.length > 300) vue.journal.length = 300;
   }
@@ -1171,7 +1194,7 @@
     });
     $("chkRecharge").addEventListener("change", function (e) {
       action({ type: "recharge", branche: e.target.checked });
-      notifier(e.target.checked ? "Chargeur branché" : "Chargeur débranché", e.target.checked ? "La LiPo se recharge à 100 mA." : "", e.target.checked ? "ok" : "");
+      notifier(e.target.checked ? "Chargeur branché" : "Chargeur débranché", e.target.checked ? TPMS.mondeTexteRecharge(m) : "", e.target.checked ? "ok" : "");
     });
     $("chkPirateAccueil").addEventListener("change", function (e) { activerPirate(e.target.checked); });
     pilules($("choixAttaqueAccueil"), function (bt) { choisirAttaque(bt.dataset.attaque); });

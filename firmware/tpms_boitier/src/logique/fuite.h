@@ -81,7 +81,12 @@ bool relevesAjouter(Releves* r, int32_t tMs, float pressionBar);
 // Jours avant le seuil bas à perte constante (INFINITY si stable, 0 si dépassé).
 float joursAvantSeuil(float pressionBar, float penteBarJour, float seuilBasBar);
 // Prévision ; JOURS_INCONNU tant qu'il n'y a pas assez de recul.
-float predireRegonflage(const Releves* r, float seuilBasBar);
+// Le seuil bas (pression manomètre) est ramené dans l'unité des relevés
+// (pression du capteur à 20 °C) avec la correction d'altitude et la
+// température actuelle du capteur ; le temps écoulé depuis le dernier
+// relevé est retranché (jamais sous 0).
+float predireRegonflage(const Releves* r, float seuilBasBar, float correctionBar,
+                        float temperatureC, int32_t maintenantMs);
 // Texte court pour l'écran : "--", "12J", ">60J" (texte : 8 octets au moins).
 void texteJours(float jours, char* texte);
 
