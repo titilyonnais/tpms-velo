@@ -4,58 +4,148 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TPMS · entrepôt et vélo</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <meta name="description" content="Surveillance de la pression des pneus par capteurs TPMS Bluetooth : flotte de chariots élévateurs, réseau d'usine, et kit vélo démonstrateur. Projet BTS CIEL, épreuve E6.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23000%27/%3E%3Cg fill=%27none%27 stroke-linecap=%27round%27%3E%3Cpath d=%27M7.51 25.49A12 12 0 1 1 24.49 25.49%27 stroke=%27%2333383e%27 stroke-width=%273.4%27/%3E%3Cpath d=%27M7.51 25.49A12 12 0 1 1 25.71 9.95%27 stroke=%27%23f5b800%27 stroke-width=%273.4%27/%3E%3Cpath d=%27M16 17L23.28 11.71%27 stroke=%27%23f1f2ee%27 stroke-width=%272.4%27/%3E%3C/g%3E%3Ccircle cx=%2716%27 cy=%2717%27 r=%272.6%27 fill=%27%23f5b800%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <!-- Page d'accueil de GitHub Pages : elle ne fait que renvoyer vers les
-       pages du projet. Sans elle, l'adresse racine du site donnait 404. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Page d'accueil de GitHub Pages : elle présente le projet et mène
+       aux pages. Sans elle, l'adresse racine du site donnait 404. -->
   <style>
-    :root {
-      --fond: #000; --carte: #111114; --bord: #26262e; --texte: #f4f4f6; --texte-2: #a1a1aa;
-      --accent: #a78bfa; --accent-doux: rgba(167, 139, 250, .15);
+    body { margin: 0; color: var(--texte); line-height: 1.5; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 48px; }
+    .entete { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .marque { display: flex; align-items: center; gap: 10px; font-size: 18px; color: var(--texte); text-decoration: none; }
+    .entete .lien-depot { color: var(--texte-2); text-decoration: none; font-size: 14px; }
+    .entete .lien-depot:hover { color: var(--accent); }
+
+    /* Ouverture : le titre et le manomètre */
+    .ouverture { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 32px; align-items: center; padding: 48px 0 40px; }
+    .ouverture h1 { font-size: clamp(34px, 5.2vw, 60px); line-height: 1.02; font-weight: 800; font-stretch: 118%; letter-spacing: -.015em; margin: 0 0 22px; max-width: 15ch; }
+    .ouverture p { color: var(--texte-2); font-size: 17px; max-width: 54ch; margin: 0 0 14px; }
+    .ouverture p strong { color: var(--texte); font-weight: 600; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .actions a { display: inline-flex; align-items: center; padding: 12px 18px; border-radius: var(--rayon-petit); font-weight: 650; text-decoration: none; }
+    .actions .principal { background: var(--accent); color: var(--sur-accent); }
+    .actions .principal:hover { background: var(--accent-clair); }
+    .actions .second { border: 1px solid var(--bord-fort); color: var(--texte); }
+    .actions .second:hover { border-color: var(--accent); }
+
+    .cadran { width: 100%; max-width: 440px; justify-self: center; }
+    .cadran .piste { fill: none; stroke: var(--tuile-3); stroke-width: 18; }
+    .cadran .zone { fill: none; stroke-width: 18; }
+    .cadran .graduation { stroke: var(--texte-3); stroke-width: 2; }
+    .cadran .graduation.forte { stroke: var(--texte-2); stroke-width: 3; }
+    .cadran .chiffre-cadran { fill: var(--texte-2); font: 600 15px var(--police); text-anchor: middle; }
+    .cadran .aiguille { stroke: var(--texte); stroke-width: 5; stroke-linecap: round; transform-origin: 200px 210px; transform: rotate(-135deg); }
+    .cadran.pret .aiguille { transform: rotate(var(--angle)); transition: transform 1.6s cubic-bezier(.3, 1.35, .45, 1); }
+    .cadran .axe { fill: var(--accent); }
+    .cadran .valeur { fill: var(--texte); font: 800 46px var(--police); font-stretch: 115%; text-anchor: middle; }
+    .cadran .unite { fill: var(--texte-2); font: 500 15px var(--police); text-anchor: middle; }
+
+    /* Les pages, classées par usage */
+    .rubrique { border-top: 1px solid var(--bord); padding: 28px 0 8px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+    .rubrique h2 { font-size: 20px; margin: 4px 0 0; }
+    .rubrique > div > p { color: var(--texte-2); font-size: 14px; margin: 6px 0 0; }
+    .liens { display: grid; gap: 2px; }
+    .liens a { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 4px 24px; align-items: baseline;
+      padding: 14px 16px; border-radius: var(--rayon-petit); color: inherit; text-decoration: none; border-left: 3px solid transparent; }
+    .liens a:hover, .liens a:focus-visible { background: var(--tuile); border-left-color: var(--accent); }
+    .liens b { font-size: 17px; font-weight: 700; font-stretch: 108%; }
+    .liens span { color: var(--texte-2); font-size: 14px; }
+
+    footer { border-top: 1px solid var(--bord); margin-top: 28px; padding-top: 20px; color: var(--texte-3); font-size: 13px; }
+    footer a { color: var(--texte-2); }
+
+    @media (max-width: 820px) {
+      .ouverture { grid-template-columns: 1fr; padding-top: 28px; }
+      .cadran { max-width: 320px; order: -1; }
+      .rubrique { grid-template-columns: 1fr; gap: 10px; }
+      .liens a { grid-template-columns: 1fr; }
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--fond); color: var(--texte); font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
-    main { max-width: 960px; margin: 0 auto; padding: 56px 16px 40px; }
-    h1 { font-size: clamp(28px, 5vw, 40px); margin: 0 0 8px; letter-spacing: -.02em; }
-    h1 span { color: var(--accent); }
-    .sous-titre { color: var(--texte-2); margin: 0 0 36px; line-height: 1.5; max-width: 680px; }
-    .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
-    a.carte {
-      display: block; padding: 20px; border-radius: 18px; background: var(--carte); border: 1px solid var(--bord);
-      color: inherit; text-decoration: none; transition: border-color .15s, transform .15s;
-    }
-    a.carte:hover, a.carte:focus-visible { border-color: var(--accent); transform: translateY(-2px); outline: none; }
-    .carte b { display: block; font-size: 17px; margin-bottom: 6px; }
-    .carte p { margin: 0; color: var(--texte-2); font-size: 14px; line-height: 1.45; }
-    .etiquette { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-      color: var(--accent); background: var(--accent-doux); padding: 3px 8px; border-radius: 999px; margin-bottom: 10px; }
-    footer { margin-top: 36px; color: var(--texte-2); font-size: 13px; }
-    footer a { color: var(--accent); }
   </style>
+  <link rel="stylesheet" href="charte/charte.css">
 </head>
 <body>
-<main>
-  <h1>Surveillance des pneus <span>TPMS</span></h1>
-  <p class="sous-titre">Projet BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité » :
-    capteurs de pression TPMS en Bluetooth sur les pneus gonflables d'une flotte de chariots élévateurs,
-    remontés par des passerelles MQTT jusqu'à une supervision, à travers un réseau d'usine segmenté.
-    Le vélo sert de démonstrateur : même capteur, même logique, boîtier de guidon et application.</p>
-  <div class="grille">
-    <a class="carte" href="entrepot/simulateur.html"><span class="etiquette">Industrie</span><b>Simulateur de l'usine</b>
-      <p>Chariots, radio, passerelles, pare-feu, courtier MQTT, horloges, journaux : 20 attaques et pannes jouables.</p></a>
-    <a class="carte" href="flotte/chariots.html"><span class="etiquette">Industrie</span><b>Supervision de l'entrepôt</b>
-      <p>8 chariots, 3 passerelles BLE → MQTT : pneus, zones, contrôles de sécurité (mode démonstration).</p></a>
-    <a class="carte" href="simulateur/"><span class="etiquette">Démonstrateur</span><b>Simulateur du capteur</b>
-      <p>Physique du pneu et du vélo, radio BLE, électronique animée, attaques, plusieurs jours de sorties.</p></a>
-    <a class="carte" href="app/"><span class="etiquette">Téléphone</span><b>Application</b>
-      <p>Pressions, historique, détection de fuite lente et réglages, par Web Bluetooth.</p></a>
-    <a class="carte" href="flotte/"><span class="etiquette">Location</span><b>Flotte de vélos</b>
-      <p>20 vélos de location : tendances, priorités de la tournée, statistiques (mode démonstration).</p></a>
-    <a class="carte" href="presentation/"><span class="etiquette">Soutenance</span><b>Présentation</b>
-      <p>Le diaporama de l'épreuve E6.</p></a>
-  </div>
-  <footer>Code, documentation et rapport : <a href="https://github.com/titilyonnais/tpms-velo">github.com/titilyonnais/tpms-velo</a></footer>
-</main>
+<div class="page">
+  <header class="entete">
+    <a class="marque" href="./"><span class="marque-logo"></span><span>TPMS</span></a>
+    <a class="lien-depot" href="https://github.com/titilyonnais/tpms-velo">Code et dossier sur GitHub</a>
+  </header>
+
+  <section class="ouverture">
+    <div>
+      <h1>Surveiller la pression des pneus, du vélo au chariot élévateur</h1>
+      <p>Des capteurs TPMS Bluetooth vissés sur les valves. Dans un entrepôt, des passerelles les écoutent et remontent leurs mesures en <strong>MQTT sur TLS</strong>, à travers un <strong>réseau d'usine découpé en zones</strong>, jusqu'à une supervision.</p>
+      <p>Le vélo sert de démonstrateur : mêmes capteurs, même logique, un boîtier de guidon à écran e-paper et une application.</p>
+      <div class="actions">
+        <a class="principal" href="entrepot/simulateur.html">Ouvrir le simulateur de l'usine</a>
+        <a class="second" href="presentation/">Voir la présentation</a>
+      </div>
+    </div>
+    <svg class="cadran" id="cadran" viewBox="0 0 400 380" role="img" aria-label="Manomètre : 8,5 bar, la pression de consigne d'un pneu de chariot élévateur">
+      <g id="gradu"></g>
+      <line class="aiguille" x1="200" y1="210" x2="200" y2="72"/>
+      <circle class="axe" cx="200" cy="210" r="11"/>
+      <text class="valeur" x="200" y="318">8,5</text>
+      <text class="unite" x="200" y="342">bar, consigne d'un pneu de chariot</text>
+    </svg>
+  </section>
+
+  <section class="rubrique">
+    <div><h2>L'usine</h2><p>La version industrielle : chariots, passerelles, réseau.</p></div>
+    <nav class="liens" aria-label="Pages de l'usine">
+      <a href="entrepot/simulateur.html"><b>Simulateur de l'usine</b><span>Chariots, radio, pare-feu, courtier MQTT, horloges et journaux, avec 20 attaques et pannes à lancer.</span></a>
+      <a href="flotte/chariots.html"><b>Supervision de l'entrepôt</b><span>Ce que voit le responsable de maintenance : pneus des 8 chariots, zones, passerelles, alertes.</span></a>
+    </nav>
+  </section>
+
+  <section class="rubrique">
+    <div><h2>Le vélo</h2><p>Le démonstrateur, et le kit de départ.</p></div>
+    <nav class="liens" aria-label="Pages du vélo">
+      <a href="simulateur/"><b>Simulateur du vélo</b><span>Physique du pneu, parcours autour de Lyon, radio, électronique animée, pirates et espions, semaine type.</span></a>
+      <a href="app/"><b>Application</b><span>Pressions, historique, fuite lente et réglages, en Web Bluetooth (Bluefy sur iPhone).</span></a>
+      <a href="flotte/"><b>Flotte de vélos de location</b><span>20 vélos : tendances sur plusieurs jours et tournée du technicien triée par priorité.</span></a>
+    </nav>
+  </section>
+
+  <section class="rubrique">
+    <div><h2>La soutenance</h2><p>Épreuve E6 du BTS CIEL.</p></div>
+    <nav class="liens" aria-label="Soutenance">
+      <a href="presentation/"><b>Présentation</b><span>Le diaporama, avec ses notes d'orateur (touche N).</span></a>
+      <a href="https://github.com/titilyonnais/tpms-velo/blob/main/docs/rapport-e6.md"><b>Rapport</b><span>Le dossier complet : cahier des charges, cybersécurité, réseau, tests.</span></a>
+    </nav>
+  </section>
+
+  <footer>Projet de BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité », réalisé par Thibault MORRETTON. Code et documentation : <a href="https://github.com/titilyonnais/tpms-velo">github.com/titilyonnais/tpms-velo</a>.</footer>
+</div>
+
+<script>
+  // Le manomètre : graduations de 0 à 13 bar sur 270°, zones des seuils
+  // des chariots (crevaison sous 4, basse sous 7,8, haute au-dessus de 9,5).
+  (function () {
+    var NS = "http://www.w3.org/2000/svg", g = document.getElementById("gradu");
+    var cx = 200, cy = 210, r = 150, MAX = 13;
+    function angle(bar) { return -135 + 270 * bar / MAX; }               // degrés, 0 = vers le haut
+    function point(bar, rayon) { var a = (angle(bar) - 90) * Math.PI / 180; return [cx + rayon * Math.cos(a), cy + rayon * Math.sin(a)]; }
+    function arc(de, a, rayon) {
+      var p1 = point(de, rayon), p2 = point(a, rayon), grand = (a - de) / MAX * 270 > 180 ? 1 : 0;
+      return "M" + p1[0].toFixed(1) + " " + p1[1].toFixed(1) + "A" + rayon + " " + rayon + " 0 " + grand + " 1 " + p2[0].toFixed(1) + " " + p2[1].toFixed(1);
+    }
+    function el(nom, att) { var e = document.createElementNS(NS, nom); for (var k in att) e.setAttribute(k, att[k]); g.appendChild(e); return e; }
+    el("path", { "class": "piste", d: arc(0, MAX, r) });
+    [[0, 4, "var(--alerte)"], [4, 7.8, "var(--attention)"], [7.8, 9.5, "var(--ok)"], [9.5, MAX, "var(--attention)"]].forEach(function (z) {
+      el("path", { "class": "zone", d: arc(z[0], z[1], r), style: "stroke:" + z[2], "stroke-opacity": z[2] === "var(--ok)" ? 1 : .9 });
+    });
+    for (var b = 0; b <= MAX; b += 0.5) {
+      var forte = b % 1 === 0, a = point(b, r - 16), c = point(b, r - (forte ? 32 : 24));
+      el("line", { "class": "graduation" + (forte ? " forte" : ""), x1: a[0], y1: a[1], x2: c[0], y2: c[1] });
+      if (forte && b % 2 === 0) { var t = point(b, r - 50); el("text", { "class": "chiffre-cadran", x: t[0], y: t[1] + 5 }).textContent = b; }
+    }
+    var cadran = document.getElementById("cadran");
+    cadran.style.setProperty("--angle", angle(8.5) + "deg");
+    // Une seule animation sur la page : l'aiguille monte à 8,5 bar.
+    setTimeout(function () { cadran.classList.add("pret"); }, 80);
+  })();
+</script>
 </body>
 </html>

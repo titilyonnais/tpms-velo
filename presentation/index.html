@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Soutenance E6 · TPMS entrepôt et vélo</title>
   <meta name="description" content="Diaporama de soutenance E6 (BTS CIEL IR) de Thibault MORRETTON : surveillance de la pression des pneus d'une flotte de chariots élévateurs (passerelles MQTT, réseau d'usine segmenté), avec un kit vélo comme démonstrateur, conçu en simulation.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23000%27/%3E%3Cg fill=%27none%27 stroke-linecap=%27round%27%3E%3Cpath d=%27M7.51 25.49A12 12 0 1 1 24.49 25.49%27 stroke=%27%2333383e%27 stroke-width=%273.4%27/%3E%3Cpath d=%27M7.51 25.49A12 12 0 1 1 25.71 9.95%27 stroke=%27%23f5b800%27 stroke-width=%273.4%27/%3E%3Cpath d=%27M16 17L23.28 11.71%27 stroke=%27%23f1f2ee%27 stroke-width=%272.4%27/%3E%3C/g%3E%3Ccircle cx=%2716%27 cy=%2717%27 r=%272.6%27 fill=%27%23f5b800%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="presentation.css">
+  <!-- Identité visuelle commune, chargée en dernier -->
+  <link rel="stylesheet" href="../charte/charte.css">
 </head>
 <body>
 
@@ -123,9 +125,9 @@
   <div class="corps">
     <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 500" role="img" aria-label="Capteurs TPMS vers boîtier XIAO nRF52840, boîtier vers application Web Bluetooth">
       <defs>
-        <marker id="fl-rouge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f87171"/></marker>
+        <marker id="fl-rouge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff4d4d"/></marker>
         <marker id="fl-gris" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b6b76"/></marker>
-        <marker id="fl-vert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+        <marker id="fl-vert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2ec4a0"/></marker>
       </defs>
       <!-- Capteurs -->
       <rect x="0" y="20" width="290" height="120" rx="16" fill="#0e0e11" stroke="#24242c"/>
@@ -141,18 +143,18 @@
       <text x="22" y="420" font-size="18" fill="#a1a1aa">un top par tour de roue</text>
 
       <!-- Liaison capteurs → boîtier -->
-      <path d="M296,80 C420,80 440,170 556,170" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
-      <path d="M296,230 C420,230 440,200 556,200" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
+      <path d="M296,80 C420,80 440,170 556,170" fill="none" stroke="#ff4d4d" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
+      <path d="M296,230 C420,230 440,200 556,200" fill="none" stroke="#ff4d4d" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#fl-rouge)"/>
       <path d="M296,400 L556,400" fill="none" stroke="#6b6b76" stroke-width="2.5" marker-end="url(#fl-gris)"/>
-      <text x="426" y="26" font-size="18" text-anchor="middle" fill="#f87171" font-weight="600">Annonces BLE en clair</text>
+      <text x="426" y="26" font-size="18" text-anchor="middle" fill="#ff4d4d" font-weight="600">Annonces BLE en clair</text>
       <text x="426" y="50" font-size="16" text-anchor="middle" fill="#a1a1aa">18 octets, sans chiffrement</text>
       <text x="426" y="70" font-size="16" text-anchor="middle" fill="#a1a1aa">ni signature</text>
       <text x="426" y="388" font-size="16" text-anchor="middle" fill="#a1a1aa">fil, entrée GPIO</text>
 
       <!-- Boîtier -->
-      <rect x="562" y="20" width="350" height="430" rx="22" fill="#110f18" stroke="#a78bfa" stroke-opacity=".55"/>
+      <rect x="562" y="20" width="350" height="430" rx="22" fill="#19160b" stroke="#f5b800" stroke-opacity=".55"/>
       <text x="590" y="62" font-size="26" font-weight="600">Boîtier de guidon</text>
-      <text x="590" y="100" font-size="19" fill="#a78bfa" class="mono">Seeed XIAO nRF52840</text>
+      <text x="590" y="100" font-size="19" fill="#f5b800" class="mono">Seeed XIAO nRF52840</text>
       <text x="590" y="146" font-size="19" fill="#d4d4d8">E-paper 1,54″ 200 × 200</text>
       <text x="590" y="180" font-size="19" fill="#d4d4d8">Buzzer + LED d'alerte</text>
       <text x="590" y="214" font-size="19" fill="#d4d4d8">2 LED d'éclairage latérales</text>
@@ -164,9 +166,9 @@
       <text x="590" y="428" font-size="17" fill="#a1a1aa">Décode, filtre, alerte, affiche</text>
 
       <!-- Liaison boîtier ↔ app -->
-      <path d="M922,235 L1126,235" fill="none" stroke="#34d399" stroke-width="3" marker-start="url(#fl-vert)" marker-end="url(#fl-vert)"/>
-      <text x="1024" y="196" font-size="18" text-anchor="middle" fill="#34d399" font-weight="600">BLE appairée</text>
-      <text x="1024" y="218" font-size="18" text-anchor="middle" fill="#34d399" font-weight="600">et chiffrée</text>
+      <path d="M922,235 L1126,235" fill="none" stroke="#2ec4a0" stroke-width="3" marker-start="url(#fl-vert)" marker-end="url(#fl-vert)"/>
+      <text x="1024" y="196" font-size="18" text-anchor="middle" fill="#2ec4a0" font-weight="600">BLE appairée</text>
+      <text x="1024" y="218" font-size="18" text-anchor="middle" fill="#2ec4a0" font-weight="600">et chiffrée</text>
       <text x="1024" y="266" font-size="15" text-anchor="middle" fill="#a1a1aa">LE Secure Connections</text>
       <text x="1024" y="288" font-size="15" text-anchor="middle" fill="#a1a1aa">code à 6 chiffres</text>
       <text x="1024" y="310" font-size="15" text-anchor="middle" fill="#a1a1aa">affiché sur l'e-paper</text>
@@ -174,7 +176,7 @@
       <!-- Application -->
       <rect x="1134" y="90" width="290" height="290" rx="22" fill="#0e0e11" stroke="#24242c"/>
       <text x="1156" y="132" font-size="24" font-weight="600">Application web</text>
-      <text x="1156" y="166" font-size="18" fill="#a78bfa" class="mono">Web Bluetooth</text>
+      <text x="1156" y="166" font-size="18" fill="#f5b800" class="mono">Web Bluetooth</text>
       <text x="1156" y="206" font-size="18" fill="#d4d4d8">iPhone : Bluefy</text>
       <text x="1156" y="234" font-size="18" fill="#d4d4d8">PC, Android : Chrome</text>
       <text x="1156" y="278" font-size="17" fill="#a1a1aa">Réglages, seuils</text>
@@ -250,15 +252,15 @@
   <div class="corps">
     <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 300" role="img" aria-label="Le dossier logique est utilisé par le simulateur, l'application et le firmware">
       <defs>
-        <marker id="fl-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
+        <marker id="fl-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f5b800"/></marker>
       </defs>
-      <rect x="432" y="0" width="560" height="112" rx="18" fill="#110f18" stroke="#a78bfa" stroke-opacity=".6"/>
-      <text x="712" y="40" font-size="24" font-weight="600" text-anchor="middle" class="mono" fill="#a78bfa">logique/</text>
+      <rect x="432" y="0" width="560" height="112" rx="18" fill="#19160b" stroke="#f5b800" stroke-opacity=".6"/>
+      <text x="712" y="40" font-size="24" font-weight="600" text-anchor="middle" class="mono" fill="#f5b800">logique/</text>
       <text x="712" y="72" font-size="18" text-anchor="middle" fill="#d4d4d8">trame · vitesse · fuite · alertes · sécurité · protocole</text>
       <text x="712" y="98" font-size="16" text-anchor="middle" fill="#a1a1aa">fonctions pures : ni page web, ni horloge, ni radio</text>
-      <path d="M560,114 L230,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
-      <path d="M712,114 L712,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
-      <path d="M864,114 L1194,190" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <path d="M560,114 L230,190" stroke="#f5b800" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <path d="M712,114 L712,190" stroke="#f5b800" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
+      <path d="M864,114 L1194,190" stroke="#f5b800" stroke-width="2" fill="none" marker-end="url(#fl-violet)"/>
       <rect x="0" y="196" width="450" height="104" rx="18" fill="#0e0e11" stroke="#24242c"/>
       <text x="24" y="232" font-size="22" font-weight="600">Simulateur · JavaScript</text>
       <text x="24" y="262" font-size="17" fill="#a1a1aa">sources simulées : monde physique,</text>
@@ -459,15 +461,15 @@
           <text x="70" y="390">J0</text><text x="172.9" y="390">J3</text><text x="275.7" y="390">J6</text><text x="378.6" y="390">J9</text>
           <text x="481.5" y="390">J12</text><text x="584.3" y="390">J15</text><text x="687.2" y="390">J18</text><text x="790" y="390">J21</text>
         </g>
-        <line x1="70" y1="306.7" x2="790" y2="306.7" stroke="#f87171" stroke-width="1.5" stroke-dasharray="6 5"/>
-        <text x="786" y="292" font-size="19" text-anchor="end" fill="#f87171">seuil bas 1,8 bar</text>
+        <line x1="70" y1="306.7" x2="790" y2="306.7" stroke="#ff4d4d" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <text x="786" y="292" font-size="19" text-anchor="end" fill="#ff4d4d">seuil bas 1,8 bar</text>
         <line x1="70" y1="93.3" x2="687.2" y2="306.7" stroke="#6b6b76" stroke-width="2.5"/>
-        <line x1="172.9" y1="128.9" x2="721.5" y2="306.7" stroke="#a78bfa" stroke-width="2.5" stroke-dasharray="9 6"/>
-        <circle cx="70" cy="93.3" r="6" fill="#a78bfa"/><circle cx="104.3" cy="105.2" r="6" fill="#a78bfa"/>
-        <circle cx="138.6" cy="117" r="6" fill="#a78bfa"/><circle cx="172.9" cy="128.9" r="6" fill="#a78bfa"/>
-        <circle cx="721.5" cy="306.7" r="7" fill="none" stroke="#a78bfa" stroke-width="2.5"/>
-        <circle cx="687.2" cy="306.7" r="7" fill="#f87171"/>
-        <text x="200" y="118" font-size="22" fill="#a78bfa" font-weight="600">au J3 : « regonfler dans 16 j »</text>
+        <line x1="172.9" y1="128.9" x2="721.5" y2="306.7" stroke="#f5b800" stroke-width="2.5" stroke-dasharray="9 6"/>
+        <circle cx="70" cy="93.3" r="6" fill="#f5b800"/><circle cx="104.3" cy="105.2" r="6" fill="#f5b800"/>
+        <circle cx="138.6" cy="117" r="6" fill="#f5b800"/><circle cx="172.9" cy="128.9" r="6" fill="#f5b800"/>
+        <circle cx="721.5" cy="306.7" r="7" fill="none" stroke="#f5b800" stroke-width="2.5"/>
+        <circle cx="687.2" cy="306.7" r="7" fill="#ff4d4d"/>
+        <text x="200" y="118" font-size="22" fill="#f5b800" font-weight="600">au J3 : « regonfler dans 16 j »</text>
         <text x="200" y="146" font-size="19" fill="#a1a1aa">4 relevés, droite des moindres carrés</text>
         <text x="640" y="342" font-size="21" text-anchor="end" fill="#f4f4f6">seuil atteint ≈ J18</text>
       </svg>
@@ -523,9 +525,9 @@
         <div></div><div class="axe">1</div><div class="axe">2</div><div class="axe">3</div><div class="axe">4</div>
       </div>
       <div class="legende-niveaux">
-        <span><i style="background:rgba(52,211,153,.35)"></i>faible 1–3</span>
-        <span><i style="background:rgba(251,191,36,.4)"></i>moyen 4–6</span>
-        <span><i style="background:rgba(248,113,113,.5)"></i>élevé 8–16</span>
+        <span><i style="background:rgba(46, 196, 160,.35)"></i>faible 1–3</span>
+        <span><i style="background:rgba(255, 138, 61,.4)"></i>moyen 4–6</span>
+        <span><i style="background:rgba(255, 77, 77,.5)"></i>élevé 8–16</span>
         <span><i style="outline:1.5px solid #a1a1aa"></i>résiduel assumé</span>
       </div>
       <p class="discret tres-petit" style="margin:8px 0 0">Avec les capteurs v2 proposés : S12 passerait de 9 à 3 (faible).</p>
@@ -710,27 +712,27 @@
   <div class="corps">
     <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 230" role="img" aria-label="Trois lignes du journal ; chacune contient l'empreinte de la précédente ; la ligne 42 modifiée casse la chaîne">
       <defs>
-        <marker id="fl-violet-j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
-        <marker id="fl-rouge-j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f87171"/></marker>
+        <marker id="fl-violet-j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f5b800"/></marker>
+        <marker id="fl-rouge-j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff4d4d"/></marker>
       </defs>
       <rect x="0" y="10" width="400" height="200" rx="16" fill="#0e0e11" stroke="#24242c"/>
       <text x="24" y="50" font-size="22" font-weight="600">Ligne 41</text>
       <text x="24" y="84" font-size="17" fill="#a1a1aa">instant · texte</text>
       <text x="24" y="116" font-size="17" fill="#a1a1aa" class="mono">précédente = E40</text>
-      <text x="24" y="180" font-size="19" fill="#a78bfa" class="mono">empreinte E41</text>
-      <path d="M404,172 C460,172 450,116 508,116" fill="none" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#fl-violet-j)"/>
-      <rect x="512" y="10" width="400" height="200" rx="16" fill="#1a0f12" stroke="#f87171"/>
+      <text x="24" y="180" font-size="19" fill="#f5b800" class="mono">empreinte E41</text>
+      <path d="M404,172 C460,172 450,116 508,116" fill="none" stroke="#f5b800" stroke-width="2.5" marker-end="url(#fl-violet-j)"/>
+      <rect x="512" y="10" width="400" height="200" rx="16" fill="#1a0f12" stroke="#ff4d4d"/>
       <text x="536" y="50" font-size="22" font-weight="600">Ligne 42</text>
-      <text x="536" y="84" font-size="17" fill="#f87171">texte modifié</text>
+      <text x="536" y="84" font-size="17" fill="#ff4d4d">texte modifié</text>
       <text x="536" y="116" font-size="17" fill="#a1a1aa" class="mono">précédente = E41</text>
-      <text x="536" y="180" font-size="19" fill="#f87171" class="mono">recalculée ≠ E42</text>
-      <path d="M916,172 C972,172 962,116 1020,116" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#fl-rouge-j)"/>
-      <text x="968" y="214" font-size="16" text-anchor="middle" fill="#f87171">chaîne cassée</text>
+      <text x="536" y="180" font-size="19" fill="#ff4d4d" class="mono">recalculée ≠ E42</text>
+      <path d="M916,172 C972,172 962,116 1020,116" fill="none" stroke="#ff4d4d" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#fl-rouge-j)"/>
+      <text x="968" y="214" font-size="16" text-anchor="middle" fill="#ff4d4d">chaîne cassée</text>
       <rect x="1024" y="10" width="400" height="200" rx="16" fill="#0e0e11" stroke="#24242c"/>
       <text x="1048" y="50" font-size="22" font-weight="600">Ligne 43</text>
       <text x="1048" y="84" font-size="17" fill="#a1a1aa">instant · texte</text>
       <text x="1048" y="116" font-size="17" fill="#a1a1aa" class="mono">précédente = E42</text>
-      <text x="1048" y="180" font-size="19" fill="#a78bfa" class="mono">empreinte E43</text>
+      <text x="1048" y="180" font-size="19" fill="#f5b800" class="mono">empreinte E43</text>
     </svg></div>
     <div class="carte carte-formule" style="margin-top:22px">
       <div class="formule">E(n) = SHA-256( n | instant | texte | E(n−1) )</div>
@@ -750,7 +752,7 @@
   <div class="corps">
     <div class="defile defile-schema"><svg class="schema" viewBox="0 0 1424 250" role="img" aria-label="Vélos, passerelle, serveur Node.js avec API et SQLite, supervision, technicien">
       <defs>
-        <marker id="fl-violet-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
+        <marker id="fl-violet-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f5b800"/></marker>
         <marker id="fl-gris-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b6b76"/></marker>
       </defs>
       <rect x="0" y="0" width="250" height="150" rx="16" fill="#0e0e11" stroke="#24242c"/>
@@ -761,11 +763,11 @@
       <rect x="293" y="0" width="250" height="150" rx="16" fill="#0e0e11" stroke="#24242c" stroke-dasharray="6 5"/>
       <text x="313" y="40" font-size="22" font-weight="600">Passerelle</text>
       <text x="313" y="72" font-size="17" fill="#a1a1aa">en station ou LTE-M</text>
-      <text x="313" y="98" font-size="17" fill="#fbbf24">hypothèse</text>
-      <rect x="586" y="0" width="250" height="150" rx="16" fill="#110f18" stroke="#a78bfa" stroke-opacity=".6"/>
+      <text x="313" y="98" font-size="17" fill="#ff8a3d">hypothèse</text>
+      <rect x="586" y="0" width="250" height="150" rx="16" fill="#19160b" stroke="#f5b800" stroke-opacity=".6"/>
       <text x="606" y="40" font-size="22" font-weight="600">Serveur</text>
-      <text x="606" y="72" font-size="17" fill="#a78bfa" class="mono">Node.js · API REST</text>
-      <text x="606" y="98" font-size="17" fill="#a78bfa" class="mono">SQLite</text>
+      <text x="606" y="72" font-size="17" fill="#f5b800" class="mono">Node.js · API REST</text>
+      <text x="606" y="98" font-size="17" fill="#f5b800" class="mono">SQLite</text>
       <text x="606" y="124" font-size="17" fill="#a1a1aa">aucune dépendance</text>
       <rect x="879" y="0" width="250" height="150" rx="16" fill="#0e0e11" stroke="#24242c"/>
       <text x="899" y="40" font-size="22" font-weight="600">Supervision</text>
@@ -775,10 +777,10 @@
       <text x="1194" y="40" font-size="22" font-weight="600">Technicien</text>
       <text x="1194" y="72" font-size="17" fill="#a1a1aa">regonfle ou change</text>
       <text x="1194" y="98" font-size="17" fill="#a1a1aa">la chambre</text>
-      <path d="M252,75 L289,75" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
-      <path d="M545,75 L582,75" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
-      <path d="M838,75 L875,75" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
-      <path d="M1131,75 L1170,75" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
+      <path d="M252,75 L289,75" stroke="#f5b800" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
+      <path d="M545,75 L582,75" stroke="#f5b800" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
+      <path d="M838,75 L875,75" stroke="#f5b800" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
+      <path d="M1131,75 L1170,75" stroke="#f5b800" stroke-width="2.5" marker-end="url(#fl-violet-f)"/>
       <path d="M1299,152 C1299,232 125,232 125,156" fill="none" stroke="#6b6b76" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#fl-gris-f)"/>
       <text x="712" y="226" font-size="16" text-anchor="middle" fill="#a1a1aa">boucle fermée : la tournée suit la priorité</text>
     </svg></div>
@@ -839,23 +841,23 @@
   <div class="corps grille" style="grid-template-columns: 1fr 470px; gap: 40px; align-items:start;">
     <div class="defile defile-schema"><svg class="schema" viewBox="0 0 900 520" role="img" aria-label="Zones du réseau de l'entrepôt, pare-feu et conduits autorisés">
       <defs>
-        <marker id="fl-vert-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+        <marker id="fl-vert-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2ec4a0"/></marker>
       </defs>
       <!-- Zones -->
-      <rect x="0" y="0" width="330" height="200" rx="18" fill="#0e0e11" stroke="#fbbf24" stroke-opacity=".6"/>
+      <rect x="0" y="0" width="330" height="200" rx="18" fill="#0e0e11" stroke="#ff8a3d" stroke-opacity=".6"/>
       <text x="22" y="38" font-size="22" font-weight="600">VLAN 10 · atelier (OT)</text>
       <text x="22" y="70" font-size="17" fill="#a1a1aa" class="mono">10.10.10.0/24</text>
       <text x="22" y="110" font-size="18" fill="#d4d4d8">3 passerelles BLE → MQTT</text>
       <text x="22" y="140" font-size="18" fill="#d4d4d8">au plafond, une par zone</text>
       <text x="22" y="178" font-size="16" fill="#a1a1aa">capteurs des chariots (Bluetooth)</text>
-      <rect x="570" y="0" width="330" height="230" rx="18" fill="#110f18" stroke="#a78bfa" stroke-opacity=".7"/>
+      <rect x="570" y="0" width="330" height="230" rx="18" fill="#19160b" stroke="#f5b800" stroke-opacity=".7"/>
       <text x="592" y="38" font-size="22" font-weight="600">VLAN 20 · serveurs</text>
       <text x="592" y="70" font-size="17" fill="#a1a1aa" class="mono">10.10.20.0/24</text>
       <text x="592" y="110" font-size="18" fill="#d4d4d8">courtier MQTT · .10 · 8883</text>
       <text x="592" y="140" font-size="18" fill="#d4d4d8">supervision · .20 · 8443</text>
       <text x="592" y="170" font-size="18" fill="#d4d4d8">NTP · .30 · syslog · .40</text>
       <text x="592" y="208" font-size="16" fill="#a1a1aa">Node.js, SQLite, Mosquitto</text>
-      <rect x="0" y="320" width="330" height="200" rx="18" fill="#0e0e11" stroke="#60a5fa" stroke-opacity=".6"/>
+      <rect x="0" y="320" width="330" height="200" rx="18" fill="#0e0e11" stroke="#5aa9e6" stroke-opacity=".6"/>
       <text x="22" y="358" font-size="22" font-weight="600">VLAN 30 · bureautique</text>
       <text x="22" y="390" font-size="17" fill="#a1a1aa" class="mono">10.10.30.0/24</text>
       <text x="22" y="430" font-size="18" fill="#d4d4d8">poste du responsable</text>
@@ -867,20 +869,20 @@
       <text x="592" y="430" font-size="18" fill="#d4d4d8">accès distant d'un</text>
       <text x="592" y="460" font-size="18" fill="#d4d4d8">prestataire (prévu)</text>
       <!-- Pare-feu -->
-      <rect x="360" y="225" width="180" height="70" rx="14" fill="rgba(167,139,250,.14)" stroke="#a78bfa"/>
+      <rect x="360" y="225" width="180" height="70" rx="14" fill="rgba(245, 184, 0,.14)" stroke="#f5b800"/>
       <text x="450" y="256" font-size="21" font-weight="600" text-anchor="middle">Pare-feu</text>
       <text x="450" y="281" font-size="15" fill="#a1a1aa" text-anchor="middle">nftables · tout refusé</text>
       <!-- Conduits -->
-      <path d="M330,120 C400,120 410,200 420,222" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
-      <path d="M480,222 C490,150 520,120 566,120" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
-      <text x="450" y="70" font-size="16" fill="#34d399" text-anchor="middle" font-weight="600">① MQTT TLS 8883</text>
-      <text x="450" y="94" font-size="16" fill="#34d399" text-anchor="middle" font-weight="600">② NTP 123 · ③ syslog 514</text>
-      <path d="M330,420 C400,420 410,330 420,298" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
-      <text x="345" y="315" font-size="16" fill="#34d399" font-weight="600">④ HTTPS 8443</text>
-      <path d="M570,420 C500,420 490,330 482,298" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#fl-vert-r)"/>
-      <text x="500" y="460" font-size="16" fill="#34d399" font-weight="600">⑤ prévu</text>
-      <line x1="165" y1="205" x2="165" y2="315" stroke="#f87171" stroke-width="2.5" stroke-dasharray="7 6"/>
-      <text x="178" y="265" font-size="17" fill="#f87171" font-weight="600">✕ jamais</text>
+      <path d="M330,120 C400,120 410,200 420,222" fill="none" stroke="#2ec4a0" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <path d="M480,222 C490,150 520,120 566,120" fill="none" stroke="#2ec4a0" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <text x="450" y="70" font-size="16" fill="#2ec4a0" text-anchor="middle" font-weight="600">① MQTT TLS 8883</text>
+      <text x="450" y="94" font-size="16" fill="#2ec4a0" text-anchor="middle" font-weight="600">② NTP 123 · ③ syslog 514</text>
+      <path d="M330,420 C400,420 410,330 420,298" fill="none" stroke="#2ec4a0" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <text x="345" y="315" font-size="16" fill="#2ec4a0" font-weight="600">④ HTTPS 8443</text>
+      <path d="M570,420 C500,420 490,330 482,298" fill="none" stroke="#2ec4a0" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#fl-vert-r)"/>
+      <text x="500" y="460" font-size="16" fill="#2ec4a0" font-weight="600">⑤ prévu</text>
+      <line x1="165" y1="205" x2="165" y2="315" stroke="#ff4d4d" stroke-width="2.5" stroke-dasharray="7 6"/>
+      <text x="178" y="265" font-size="17" fill="#ff4d4d" font-weight="600">✕ jamais</text>
     </svg></div>
     <div class="filtres">
       <div class="filtre"><b>Zones et conduits</b>norme IEC 62443 : on regroupe par niveau de confiance, on n'ouvre que le nécessaire</div>
@@ -920,9 +922,9 @@
 </section>
 
 <!-- ================================================================ 26 -->
-<section class="diapo" data-notes="La démonstration : node entrepot/demonstration.js, 13 essais, chacun avec sa preuve. Le pare-feu bloque le bureau vers l'atelier, les compteurs le prouvent. Le courtier refuse un client sans certificat ou signé par une AC pirate. Le plus important : même avec le certificat volé d'une passerelle, l'intrus ne peut ni parler au nom d'une autre, les ACL jettent le message, ni fausser une pression, le serveur refait les contrôles du boîtier. Une identité prouvée ne rend pas le contenu vrai. Enfin la continuité : passerelle coupée vue hors ligne en moins d'une seconde, courtier arrêté 30 s sans perte. Et une faille trouvée dans ma propre maquette : le serveur web donnait la clé privée du courtier, parce que le dépôt était monté en entier. Corrigée, testée, ajoutée à la démonstration.">
+<section class="diapo" data-notes="La démonstration : node entrepot/demonstration.js, 14 essais, chacun avec sa preuve. Le pare-feu bloque le bureau vers l'atelier, les compteurs le prouvent. Le courtier refuse un client sans certificat ou signé par une AC pirate. Le plus important : même avec le certificat volé d'une passerelle, l'intrus ne peut ni parler au nom d'une autre, les ACL jettent le message, ni fausser une pression, le serveur refait les contrôles du boîtier. Une identité prouvée ne rend pas le contenu vrai. Enfin la continuité : passerelle coupée vue hors ligne en moins d'une seconde, courtier arrêté 30 s sans perte. Et une faille trouvée dans ma propre maquette : le serveur web donnait la clé privée du courtier, parce que le dépôt était monté en entier. Corrigée, testée, ajoutée à la démonstration.">
   <p class="repere">Version industrielle · démonstration</p>
-  <h2><em>13 essais sur 13</em> : chaque couche suppose que la précédente peut tomber</h2>
+  <h2><em>14 essais sur 14</em> : chaque couche suppose que la précédente peut tomber</h2>
   <div class="corps grille" style="grid-template-columns: 1.35fr 1fr; gap: 40px; align-items:start;">
     <div class="defile">
       <table class="serre" style="font-size:16.5px">
@@ -930,7 +932,7 @@
         <tbody>
           <tr><td class="violet">Pare-feu</td><td>nmap d'une passerelle depuis le bureau</td><td>4 ports filtrés, compteur +4</td></tr>
           <tr><td class="violet">Pare-feu</td><td>Bureau → courtier ; atelier → supervision</td><td>bloqués, comptés</td></tr>
-          <tr><td class="violet">Courtier</td><td>Sans certificat ; certificat d'une AC pirate</td><td>refusés (alertes TLS 116 et 48)</td></tr>
+          <tr><td class="violet">Courtier</td><td>Sans certificat ; AC pirate ; certificat volé révoqué</td><td>refusés (alertes TLS 116, 48, 44)</td></tr>
           <tr><td class="violet">Courtier</td><td>Certificat <b>volé</b> de la passerelle 1, au nom de la 2</td><td>jeté par les ACL, rien reçu</td></tr>
           <tr><td class="violet">Serveur</td><td>Certificat volé : capteur inconnu, 20 bar, rejeu de 3 h, lot incohérent</td><td>rejetés ; pression affichée inchangée</td></tr>
           <tr><td class="violet">Continuité</td><td>Passerelle 2 coupée net</td><td>« hors ligne » en &lt; 1 s</td></tr>
@@ -945,7 +947,7 @@
       <pre class="code">node entrepot/demonstration.js</pre>
     </div>
   </div>
-  <p class="note-bas"><b class="orange">Limites :</b> toutes les zones sur un seul PC ; pas de révocation des certificats ; NTP non authentifié ; pas de limite de débit par client MQTT.</p>
+  <p class="note-bas"><b class="orange">Limites :</b> toutes les zones sur un seul PC ; NTP non authentifié ; clé des passerelles lisible si on les vole (révoquée ensuite, essai 7).</p>
 </section>
 
 <!-- ================================================================ 27 -->
@@ -985,7 +987,7 @@
         <div class="barre-ligne"><span class="nom">Fenêtre 2 s variable</span><div class="piste"><div class="barre mediane" style="width:25.7%"></div><span class="barre-val" style="left:calc(25.7% + 8px)">9 s</span><div class="barre pire" style="width:97.1%"></div><span class="barre-val b" style="left:calc(97.1% - 40px); color:#fff">34 s</span></div></div>
         <div class="barre-ligne retenu"><span class="nom">Fenêtre 3 s variable + écoute renforcée (retenu)</span><div class="piste"><div class="barre mediane" style="width:22.9%"></div><span class="barre-val" style="left:calc(22.9% + 8px)">8 s</span><div class="barre pire" style="width:25.7%"></div><span class="barre-val b" style="left:calc(25.7% + 8px)">9 s</span></div></div>
       </div>
-      <div class="legende-niveaux" style="margin-top:18px"><span><i style="background:#6b6b76"></i>médiane</span><span><i style="background:#f87171"></i>pire cas</span></div>
+      <div class="legende-niveaux" style="margin-top:18px"><span><i style="background:#6b6b76"></i>médiane</span><span><i style="background:#ff4d4d"></i>pire cas</span></div>
     </div>
     <div>
       <div class="defile">
@@ -1001,15 +1003,15 @@
       </div>
       <p class="tres-petit discret" style="margin:20px 0 4px">Journée type de 7,063 mAh (1 h de roulage, 15 min d'éclairage) · LiPo 450 mAh utiles</p>
       <div class="empile">
-        <div style="width:49.6%; background:#a78bfa" title="Écoute radio 3,500 mAh"></div>
-        <div style="width:35.4%; background:#fbbf24" title="Éclairage 2,500 mAh"></div>
-        <div style="width:12.7%; background:#34d399" title="Écran 0,900 mAh"></div>
+        <div style="width:49.6%; background:#f5b800" title="Écoute radio 3,500 mAh"></div>
+        <div style="width:35.4%; background:#ff8a3d" title="Éclairage 2,500 mAh"></div>
+        <div style="width:12.7%; background:#2ec4a0" title="Écran 0,900 mAh"></div>
         <div style="width:2.3%; background:#6b6b76" title="Veille, processeur, app 0,162 mAh"></div>
       </div>
       <div class="legende-empile">
-        <span><i style="background:#a78bfa"></i>radio 3,500</span>
-        <span><i style="background:#fbbf24"></i>éclairage 2,500</span>
-        <span><i style="background:#34d399"></i>écran 0,900</span>
+        <span><i style="background:#f5b800"></i>radio 3,500</span>
+        <span><i style="background:#ff8a3d"></i>éclairage 2,500</span>
+        <span><i style="background:#2ec4a0"></i>écran 0,900</span>
         <span><i style="background:#6b6b76"></i>reste 0,162</span>
       </div>
     </div>
@@ -1034,8 +1036,8 @@
         <div class="heures"><span style="left:0">0 h</span><span style="left:25%">6 h</span><span style="left:50%">12 h</span><span style="left:75%">18 h</span><span style="left:100%; transform:translateX(-100%)">24 h</span></div>
       </div>
       <div class="legende-niveaux" style="margin-top:14px">
-        <span><i style="background:#a78bfa"></i>départ d'une sortie (7 h 45, 17 h 30, samedi 10 h, dimanche 9 h 30)</span>
-        <span><i style="background:#34d399"></i>recharge 20 h – 23 h</span>
+        <span><i style="background:#f5b800"></i>départ d'une sortie (7 h 45, 17 h 30, samedi 10 h, dimanche 9 h 30)</span>
+        <span><i style="background:#2ec4a0"></i>recharge 20 h – 23 h</span>
       </div>
       <p class="discret petit" style="margin:18px 0 0">Parcours choisi : boucle des berges du Rhône (lyon-ville), graine 8 · 14 événements par semaine · calcul de la semaine ≈ 41 s.</p>
     </div>
@@ -1051,9 +1053,9 @@
 </section>
 
 <!-- ================================================================ 30 -->
-<section class="diapo" data-notes="776 tests JavaScript en 9 suites et 139 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur ; puis 49 pour la version industrielle : client MQTT octet par octet, passerelles, réception des lots piégés, et les fichiers secrets jamais servis. Le serveur en a 135, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
+<section class="diapo" data-notes="777 tests JavaScript en 9 suites et 139 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur ; puis 49 pour la version industrielle : client MQTT octet par octet, passerelles, réception des lots piégés, et les fichiers secrets jamais servis. Le serveur en a 135, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
   <p class="repere">Vérification</p>
-  <h2><em>776 tests JavaScript et 139 tests C++</em>, relancés par GitHub à chaque push</h2>
+  <h2><em>777 tests JavaScript et 139 tests C++</em>, relancés par GitHub à chaque push</h2>
   <div class="corps grille" style="grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:start;">
     <div class="barres tests-barres" style="gap:16px">
       <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">214</span></div>
@@ -1062,7 +1064,7 @@
       <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:34.6%"></div></div><span class="total">74</span></div>
       <div class="barre-ligne"><span class="nom">Vélo et parcours</span><div class="piste"><div class="barre" style="width:29.8%"></div></div><span class="total">62</span></div>
       <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:29.9%"></div></div><span class="total">64</span></div>
-      <div class="barre-ligne"><span class="nom">Version industrielle et simulateur de l'usine</span><div class="piste"><div class="barre" style="width:37.4%"></div></div><span class="total">80</span></div>
+      <div class="barre-ligne"><span class="nom">Version industrielle et simulateur de l'usine</span><div class="piste"><div class="barre" style="width:37.9%"></div></div><span class="total">81</span></div>
       <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:27.1%"></div></div><span class="total">58</span></div>
       <div class="barre-ligne cpp"><span class="nom">Logique C++ du firmware</span><div class="piste"><div class="barre" style="width:65%"></div></div><span class="total">139</span></div>
       <pre class="code" style="margin-top:6px">node simulateur/tests/tout.js</pre>
@@ -1085,7 +1087,7 @@
       <li>Crevaison arrière<span>Pneus : chute de pression, état CREVAISON, bip et LED.</span></li>
       <li>Attaque pirate<span>Radio et sécurité : protections coupées, fausse crevaison ; protections actives, SIGNAL SUSPECT.</span></li>
       <li>Semaine type<span>Avance rapide jusqu'au dimanche : batterie, veille, export CSV.</span></li>
-      <li>Entrepôt<span>Supervision des chariots : lots piégés rejetés, passerelle coupée vue « hors ligne » ; sur la maquette, les 13 essais.</span></li>
+      <li>Entrepôt<span>Supervision des chariots : lots piégés rejetés, passerelle coupée vue « hors ligne » ; sur la maquette, les 14 essais.</span></li>
     </ol>
     <div>
       <a class="bouton-lien" href="../simulateur/index.html" target="_blank" rel="noopener">Ouvrir le simulateur <span aria-hidden="true">→</span></a>
@@ -1131,7 +1133,7 @@
   <div class="grille g3" style="gap:22px">
     <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression corrigée et compensée, une prévision de regonflage, la tournée de 20 vélos, et la supervision de 32 pneus de chariots remontés par MQTT.</p></div>
     <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">31 scénarios</div><p class="discret">analysés (kit, serveur, réseau) ; 0 fausse crevaison acceptée sur 300 ; 13 essais réseau sur 13 ; seul le pistage du cycliste reste élevé, d'où la proposition de capteurs v2.</p></div>
-    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés, plus une faille de la maquette ; 776 tests JS et 139 tests C++ relancés à chaque push.</p></div>
+    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés, plus une faille de la maquette ; 777 tests JS et 139 tests C++ relancés à chaque push.</p></div>
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>

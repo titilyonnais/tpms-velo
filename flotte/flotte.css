@@ -28,7 +28,7 @@ section[id] { scroll-margin-top: 90px; }
 
 .bandeau-demo {
   margin: 16px 28px 0; padding: 12px 16px; border-radius: 14px;
-  background: var(--accent-doux); border: 1px solid rgba(167, 139, 250, .35); color: #ddd6fe; font-size: 13px;
+  background: var(--accent-doux); border: 1px solid rgba(245, 184, 0, .35); color: #ffe39a; font-size: 13px;
 }
 .bandeau-demo code { background: rgba(0, 0, 0, .35); padding: 1px 6px; border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
 
@@ -73,7 +73,7 @@ section[id] { scroll-margin-top: 90px; }
 .tableau-priorite .raison { display: block; font-size: 12px; color: var(--texte-2); margin-top: 3px; white-space: normal; }
 .jauge-priorite { display: inline-block; width: 42px; height: 6px; border-radius: 999px; background: var(--tuile-3); overflow: hidden; vertical-align: middle; margin-right: 6px; }
 .jauge-priorite i { display: block; height: 100%; background: var(--accent); }
-.puce.surveiller { background: rgba(96, 165, 250, .14); color: var(--info); }
+.puce.surveiller { background: rgba(90, 169, 230, .14); color: var(--info); }
 .puce.muet { background: var(--tuile-3); color: var(--texte-2); }
 
 /* ---------- Détail ---------- */
@@ -122,7 +122,7 @@ section[id] { scroll-margin-top: 90px; }
 .carte-connexion { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; }
 .carte-connexion > header { margin-bottom: 0; }
 .carte-connexion > header svg { stroke: var(--accent); }
-.carte-connexion label { font-size: 12px; color: var(--texte-2); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.carte-connexion label { font-size: 12px; color: var(--texte-2); text-transform: none; letter-spacing: 0; margin-top: 4px; }
 .champ-jeton {
   width: 100%; padding: 11px 12px; border-radius: var(--rayon-petit);
   background: var(--tuile-2); border: 1px solid var(--bord-fort); color: var(--texte);
@@ -142,8 +142,8 @@ section[id] { scroll-margin-top: 90px; }
 .plan-entrepot .zone-plan.exterieur { fill: #0a0f0c; stroke-dasharray: 6 5; }
 .plan-entrepot .zone-nom { fill: var(--texte-2); font: 500 13px var(--police); }
 .plan-entrepot .rack { fill: #1a1a22; stroke: #2a2a34; }
-.plan-entrepot .portee { fill: rgba(167, 139, 250, .06); stroke: rgba(167, 139, 250, .35); stroke-width: 1; stroke-dasharray: 4 5; }
-.plan-entrepot .portee.coupee { fill: rgba(248, 113, 113, .04); stroke: rgba(248, 113, 113, .35); }
+.plan-entrepot .portee { fill: rgba(245, 184, 0, .06); stroke: rgba(245, 184, 0, .35); stroke-width: 1; stroke-dasharray: 4 5; }
+.plan-entrepot .portee.coupee { fill: rgba(255, 77, 77, .04); stroke: rgba(255, 77, 77, .35); }
 .plan-entrepot .passerelle-plan { fill: var(--accent); stroke: var(--fond); stroke-width: 3; }
 .plan-entrepot .passerelle-plan.coupee { fill: var(--alerte); }
 .plan-entrepot .passerelle-texte { fill: var(--texte); font: 600 12px var(--mono); }
@@ -154,7 +154,7 @@ section[id] { scroll-margin-top: 90px; }
 .plan-entrepot .chariot-plan:focus .velo { stroke: var(--accent); }
 .plan-entrepot .chariot-texte { fill: #0b0b0d; font: 600 12px var(--mono); text-anchor: middle; pointer-events: none; }
 .cercle-portee { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin: 0 5px 0 10px; vertical-align: -2px;
-  border: 1px dashed rgba(167, 139, 250, .7); background: rgba(167, 139, 250, .1); }
+  border: 1px dashed rgba(245, 184, 0, .7); background: rgba(245, 184, 0, .1); }
 
 .tableau-chariots tbody tr { cursor: pointer; }
 .tableau-chariots tbody tr:hover td { background: var(--tuile-2); }
@@ -171,9 +171,9 @@ section[id] { scroll-margin-top: 90px; }
 #secuRefus .raison { display: block; font-size: 12px; color: var(--texte-2); margin-top: 3px; white-space: normal; }
 
 .schema-reseau .boite-reseau { fill: var(--tuile-2); stroke: var(--bord-fort); stroke-width: 1.5; }
-.schema-reseau .boite-reseau.ot { stroke: rgba(251, 191, 36, .6); }
-.schema-reseau .boite-reseau.serveurs { stroke: rgba(167, 139, 250, .7); }
-.schema-reseau .boite-reseau.bureau { stroke: rgba(96, 165, 250, .6); }
+.schema-reseau .boite-reseau.ot { stroke: rgba(255, 138, 61, .6); }
+.schema-reseau .boite-reseau.serveurs { stroke: rgba(245, 184, 0, .7); }
+.schema-reseau .boite-reseau.bureau { stroke: rgba(90, 169, 230, .6); }
 .schema-reseau .boite-reseau.dmz { stroke: var(--bord-fort); stroke-dasharray: 5 4; }
 .schema-reseau .boite-reseau.pare-feu { fill: var(--accent-doux); stroke: var(--accent); }
 .schema-reseau .boite-titre { fill: var(--texte); font: 600 12px var(--police); }

@@ -1,0 +1,149 @@
+/* =====================================================================
+   charte.css — Identité visuelle commune à toutes les pages du projet
+   ---------------------------------------------------------------------
+   Chargée EN DERNIER par chaque page (après sa propre feuille) : elle
+   fixe les couleurs, les polices, le logo et les éléments communs.
+
+   Le parti pris : le monde du chariot élévateur et du manomètre.
+     - noir pur pour le fond, graphite pour les panneaux ;
+     - JAUNE SÉCURITÉ (celui des chariots et des marquages au sol) pour
+       l'identité, les actions et la sélection, avec le texte en noir ;
+     - gris acier pour les textes secondaires et les axes ;
+     - les états gardent leurs couleurs à eux (vert, orange, rouge),
+       distinctes du jaune : une couleur = un sens ;
+     - un seul élément décoratif, le ruban de sécurité jaune et noir en
+       haut de chaque page ; un logo en cadran de manomètre ;
+     - Archivo : large et grasse pour les titres et les grands chiffres,
+       normale pour le texte ; JetBrains Mono seulement pour le code
+       (adresses, sujets MQTT, commandes).
+   ===================================================================== */
+
+:root {
+  color-scheme: dark;
+  /* Fond et panneaux */
+  --fond: #000000;
+  --tuile: #16181b;
+  --tuile-2: #1d2024;
+  --tuile-3: #262a2f;
+  --carte: var(--tuile);          /* noms utilisés par l'application (app/) */
+  --carte-2: var(--tuile-2);
+  --bord: #272b30;
+  --bord-fort: #3a3f45;
+  /* Texte */
+  --texte: #f1f2ee;
+  --texte-2: #9aaab8;             /* acier */
+  --texte-3: #67737e;
+  /* Identité */
+  --accent: #f5b800;              /* jaune sécurité */
+  --accent-fort: #f5b800;
+  --accent-clair: #ffc933;
+  --accent-doux: rgba(245, 184, 0, .13);
+  --sur-accent: #000000;          /* texte posé sur le jaune */
+  /* États */
+  --ok: #2ec4a0;
+  --ok-doux: rgba(46, 196, 160, .14);
+  --attention: #ff8a3d;
+  --attention-doux: rgba(255, 138, 61, .15);
+  --alerte: #ff4d4d;
+  --alerte-doux: rgba(255, 77, 77, .15);
+  --info: #5aa9e6;
+  --epaper: #d9d7cf;
+  /* Formes et polices */
+  --rayon: 12px;
+  --rayon-petit: 8px;
+  --police: "Archivo", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "SF Mono", monospace;
+  --ruban: repeating-linear-gradient(-45deg, var(--accent) 0 9px, #000 9px 18px);
+  --logo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke-linecap='round'%3E%3Cpath d='M7.51 25.49A12 12 0 1 1 24.49 25.49' stroke='%2333383e' stroke-width='3.4'/%3E%3Cpath d='M7.51 25.49A12 12 0 1 1 25.71 9.95' stroke='%23f5b800' stroke-width='3.4'/%3E%3Cpath d='M16 17L23.28 11.71' stroke='%23f1f2ee' stroke-width='2.4'/%3E%3Ccircle cx='16' cy='17' r='2.6' fill='%23f5b800'/%3E%3C/svg%3E");
+}
+
+html { scrollbar-color: var(--bord-fort) var(--fond); }
+body { font-family: var(--police); background: var(--fond); }
+::selection { background: var(--accent); color: var(--sur-accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* La signature : le ruban de sécurité, en haut de chaque page. */
+body::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 100;
+  background: var(--ruban); pointer-events: none;
+}
+
+/* ---------- Typographie ---------- */
+h1, h2, h3, .etat-titre, .titre-principal { font-stretch: 112%; }
+h2 { font-weight: 750; letter-spacing: -.005em; }
+h3 { font-weight: 650; }
+/* Pas de capitales espacées : des intertitres en minuscules, lisibles. */
+h4 { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 650; color: var(--texte-2); }
+.tableau th { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--texte-3); }
+.horloge span { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--texte-2); }
+.horloge b { font-family: var(--police); font-stretch: 112%; font-weight: 700; letter-spacing: .01em; }
+.grand-chiffre span { font-stretch: 112%; font-weight: 700; letter-spacing: -.02em; }
+.grand-chiffre small { color: var(--texte-2); }
+
+/* ---------- Marque : cadran de manomètre + nom large ---------- */
+.marque { font-stretch: 125%; font-weight: 800; letter-spacing: .01em; }
+.marque b { color: var(--accent); font-weight: 800; }
+.marque-logo {
+  width: 30px; height: 30px; flex: none;
+  border: 0; border-radius: 0; box-shadow: none;
+  background: var(--logo) center / contain no-repeat;
+}
+
+/* ---------- Navigation : un trait jaune devant la page ouverte ---------- */
+.navigation button, .navigation a { position: relative; border-radius: var(--rayon-petit); }
+.navigation button.actif, .navigation > a.actif { background: var(--tuile-2); color: var(--texte); }
+.navigation button.actif svg, .navigation > a.actif svg { stroke: var(--accent); }
+.navigation button.actif::before, .navigation > a.actif::before {
+  content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--accent);
+}
+.navigation-pied a { color: var(--accent); }
+
+/* ---------- Panneaux ---------- */
+.tuile { background: var(--tuile); border-color: var(--bord); border-radius: var(--rayon); }
+.tuile-action { background: linear-gradient(120deg, rgba(245, 184, 0, .11), var(--tuile) 60%); border-color: rgba(245, 184, 0, .3); }
+.bandeau-demo { background: var(--accent-doux); border-color: rgba(245, 184, 0, .35); color: #ffe39a; border-radius: var(--rayon-petit); }
+
+/* ---------- Boutons : le jaune porte du texte noir ---------- */
+.bouton { border-radius: var(--rayon-petit); }
+.bouton:hover { border-color: #4a5058; }
+.bouton.principal, .bouton.plein { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 650; }
+.bouton.principal:hover, .bouton.plein:hover { background: var(--accent-clair); border-color: var(--accent-clair); }
+.bouton.actif { background: var(--accent-doux); border-color: var(--accent); color: var(--accent); }
+.bouton-rond { background: var(--accent); color: var(--sur-accent); }
+.bouton-rond.en-pause { background: var(--tuile-3); color: var(--texte); }
+.pilules { border-radius: var(--rayon-petit); }
+.pilules button { border-radius: 6px; }
+.pilules button.actif, .segments button.actif, .onglets button.actif { background: var(--accent); color: var(--sur-accent); font-weight: 650; }
+.interrupteur input:checked + span { background: var(--accent); border-color: var(--accent); }
+.interrupteur input:checked + span::after { background: var(--sur-accent); }
+select option:checked { background: var(--accent); color: var(--sur-accent); }
+.bouton-lien { background: var(--accent); color: var(--sur-accent); }
+.bouton-lien.secondaire { background: transparent; color: var(--texte); }
+
+/* ---------- Courbes : quatre couleurs bien distinctes ---------- */
+/* (jaune, bleu, acier en pointillés, vert ; l'orange reste aux états) */
+.graphe .serie { stroke: var(--accent); }
+.graphe .serie.s2, .graphe .serie.points.s2 { stroke: var(--info); }
+.graphe .serie.s3 { stroke: var(--texte-2); }
+.graphe .serie.s4 { stroke: var(--ok); }
+.legende .trait { background: var(--accent); }
+.legende .trait.s2 { background: var(--info); }
+.legende .trait.s3 { background: var(--texte-2); }
+.legende .trait.s4 { background: var(--ok); }
+
+/* ---------- États ---------- */
+.puce { border-radius: 6px; }
+
+/* Navigation horizontale (téléphone, tablette) : le trait passe dessous. */
+@media (max-width: 900px) {
+  .navigation button.actif::before, .navigation > a.actif::before {
+    left: 8px; right: 8px; top: auto; bottom: -8px; width: auto; height: 3px; border-radius: 3px 3px 0 0;
+  }
+  .navigation { top: 4px; }   /* sous le ruban de sécurité */
+}
+
+/* Mouvement réduit : on respecte le réglage du système. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

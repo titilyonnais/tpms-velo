@@ -7,11 +7,11 @@
 .navigation-pied a:hover { text-decoration: underline; }
 
 /* Plan : brouilleur, trajets, charge */
-.plan-entrepot .brouilleur { fill: rgba(248, 113, 113, .14); stroke: rgba(248, 113, 113, .7); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.plan-entrepot .brouilleur { fill: rgba(255, 77, 77, .14); stroke: rgba(255, 77, 77, .7); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .plan-entrepot .trajet { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 4; opacity: .45; }
 .plan-entrepot .charge-texte { fill: var(--texte-2); font: 500 10px var(--mono); text-anchor: middle; pointer-events: none; }
 .plan-entrepot .charge-texte.alerte { fill: var(--alerte); font-weight: 600; }
-.pastille.brouille { background: rgba(248, 113, 113, .3); border: 1px dashed var(--alerte); }
+.pastille.brouille { background: rgba(255, 77, 77, .3); border: 1px dashed var(--alerte); }
 
 /* Tableaux */
 .tableau-pneus-sim td { white-space: nowrap; font-family: var(--police); color: var(--texte); font-size: 13px; }
@@ -30,9 +30,9 @@
 
 /* Schéma du réseau */
 .schema-sim .zone-schema { fill: #0d0d12; stroke-width: 1.5; }
-.schema-sim .zone-schema.ot { stroke: rgba(251, 191, 36, .6); }
-.schema-sim .zone-schema.serveurs { stroke: rgba(167, 139, 250, .7); }
-.schema-sim .zone-schema.bureau { stroke: rgba(96, 165, 250, .6); }
+.schema-sim .zone-schema.ot { stroke: rgba(255, 138, 61, .6); }
+.schema-sim .zone-schema.serveurs { stroke: rgba(245, 184, 0, .7); }
+.schema-sim .zone-schema.bureau { stroke: rgba(90, 169, 230, .6); }
 .schema-sim .zone-schema.dmz { stroke: var(--bord-fort); stroke-dasharray: 6 5; }
 .schema-sim .titre-zone { fill: var(--texte); font: 600 14px var(--police); }
 .schema-sim .sous-zone { fill: var(--texte-2); font: 400 12px var(--mono); }
@@ -40,7 +40,7 @@
 .schema-sim .lien { stroke: var(--bord-fort); stroke-width: 2; }
 .schema-sim .boite-pare-feu { fill: var(--accent-doux); stroke: var(--accent); stroke-width: 1.5; }
 .schema-sim .machine { fill: var(--tuile-2); stroke-width: 1.5; }
-.schema-sim .machine.ok { stroke: rgba(52, 211, 153, .7); }
+.schema-sim .machine.ok { stroke: rgba(46, 196, 160, .7); }
 .schema-sim .machine.alerte { stroke: var(--alerte); fill: var(--alerte-doux); }
 .schema-sim .machine.attention { stroke: var(--attention); }
 .schema-sim .machine.intrus { stroke: var(--alerte); stroke-dasharray: 4 3; }

@@ -826,9 +826,9 @@ function feuilleDeStyle() {
 // couleur du thème clair (document imprimé) par son équivalent sombre.
 var COULEURS_SOMBRES = [
   ["#fff4d6", "#3a2e10"], ["#eaf2e3", "#0f2e22"], ["#e4e2dc", "#26262b"], ["#fde3d9", "#3b2566"],
-  ["#f7f5ef", "#16161a"], ["#e9b6aa", "#f87171"], ["#2b5c8a", "#60a5fa"],
+  ["#f7f5ef", "#16161a"], ["#e9b6aa", "#ff4d4d"], ["#2b5c8a", "#5aa9e6"],
   ["#8c887d", "#6b6b73"], ["#5e5b53", "#a1a1aa"],
-  [ENCRE, "#d4d4d8"], [ROUGE, "#a78bfa"], ["#fff", "#0b0b0d"]
+  [ENCRE, "#d4d4d8"], [ROUGE, "#f5b800"], ["#fff", "#0b0b0d"]
 ];
 function themeSombre(css) {
   COULEURS_SOMBRES.forEach(function (c) { css = css.split(c[0]).join(c[1]); });
