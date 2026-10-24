@@ -21,9 +21,9 @@ Ce dossier contient trois choses :
 | `reseau.js` | Client SNTP (RFC 4330) et envoi au syslog (RFC 5424) |
 | `reception.js` | **Logique pure** de réception des lots (vérification, décodage, liste blanche, vraisemblance, dédoublonnage, zone, état des pneus) : utilisée par le serveur (`serveur/chariots.js`, qui enregistre en SQLite) et par le mode démo de la page `flotte/chariots.html` |
 | `intrus.js` | Ce que tente un pirate branché sur l'atelier (lancé par la démonstration) |
-| `demonstration.js` | Les 13 essais de sécurité commentés, sur la maquette Docker |
+| `demonstration.js` | Les 14 essais de sécurité commentés, sur la maquette Docker |
 | `usine.tests.js` | Tests du simulateur : fidélité à la maquette (règles de `regles.nft`, droits de `courtier/acl`, fichiers interdits du serveur, tailles des paquets MQTT), réception, pare-feu, technicien, les 20 essais |
-| `generer-certificats.js` | Autorité de certification de l'usine, certificats du courtier, de la supervision et des passerelles, plus une « AC pirate » pour la démonstration |
+| `generer-certificats.js` | Autorité de certification de l'usine, certificats du courtier, de la supervision et des passerelles, liste de révocation (`crl.pem`, avec l'ancien certificat de la passerelle 1 « volée »), plus une « AC pirate » pour la démonstration ; `--revoquer <nom>` révoque un certificat |
 | `generer-registre.js` | Registre des capteurs posés sur les chariots (liste blanche du serveur) |
 
 ## 2. Lancer la maquette
@@ -47,7 +47,7 @@ Commandes utiles :
 | `docker compose ps` | état des conteneurs |
 | `docker compose logs -f supervision` | journal du serveur (connexion MQTT, lots refusés) |
 | `docker compose exec pare-feu nft list ruleset` | règles du pare-feu **avec leurs compteurs** |
-| `node demonstration.js` | les 13 essais de sécurité (≈ 3 min) ; `node demonstration.js 6` pour un seul |
+| `node demonstration.js` | les 14 essais de sécurité (≈ 3 min) ; `node demonstration.js 6` pour un seul |
 | type `journaux/central.log` (ou `cat`) | journal central : ce que racontent les passerelles |
 | `docker compose down` | tout arrêter |
 
@@ -81,15 +81,16 @@ Plan d'adressage et matrice des flux : `docs/orientation-industrielle.md`, § 3.
 | 4 | Le poste réclame la clé privée du courtier à la supervision | serveur | 403 (même en majuscules) |
 | 5 | L'intrus se connecte au courtier sans certificat | courtier (TLS mutuel) | alerte TLS 116 « certificat exigé » |
 | 6 | Certificat fabriqué par une AC pirate | courtier | alerte TLS 48 « AC inconnue » |
-| 7 | Certificat **volé** de la passerelle 1, publié au nom de la 2 | courtier (ACL) | la supervision, à l'écoute, ne reçoit rien |
-| 8 | Certificat volé : lot qui se dit de la passerelle 2 | serveur | lot refusé (sujet ≠ contenu) |
-| 9 | Certificat volé : capteur absent du registre | serveur (liste blanche) | compteur « capteurs inconnus » |
-| 10 | Certificat volé : pneu annoncé à 20 bar | serveur (vraisemblance) | compteur « invraisemblables », pression affichée inchangée |
-| 11 | Certificat volé : annonces vieilles de 3 h | serveur (anti-rejeu, heure NTP) | lot refusé |
-| 12 | Le programme de la passerelle 2 s'arrête net (`docker kill` : le système ferme la connexion) | courtier (testament) | « hors ligne » sur la supervision en moins d'une seconde ; une vraie coupure de courant (sans FIN) ne se voit qu'après 45 s (simulateur, § 7) |
-| 13 | Le courtier est arrêté 30 s | passerelles (stocker puis transmettre) | « N lot(s) à rattraper » dans le journal central |
+| 7 | L'ancien certificat de la passerelle 1, volé avec elle, puis révoqué | courtier (liste de révocation) | alerte TLS 44 « certificat révoqué » ; la passerelle de remplacement, avec son certificat neuf, reste connectée |
+| 8 | Certificat **volé** de la passerelle 1, publié au nom de la 2 | courtier (ACL) | la supervision, à l'écoute, ne reçoit rien |
+| 9 | Certificat volé : lot qui se dit de la passerelle 2 | serveur | lot refusé (sujet ≠ contenu) |
+| 10 | Certificat volé : capteur absent du registre | serveur (liste blanche) | compteur « capteurs inconnus » |
+| 11 | Certificat volé : pneu annoncé à 20 bar | serveur (vraisemblance) | compteur « invraisemblables », pression affichée inchangée |
+| 12 | Certificat volé : annonces vieilles de 3 h | serveur (anti-rejeu, heure NTP) | lot refusé |
+| 13 | Le programme de la passerelle 2 s'arrête net (`docker kill` : le système ferme la connexion) | courtier (testament) | « hors ligne » sur la supervision en moins d'une seconde ; une vraie coupure de courant (sans FIN) ne se voit qu'après 45 s (simulateur, § 7) |
+| 14 | Le courtier est arrêté 30 s | passerelles (stocker puis transmettre) | « N lot(s) à rattraper » dans le journal central |
 
-Résultat du 24/10/2026 : **13 / 13 essais conformes**. Les essais 7 à 11 montrent la **défense en profondeur** : même avec un certificat volé, un pirate ne peut ni usurper une autre passerelle, ni fausser les pressions.
+Résultat du 24/10/2026 : **14 / 14 essais conformes**. Les essais 7 à 12 montrent la **défense en profondeur** : même avec un certificat volé, un pirate ne peut ni usurper une autre passerelle, ni fausser les pressions.
 
 ## 5. Ce que la maquette nous a appris (pièges rencontrés)
 
@@ -131,8 +132,14 @@ Ouvrir `entrepot/simulateur.html` (ou la version en ligne). Le temps démarre le
 | Attaques et pannes | Les 20 essais, un par un ou tous à la suite, avec l'attendu et l'obtenu |
 | Supervision | Exactement ce que voit le serveur : pneus, passerelles, contrôles, refus, alertes |
 
-Les 7 essais en plus de la maquette : coupure de courant d'une passerelle (testament après 45 s, contre aussitôt pour un plantage), balayage dans l'atelier (limite : pas de filtrage dans une zone), horloge faussée de 90 s (lots refusés jusqu'au réglage NTP), brouillage radio, redémarrage de la supervision (session persistante), inondation de 2 000 lots (limite : pas de limite de débit), révocation d'un certificat volé (proposition).
+Les 6 essais en plus de la maquette : coupure de courant d'une passerelle (testament après 45 s, contre aussitôt pour un plantage), balayage dans l'atelier (limite : pas de filtrage dans une zone), horloge faussée de 90 s (lots refusés jusqu'au réglage NTP), brouillage radio, redémarrage de la supervision (session persistante), inondation de 2 000 lots (30 traités par minute, le reste refusé pour débit anormal).
 
-## 8. Limites
+## 8. Restes traités le 25/10/2026
+
+- **Révocation** : l'AC publie une liste de révocation (`certificats/crl.pem`) que le courtier consulte (`crlfile`) ; essai 7.
+- **Limites du courtier** : messages de 256 Kio au plus, 20 messages en vol par client, 4 000 messages gardés pour un client absent (`mosquitto.conf`).
+- **Débit** : la supervision ne traite pas plus de 30 lots par minute et par passerelle (6 en temps normal) ; au-delà, refus « débit » noté une fois par minute.
+
+## 9. Limites
 
 La maquette reproduit le **découpage** et le **filtrage** d'un vrai réseau, mais tous les « VLAN » tournent sur le même PC : elle ne remplace ni un commutateur administrable ni un vrai pare-feu. Le réseau « air » simule la radio Bluetooth (portée calculée, pas mesurée). Les capteurs « poids lourd » et le format de leurs trames restent à vérifier.

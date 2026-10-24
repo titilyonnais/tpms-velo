@@ -52,7 +52,7 @@ Prérequis : Docker Desktop et Node.js 24. Depuis le dossier `entrepot/` :
 ```bash
 node generer-certificats.js      # AC de l'usine et certificats (clés privées hors de Git)
 docker compose up -d --build     # pare-feu, courtier, supervision, NTP, syslog, 3 passerelles, poste, entrepôt simulé
-node demonstration.js            # 13 essais de sécurité commentés (13 / 13 conformes le 24/10/2026)
+node demonstration.js            # 14 essais de sécurité commentés (14 / 14 conformes le 24/10/2026)
 ```
 
 Supervision : https://localhost:8443/flotte/chariots.html (certificat signé par l'AC de la maquette). Sans Docker, la même page tourne en mode démo dans le navigateur.

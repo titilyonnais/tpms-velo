@@ -340,7 +340,7 @@ Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/f
 
 ### Tests
 
-Les tests JavaScript sont répartis en 9 suites, 776 au total, tous réussis :
+Les tests JavaScript sont répartis en 9 suites, 777 au total, tous réussis :
 
 | Suite | Fichier | Nombre |
 |---|---|---|
@@ -352,8 +352,8 @@ Les tests JavaScript sont répartis en 9 suites, 776 au total, tous réussis :
 | Monde complet, de bout en bout | `moteur.tests.js` | 58 |
 | Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD, HTTPS, fichiers secrets jamais servis) | `serveur/serveur.tests.js` | 135 |
 | Version industrielle (client MQTT, SNTP et syslog, entrepôt simulé, réception des lots, API des chariots) | `entrepot/entrepot.tests.js` | 49 |
-| Simulateur de l'usine (fidélité à la maquette, réception, pare-feu, courtier, technicien, 20 essais) | `entrepot/usine.tests.js` | 31 |
-| **Total** | | **776** |
+| Simulateur de l'usine (fidélité à la maquette, réception, pare-feu, courtier, technicien, 20 essais) | `entrepot/usine.tests.js` | 32 |
+| **Total** | | **777** |
 
 La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage), baromètre avec et sans évent, recharge par grand froid (dehors et à la maison).
 
@@ -413,7 +413,7 @@ Avant, la traduction C++ était seulement compilée (vérification de syntaxe) ;
 
 | Tâche | Ce qu'elle fait |
 |---|---|
-| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (776 tests, dont ceux du serveur, de l'entrepôt et de l'usine) |
+| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (777 tests, dont ceux du serveur, de l'entrepôt et de l'usine) |
 | « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (139 tests) |
 
 Si un seul test échoue, le commit est marqué d'une croix rouge sur GitHub et le badge « Tests » du README passe au rouge. L'historique des exécutions, visible sur GitHub, montre que chaque version du dépôt a passé les tests.

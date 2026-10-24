@@ -11,7 +11,7 @@ Cette fiche sert à **s'entraîner**, pas à être lue devant le jury. Pour chaq
 ## 1. Le projet et la démarche
 
 **Q1. En une phrase, qu'avez-vous fait ?**
-Un système de surveillance de la pression des pneus par capteurs TPMS Bluetooth, appliqué à une **flotte de chariots élévateurs** (passerelles BLE → MQTT, réseau d'usine découpé en zones, supervision), avec un **kit vélo** comme démonstrateur (boîtier à écran e-paper, application) ; et surtout un **simulateur complet** et une **maquette réseau Docker** qui m'ont permis de tout concevoir, tester et attaquer avant d'avoir le matériel : 776 tests JavaScript et 139 tests C++, relancés à chaque envoi de code sur GitHub.
+Un système de surveillance de la pression des pneus par capteurs TPMS Bluetooth, appliqué à une **flotte de chariots élévateurs** (passerelles BLE → MQTT, réseau d'usine découpé en zones, supervision), avec un **kit vélo** comme démonstrateur (boîtier à écran e-paper, application) ; et surtout un **simulateur complet** et une **maquette réseau Docker** qui m'ont permis de tout concevoir, tester et attaquer avant d'avoir le matériel : 777 tests JavaScript et 139 tests C++, relancés à chaque envoi de code sur GitHub.
 → rapport § 1.6 et § 3.
 
 **Q2. Pourquoi un simulateur plutôt qu'attendre le matériel ?**
@@ -158,15 +158,15 @@ C'est le protocole de l'IoT industriel : léger, par **publication et abonnement
 
 **Q33. Que se passe-t-il si une passerelle tombe, ou si le courtier tombe ?**
 Passerelle : à la connexion elle a confié un **testament** au courtier, qui publie « hors ligne » à sa place ; la supervision le voit en moins d'une seconde. Courtier : chaque passerelle **garde ses lots** (jusqu'à 1 h) et les renvoie au retour, en **QoS 1** (accusé de réception). Essai : courtier arrêté 30 s, aucune mesure perdue.
-→ essais 12 et 13.
+→ essais 13 et 14.
 
 **Q34. Comment empêchez-vous une fausse passerelle ?**
 **TLS mutuel** : le courtier n'accepte que les clients qui présentent un certificat signé par l'AC de l'usine (pas de port 1883 en clair, pas d'anonyme). Sans certificat : alerte TLS 116 ; certificat d'une AC pirate : alerte 48. Et les **ACL** : la passerelle 1 ne peut publier que sous son numéro.
-→ essais 5 à 7, `entrepot/courtier/`.
+→ essais 5 à 8, `entrepot/courtier/`.
 
 **Q35. Et si on vole une passerelle avec son certificat ?**
-C'est l'essai le plus important : avec le certificat volé, l'intrus passe le courtier, mais il ne peut ni parler au nom d'une autre passerelle (ACL), ni fausser les pressions : le **serveur refait les contrôles du boîtier** (sujet = contenu, liste blanche, 0-13 bar, anti-rejeu). **Une identité prouvée ne rend pas le contenu vrai.** Limite honnête : il peut envoyer des valeurs plausibles pour les capteurs à sa portée tant qu'on ne **révoque** pas le certificat ; il faudrait une liste de révocation et une clé protégée dans la passerelle.
-→ essais 8 à 11, analyse de risques S26 et § 6.15.
+C'est l'essai le plus important : avec le certificat volé, l'intrus passe le courtier, mais il ne peut ni parler au nom d'une autre passerelle (ACL), ni fausser les pressions : le **serveur refait les contrôles du boîtier** (sujet = contenu, liste blanche, 0-13 bar, anti-rejeu). **Une identité prouvée ne rend pas le contenu vrai.** Et on révoque son certificat : l'AC publie une liste de révocation que le courtier consulte, l'ancien certificat est alors refusé (alerte TLS 44, essai 7) pendant que la passerelle de remplacement reçoit un certificat neuf. Limite honnête : tant qu'on n'a pas vu le vol, il peut envoyer des valeurs plausibles pour les capteurs à sa portée ; il faudrait aussi une clé protégée dans la passerelle.
+→ essais 8 à 12, analyse de risques S26 et § 6.15.
 
 **Q36. Pourquoi un serveur NTP ?**
 Les passerelles datent les annonces : sans heure commune, impossible de détecter un rejeu (le serveur refuse au-delà de 60 s dans le futur et de 2 h dans le passé), de comparer deux passerelles, ou de vérifier la validité d'un certificat. Écart mesuré : 11 à 21 ms. Limite : NTP n'est pas authentifié ; NTS le serait.
@@ -195,7 +195,7 @@ Des défauts de logique, corrigés dans le vrai code. Par exemple, mon client MQ
 4. **Grand froid** : Configuration → météo « Hiver, gel », départ à 6 h et « Recharge du boîtier : dehors », puis brancher le chargeur → « FROID » près de la batterie, et la page Électronique montre la recharge coupée.
 5. **Flotte** : serveur local, connexion par mot de passe, puis « Se déconnecter » ; attaques de rejeu et de signature avec `flotte-vers-serveur.js`.
 6. **Entrepôt, sans Docker** : le simulateur de l'usine (https://titilyonnais.github.io/tpms-velo/entrepot/simulateur.html), page « Attaques et pannes » → « Tout lancer » (×60), puis page « Réseau et pare-feu » pour voir les paquets refusés ; ou la supervision seule (`/flotte/chariots.html`).
-7. **Entrepôt, maquette Docker** (lancer `docker compose up -d` dans `entrepot/` **avant** l'oral, Docker Desktop démarré) : `node entrepot/demonstration.js` (13 essais, environ 3 min, ou un seul : `node entrepot/demonstration.js 7`) ; `docker compose exec pare-feu nft list ruleset` pour montrer les compteurs ; `journaux/central.log` pour le journal central.
+7. **Entrepôt, maquette Docker** (lancer `docker compose up -d` dans `entrepot/` **avant** l'oral, Docker Desktop démarré) : `node entrepot/demonstration.js` (14 essais, environ 3 min, ou un seul : `node entrepot/demonstration.js 7`) ; `docker compose exec pare-feu nft list ruleset` pour montrer les compteurs ; `journaux/central.log` pour le journal central.
 
 ## 8. À compléter avant le jour J
 

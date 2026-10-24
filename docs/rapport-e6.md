@@ -112,7 +112,7 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
 | Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture par mot de passe et sessions qui expirent, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
 | Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Version 2 : modèle paramétré de 10 pièces, avec un évent à membrane pour le baromètre, rendu, contrôlé (aucune interférence aux cotes nominales), STL prêts ; pas encore imprimé |
-| Version industrielle : passerelles BLE → MQTT, réception par le serveur, maquette réseau Docker, supervision de l'entrepôt | `entrepot/`, `flotte/chariots.html` | Terminée le 24/10/2026, testée (47 tests) ; maquette lancée sur mon PC, 13 essais de sécurité sur 13 conformes ; supervision en ligne en mode démo |
+| Version industrielle : passerelles BLE → MQTT, réception par le serveur, maquette réseau Docker, supervision de l'entrepôt | `entrepot/`, `flotte/chariots.html` | Terminée le 24/10/2026, testée (47 tests) ; maquette lancée sur mon PC, 14 essais de sécurité sur 14 conformes ; supervision en ligne en mode démo |
 | Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique, orientation industrielle |
 
 ### 1.7 L'adaptation industrielle
@@ -1424,7 +1424,7 @@ Les valeurs mesurées remplaceront les hypothèses de `logique/energie.js` ; le 
 
 ### 8.1 Les tests automatiques
 
-Le dépôt contient **776 tests JavaScript en 9 suites** et **139 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte, puis 49 pour la version industrielle, 31 pour le simulateur de l'usine, et 28 JavaScript et 3 C++ pour les défauts du simulateur du vélo trouvés par l'audit des valeurs affichées). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
+Le dépôt contient **777 tests JavaScript en 9 suites** et **139 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte, puis 49 pour la version industrielle, 32 pour le simulateur de l'usine, et 28 JavaScript et 3 C++ pour les défauts du simulateur du vélo trouvés par l'audit des valeurs affichées). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
 
 | Suite | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|---|
@@ -1436,8 +1436,8 @@ Le dépôt contient **776 tests JavaScript en 9 suites** et **139 tests C++**, t
 | Monde complet | `moteur.tests.js` | 58 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 ; baromètre avec évent, sans évent et absent ; recharge par grand froid dehors, puis à la maison |
 | Serveur de flotte | `serveur/serveur.tests.js` | 135 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; connexion par mot de passe (compte inconnu traité comme un mot de passe faux), sessions qui expirent (15 min d'inactivité, 8 h au plus, 3 par compte), vraie déconnexion, rôles ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) ; certificats, clés et journaux de l'entrepôt jamais servis, même en majuscules |
 | Version industrielle | `entrepot/entrepot.tests.js` | 49 | Client MQTT octet par octet (longueur restante, CONNECT, PUBLISH, SUBSCRIBE, testament) et contre un faux courtier ; SNTP et syslog ; entrepôt simulé (zones, fuites, regonflage du matin, nuit aux quais, portée radio) ; réception des lots : zone de la meilleure réception, dédoublonnage, une mesure par minute, lots piégés (sujet ≠ contenu, futur, rejeu, injection), liste blanche, vraisemblance, crevaison, testament ; logique de réception seule (comme dans le navigateur) ; API des chariots réservée aux sessions |
-| Simulateur de l'usine | `entrepot/usine.tests.js` | 31 | Fidélité à la maquette (règles de `regles.nft`, droits de `courtier/acl`, fichiers interdits du serveur, tailles des paquets MQTT, heure de Paris) ; réception (dédoublonnage, zone, capteur perdu, pression à 20 °C, fuite lente) ; pare-feu à états ; technicien ; les 20 essais |
-| **Total JavaScript** | | **776** | |
+| Simulateur de l'usine | `entrepot/usine.tests.js` | 32 | Fidélité à la maquette (règles de `regles.nft`, droits de `courtier/acl`, fichiers interdits du serveur, tailles des paquets MQTT, heure de Paris) ; réception (dédoublonnage, zone, capteur perdu, pression à 20 °C, fuite lente) ; pare-feu à états ; technicien ; les 20 essais |
+| **Total JavaScript** | | **777** | |
 
 **Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **139 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
 
@@ -1537,7 +1537,7 @@ Le même audit, sur la version industrielle, a mené aux corrections du § 10.9.
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
 | ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7), évent à membrane compris ; non vérifiables avant l'impression et l'essai |
-| ENF-08 à ENF-11 (logiciel) | Vérifiées (776 tests JavaScript, 139 tests C++, lancés à chaque envoi de code ; aucune installation) |
+| ENF-08 à ENF-11 (logiciel) | Vérifiées (777 tests JavaScript, 139 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
 | ENF-31 (confirmation par bouton) | Vérifiée par 20 tests JavaScript et 11 tests C++ ; à essayer avec la vraie radio et Bluefy |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
@@ -1659,7 +1659,7 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 14:39 – 14:44 | `0d70b19`, `1d64634` | Démonstration des essais de sécurité ; faille trouvée et corrigée (clé privée du courtier servie par la supervision) |
 | 14:51 | `e7074be` | Supervision de l'entrepôt (`flotte/chariots.html`) et logique de réception partagée ; 717 tests JavaScript |
 
-À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 776 aujourd'hui, auxquels s'ajoutent 139 tests C++.
+À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 777 aujourd'hui, auxquels s'ajoutent 139 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1788,14 +1788,14 @@ La maquette m'a appris plusieurs choses sur le fonctionnement réel des réseaux
 
 ### 10.6 La démonstration de sécurité du réseau
 
-`node entrepot/demonstration.js` enchaîne **13 essais** commentés sur la maquette. Chaque essai dit ce qui est tenté, ce qu'on attend et d'où vient la preuve (compteurs du pare-feu, réponse du courtier, compteurs du serveur, journal central). Résultat du 24/10/2026 : **13 sur 13 conformes**.
+`node entrepot/demonstration.js` enchaîne **14 essais** commentés sur la maquette. Chaque essai dit ce qui est tenté, ce qu'on attend et d'où vient la preuve (compteurs du pare-feu, réponse du courtier, compteurs du serveur, journal central). Résultat du 24/10/2026 : **14 sur 14 conformes**.
 
 | Couche | Essai | Résultat |
 |---|---|---|
 | Pare-feu | Balayage `nmap` d'une passerelle depuis un poste de bureau | 4 ports « filtered », +4 au compteur « REFUS bureautique vers OT » |
 | Pare-feu | Le poste vise le courtier ; l'intrus de l'atelier vise la supervision | Bloqués, comptés |
 | Serveur web | Le poste réclame la clé privée du courtier | 403 (voir § 10.7) |
-| Courtier | Connexion sans certificat ; certificat d'une AC pirate | Refusées (alertes TLS 116 et 48) |
+| Courtier | Connexion sans certificat ; certificat d'une AC pirate ; ancien certificat d'une passerelle volée, révoqué | Refusées (alertes TLS 116, 48 et 44) |
 | Courtier | Certificat **volé** de la passerelle 1, publié au nom de la 2 | Jeté par les droits ACL : la supervision n'a rien reçu |
 | Serveur | Certificat volé : lot incohérent, capteur inconnu, pneu à 20 bar, annonces vieilles de 3 h | Tous rejetés ; la pression affichée reste la vraie (8,41 bar) |
 | Continuité | La passerelle 2 s'arrête net | « Hors ligne » sur la supervision en moins d'une seconde (testament) |
@@ -1833,14 +1833,13 @@ Il reproduit **machine par machine** ce que fait la maquette :
 
 Des tests vérifient que le simulateur reste fidèle à la maquette : règles lues dans `regles.nft`, droits lus dans `courtier/acl`, même règle des fichiers interdits que le serveur, mêmes tailles de paquets MQTT que mon client.
 
-On y rejoue **20 essais** : les 13 de la maquette, et 7 que seule la simulation permet.
+On y rejoue **20 essais** : les 14 de la maquette, et 6 que seule la simulation permet.
 - Coupure de courant (le testament arrive après 45 s, contre aussitôt pour un plantage).
 - Horloge faussée de 90 s : 22 lots refusés « datés du futur » jusqu'au réglage NTP suivant.
 - Brouillage radio.
 - Redémarrage de la supervision.
 - Inondation de 2 000 lots.
 - Balayage à l'intérieur de l'atelier, où le pare-feu ne voit rien.
-- Révocation d'un certificat volé.
 
 Les 20 sont conformes.
 
@@ -1856,8 +1855,8 @@ C'est la même leçon que pour le vélo (§ 6.8) : **la simulation trouve des d�
 ### 10.10 Limites
 
 - La maquette reproduit le **découpage** et le **filtrage**, mais toutes les zones tournent sur le même PC : elle ne remplace ni un vrai commutateur ni un vrai pare-feu. Le même plan peut être refait dans Packet Tracer.
-- Une passerelle volée garde un certificat valable tant qu'on ne le révoque pas : il faudrait une liste de révocation et une clé protégée dans la passerelle.
-- Le NTP n'est pas authentifié (NTS le permettrait) ; le courtier n'a pas de limite de débit par client.
+- Une passerelle volée est révoquée par la liste de révocation de l'AC (essai 7), mais sa clé reste lisible dans la passerelle : il faudrait une clé protégée (composant sécurisé).
+- Le NTP n'est pas authentifié (NTS le permettrait) ; le courtier limite la taille et le nombre de messages en vol, et la supervision le débit (30 lots par minute), mais pas le courtier lui-même.
 - Les capteurs « poids lourd », le format de leurs trames, la portée Bluetooth réelle dans un entrepôt et les pressions des chariots sont des **hypothèses**.
 
 ---
@@ -1869,7 +1868,7 @@ C'est la même leçon que pour le vélo (§ 6.8) : **la simulation trouve des d�
 | Objectif | Résultat |
 |---|---|
 | Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique (révision C, avec baromètre et coupure de la recharge), firmware, application et boîtier 3D écrits |
-| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 776 tests JavaScript et 139 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 777 tests JavaScript et 139 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
 | Donner au projet une dimension industrielle et réseau | Flotte de chariots élévateurs : passerelles BLE → MQTT (client écrit sans bibliothèque), réseau d'usine en 4 zones derrière un pare-feu nftables, courtier en TLS mutuel avec droits par sujet, NTP, syslog ; maquette Docker de 10 conteneurs lancée en une commande ; supervision de l'entrepôt ; 13 essais de sécurité sur 13 conformes |
 | Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; correction d'altitude par le baromètre, avec la pression « manomètre » pour l'écran et les alertes et la pression du capteur pour l'historique ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
 | Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur, 8 pour le réseau de l'entrepôt) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; changements sensibles confirmés par un bouton du boîtier ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes par mot de passe et sessions qui expirent, HTTPS en option ; risques résiduels identifiés et justifiés |
@@ -2013,7 +2012,7 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | [../firmware/README.md](../firmware/README.md) | Organisation du firmware, compilation, câblage (dont baromètre, coupure de la recharge et deux boutons sur une broche), composants à ajouter, mise en service, points à vérifier |
 | [../app/README.md](../app/README.md) | Vues et transports de l'application |
 | [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement (HTTP ou HTTPS), connexion par mot de passe et sessions, RGPD, API, format des envois signés, sécurité, limites |
-| [../entrepot/README.md](../entrepot/README.md) | Maquette réseau de l'entrepôt : lancement, conteneurs, démonstration des 13 essais, pièges rencontrés, limites |
+| [../entrepot/README.md](../entrepot/README.md) | Maquette réseau de l'entrepôt : lancement, conteneurs, démonstration des 14 essais, pièges rencontrés, limites |
 | [../boitier-3d/README.md](../boitier-3d/README.md) | Boîtier 3D : cotes, joint, évent à membrane et berceau du baromètre, impression, quincaillerie, montage, essais d'étanchéité |
 
 En ligne :
@@ -2044,7 +2043,7 @@ Références :
 Depuis la racine du dépôt (Node.js requis) :
 
 ```
-node simulateur/tests/tout.js              # les 776 tests JavaScript, 9 suites
+node simulateur/tests/tout.js              # les 777 tests JavaScript, 9 suites
 node simulateur/tests/tests.js             # suite « logique et boîtier » (208 tests)
 node serveur/serveur.tests.js              # suite « serveur de flotte » (135 tests)
 node entrepot/entrepot.tests.js            # suite « version industrielle » (47 tests)
@@ -2066,7 +2065,7 @@ Maquette réseau de l'entrepôt (Docker Desktop, depuis le dossier `entrepot/`) 
 node generer-certificats.js                # AC de l'usine et certificats (une fois)
 docker compose up -d --build               # les 10 conteneurs
 docker compose exec pare-feu nft list ruleset   # règles du pare-feu et compteurs
-node demonstration.js                      # les 13 essais de sécurité (≈ 3 min)
+node demonstration.js                      # les 14 essais de sécurité (≈ 3 min)
 docker compose down                        # tout arrêter
 ```
 

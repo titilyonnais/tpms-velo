@@ -131,7 +131,7 @@ La maquette se lance avec une seule commande (`docker compose up`) et reproduit 
 
 Images téléchargées depuis Docker Hub (officielles) : `node`, `eclipse-mosquitto`, `alpine`.
 
-**Démonstration devant le jury** : `node entrepot/demonstration.js` enchaîne **13 essais** commentés (13 / 13 conformes le 24/10/2026) : balayage de ports du bureau vers l'atelier bloqué, client MQTT sans certificat ou signé par une AC pirate refusé, certificat volé qui publie au nom d'une autre passerelle jeté par les ACL, lots piégés (capteur inconnu, 20 bar, rejeu) rejetés par le serveur, testament d'une passerelle coupée, courtier arrêté 30 s sans perte de mesures (stocker puis transmettre). La page `flotte/chariots.html` montre le tout côté supervision.
+**Démonstration devant le jury** : `node entrepot/demonstration.js` enchaîne **14 essais** commentés (14 / 14 conformes le 24/10/2026) : balayage de ports du bureau vers l'atelier bloqué, client MQTT sans certificat ou signé par une AC pirate refusé, certificat volé qui publie au nom d'une autre passerelle jeté par les ACL, lots piégés (capteur inconnu, 20 bar, rejeu) rejetés par le serveur, testament d'une passerelle coupée, courtier arrêté 30 s sans perte de mesures (stocker puis transmettre). La page `flotte/chariots.html` montre le tout côté supervision.
 
 ## 5. Ce qui reste hypothétique
 
@@ -147,7 +147,7 @@ Toutes faites le 24/10/2026 :
 1. Client MQTT (écrit sans bibliothèque, pour pouvoir l'expliquer) et passerelles simulées, avec leurs tests.
 2. Réception des trames par le serveur (MQTT), chariots, capteurs, zones ; logique de réception partagée avec la page (`entrepot/reception.js`).
 3. Maquette Docker : réseaux, pare-feu, courtier, certificats, NTP, syslog.
-4. Démonstration d'attaques réseau (13 essais).
+4. Démonstration d'attaques réseau (14 essais, dont la révocation d'un certificat volé).
 5. Page de supervision `flotte/chariots.html` (mode serveur ou démo) et documentation en version « chariots ».
 
 Restent à faire avec le matériel : mesurer la portée Bluetooth réelle (démonstrateur vélo), choisir des capteurs « poids lourd », refaire le plan dans Packet Tracer si le professeur le demande.

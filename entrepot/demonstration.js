@@ -2,7 +2,7 @@
 // demonstration.js — Essais de sécurité commentés de la maquette
 // ---------------------------------------------------------------------
 // À lancer sur le PC, maquette démarrée (docker compose up -d) :
-//   node entrepot/demonstration.js        les 13 essais à la suite (≈ 3 min)
+//   node entrepot/demonstration.js        les 14 essais à la suite (≈ 3 min)
 //   node entrepot/demonstration.js 6      un seul essai (pour l'oral)
 //
 // Chaque essai dit ce qui est tenté, ce qu'on attend, ce qu'on obtient,
@@ -150,6 +150,13 @@ var ESSAIS = [
     lancer: async function () {
       var r = intrus("ac-pirate");
       return { obtenu: r, ok: r.indexOf("REFUSÉ") === 0 };
+    } },
+
+  { titre: "L'intrus présente l'ancien certificat de la passerelle 1, volé avec elle puis révoqué",
+    attendu: "refusé : le courtier consulte la liste de révocation de l'AC (la passerelle de remplacement a un certificat neuf)",
+    lancer: async function () {
+      var r = intrus("revoque");
+      return { obtenu: r, ok: r.indexOf("REFUSÉ") === 0 && /révoqué/.test(r) };
     } },
 
   { titre: "Avec le certificat VOLÉ de la passerelle 1, l'intrus publie au nom de la passerelle 2",

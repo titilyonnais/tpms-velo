@@ -441,9 +441,9 @@
     $("corpsRetenus").innerHTML = Object.keys(C.retenus).map(function (s) {
       return "<tr><td class=\"mono\">" + echapper(s) + "</td><td class=\"mono petit-texte\">" + echapper(C.retenus[s].slice(0, 90)) + "</td></tr>";
     }).join("") || "<tr><td colspan=\"2\">Aucun.</td></tr>";
-    $("corpsCertificats").innerHTML = ["courtier", "supervision", "serveur-supervision", "passerelle-1", "passerelle-2", "passerelle-3", "passerelle-9"].map(function (n) {
+    $("corpsCertificats").innerHTML = ["courtier", "supervision", "serveur-supervision", "passerelle-1", "passerelle-2", "passerelle-3", "passerelle-1-ancien", "passerelle-9"].map(function (n) {
       var c = TPMS.usineCertificat(u, n), pirate = c.emetteur !== "AC de l'usine";
-      return "<tr><td class=\"mono\">" + n + "</td><td class=\"" + (pirate ? "alerte-texte" : "") + "\">" + echapper(c.emetteur) + "</td><td>" + jour(c.finMs) + "</td><td>" + (u.revocations[n] ? "<span class=\"alerte-texte\">révoqué</span>" : pirate ? "<span class=\"alerte-texte\">refusé (AC inconnue)</span>" : "valable") + "</td></tr>";
+      return "<tr><td class=\"mono\">" + n + (c.cn !== n ? "<span class=\"raison\">CN=" + c.cn + "</span>" : "") + "</td><td class=\"" + (pirate ? "alerte-texte" : "") + "\">" + echapper(c.emetteur) + "</td><td>" + jour(c.finMs) + "</td><td>" + (u.revocations[n] ? "<span class=\"alerte-texte\">révoqué</span>" : pirate ? "<span class=\"alerte-texte\">refusé (AC inconnue)</span>" : "valable") + "</td></tr>";
     }).join("");
     $("corpsAcl").innerHTML = TPMS.ACL_COURTIER.map(function (r) { return "<tr><td class=\"mono\">" + r.utilisateur + "</td><td>" + (r.acces === "read" ? "lecture" : "écriture") + "</td><td class=\"mono\">" + r.filtre + "</td></tr>"; }).join("") +
       "<tr><td colspan=\"3\" class=\"discret\">Tout le reste est interdit (pas de connexion anonyme, pas de port 1883).</td></tr>";

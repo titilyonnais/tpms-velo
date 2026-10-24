@@ -39,6 +39,7 @@ TPMS.POSITIONS_PNEU_CHARIOT = ["AVG", "AVD", "ARG", "ARD"];
 TPMS.RECEPTION = {
   pressionMaxBar: 13,          // plage des capteurs « poids lourd »
   annoncesMaxParLot: 2000,
+  lotsMaxParMinute: 30,        // une passerelle publie 6 lots par minute (+ rattrapage) : au-delà, débit anormal (S31)
   ageMaxMs: 2 * 3600000,       // une passerelle garde au plus 1 h de lots : 2 h de marge
   avanceMaxMs: 60000,          // une date dans le futur au-delà de 60 s : horloge fausse ou rejeu
   memeAnnonceMs: 3000,         // même trame, même capteur, à moins de 3 s : une seule annonce
@@ -87,6 +88,7 @@ TPMS.creerReceptionLots = function (registre, rappels) {
   var zones = new Map();         // chariot → { zone, passerelle, t, puissances: { passerelle: { moy, t, zone } } }
   var compteurs = { lots: 0, acceptees: 0, doublons: 0, enRetard: 0, inconnues: 0, invalides: 0, invraisemblables: 0, lotsRefuses: 0 };
   var dernierRefusInconnuMs = new Map();
+  var debits = new Map();        // passerelle → { debutMs, lots, refusNoteMs } (fenêtre d'une minute)
 
   // Seuils au format de logique/alertes.js (une entrée par position).
   var S = R.seuils;
@@ -279,6 +281,17 @@ TPMS.creerReceptionLots = function (registre, rappels) {
       return "";
     }
     compteurs.lots++;
+    // Débit : plus de 30 lots en une minute pour une même passerelle, on
+    // n'en traite plus jusqu'à la minute suivante (un certificat volé ne
+    // peut pas noyer la base). Le refus est noté une fois par minute.
+    var d = debits.get(idSujet);
+    if (!d || maintenantMs - d.debutMs >= 60000) { d = { debutMs: maintenantMs, lots: 0, refusNote: false }; debits.set(idSujet, d); }
+    d.lots++;
+    if (d.lots > R.lotsMaxParMinute) {
+      compteurs.lotsRefuses++;
+      if (!d.refusNote) { d.refusNote = true; appeler("refus", maintenantMs, "passerelle-" + idSujet, "debit", "plus de " + R.lotsMaxParMinute + " lots en une minute : lots ignorés jusqu'à la minute suivante"); }
+      return "débit anormal";
+    }
     var probleme = verifierLot(idSujet, objet, maintenantMs);
     if (probleme) {
       compteurs.lotsRefuses++;

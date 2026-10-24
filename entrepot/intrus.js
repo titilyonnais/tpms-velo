@@ -7,6 +7,7 @@
 //
 //   node entrepot/intrus.js sans-certificat   connexion au courtier sans certificat client
 //   node entrepot/intrus.js ac-pirate         certificat signé par une autre AC (passerelle-9)
+//   node entrepot/intrus.js revoque           ancien certificat de la passerelle 1, volé avec elle et révoqué
 //   node entrepot/intrus.js usurpation        certificat VOLÉ de la passerelle 1, publié
 //                                             sur le sujet de la passerelle 2
 //   node entrepot/intrus.js faux-lot          certificat volé, lot qui se dit de la passerelle 2
@@ -59,6 +60,7 @@ function expliquer(e) {
   var m = e.message;
   if (/certificate required/.test(m)) return "alerte TLS 116, certificat client exigé";
   if (/unknown ca/.test(m)) return "alerte TLS 48, certificat signé par une AC inconnue";
+  if (/certificate revoked/.test(m)) return "alerte TLS 44, certificat révoqué";
   return m;
 }
 
@@ -76,8 +78,8 @@ var essai = process.argv[2];
 var maintenant = Date.now();
 var premierCapteur = JSON.parse(fs.readFileSync(__dirname + "/../serveur/capteurs-chariots.json", "utf8")).capteurs[0];
 
-if (essai === "sans-certificat" || essai === "ac-pirate") {
-  var identite = essai === "ac-pirate" ? "passerelle-9" : null;
+if (essai === "sans-certificat" || essai === "ac-pirate" || essai === "revoque") {
+  var identite = essai === "ac-pirate" ? "passerelle-9" : essai === "revoque" ? "passerelle-1-ancien" : null;
   connecterAvec(identite, "ac.pem").then(function (c) {
     c.fermer();
     fin("ACCEPTÉ : le courtier a laissé entrer l'intrus !");

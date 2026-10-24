@@ -120,6 +120,14 @@ function sujet(id) { return "entrepot/lyon/passerelle/" + id + "/trames"; }
     var tk = t0 + k * 600000;
     r3.recevoirMessage(sujet(1), lot(1, "quais", [{ t: tk, rssi: -70, trame: trame(adr3, 8.5 - 0.3 * k / 144) }]), tk + 1000);
   }
+  // Débit : 40 lots de la même passerelle dans la même minute → 30 traités, 10 refusés, un seul refus noté.
+  var refusNotes = [];
+  var r4 = TPMS.creerReceptionLots(TPMS.entrepotRegistreCapteurs(monde), { refus: function (t, s, motif) { refusNotes.push(motif); } });
+  var refusesDebit = 0;
+  for (var j = 0; j < 40; j++) if (r4.recevoirMessage(sujet(1), lot(1, "quais", []), t0 + j * 100) === "débit anormal") refusesDebit++;
+  var apresMinute = r4.recevoirMessage(sujet(1), lot(1, "quais", []), t0 + 61000);
+  verifier("réception : plus de 30 lots par minute d'une passerelle → les suivants refusés (débit), un seul refus noté, reprise la minute suivante",
+    refusesDebit === 10 && refusNotes.filter(function (m) { return m === "debit"; }).length === 1 && apresMinute === "", refusesDebit + " " + refusNotes.join(","));
   var p3 = r3.etatDesPneus(t0 + 14 * 3600000 + 1000).C03.pneus.ARG;
   verifier("réception : fuite lente de −0,3 bar/jour repérée après 14 h (tendance depuis le dernier regonflage)",
     p3.etat === "FUITE_LENTE" && Math.abs(p3.tendanceBarJour + 0.3) < 0.02 && alertes.indexOf("C03ARG FUITE_LENTE") >= 0, p3.etat + " " + p3.tendanceBarJour);
@@ -200,7 +208,7 @@ function sujet(id) { return "entrepot/lyon/passerelle/" + id + "/trames"; }
     if (!e.resultat || !e.resultat.ok) echecs.push(def.id + " : " + (e.resultat ? e.resultat.obtenu : "pas de résultat"));
     TPMS.usineAvancer(u, u.tMs + 60000);
   });
-  verifier("essais : les " + TPMS.USINE_ESSAIS.length + " essais (13 de la maquette + 7 de la simulation) sont conformes", echecs.length === 0, echecs.join(" ; "));
+  verifier("essais : les " + TPMS.USINE_ESSAIS.length + " essais (14 de la maquette + 6 de la simulation) sont conformes", echecs.length === 0, echecs.join(" ; "));
   var e = u.essais.filter(function (x) { return x.id === "courant-passerelle"; })[0];
   verifier("essais : coupure de courant d'une passerelle vue « hors ligne » après le délai de garde (20 à 50 s), pas aussitôt",
     e && /après (\d+) s/.test(e.resultat.obtenu) && Number(/après (\d+) s/.exec(e.resultat.obtenu)[1]) >= 20, e && e.resultat.obtenu);

@@ -164,7 +164,9 @@ TPMS.creerUsine = function (options) {
     technicien: { interventions: [], derniereTourneeJour: null, prochainControleMs: debut, aReparer: {} },
     machines: {}, regles: [], conntrack: {}, compteurEtabli: { paquets: 0, octets: 0 },
     flux: [], journalCentral: [], journalCourtier: [], journalSupervision: [], journalPareFeu: [],
-    brouilleur: null, revocations: {}, posteActif: true,
+    // Liste de révocation de l'AC (certificats/crl.pem) : l'ancien certificat
+    // de la passerelle 1, volé avec elle, y figure dès le départ.
+    brouilleur: null, revocations: { "passerelle-1-ancien": true }, posteActif: true,
     courtier: { clients: {}, retenus: {}, abonnements: {}, enAttente: {}, messagesRecus: 0, refusAcl: 0, compteurId: 1 },
     stats: { annoncesEmises: 0, annoncesBrouillees: 0, annoncesEntendues: 0 },
     derniersRssi: {},              // chariot → passerelle → { rssi, t } (pour l'affichage)
@@ -372,11 +374,13 @@ function tcpFermer(usine, cx, franche) {
 // 5. TLS et certificats
 // ---------------------------------------------------------------------
 // Certificats de la maquette (entrepot/generer-certificats.js), valables
-// 365 jours. « volé » : le même certificat, copié depuis une passerelle.
+// 365 jours. « passerelle-1-ancien » : l'ancien certificat de la
+// passerelle 1 (même nom CN=passerelle-1), volé avec elle et révoqué.
 TPMS.usineCertificat = function (usine, nom) {
   if (!nom) return null;
   var pirate = nom === "passerelle-9";
-  return { cn: nom, emetteur: pirate ? "AC pirate" : "AC de l'usine", debutMs: usine.debutMs - 86400000, finMs: usine.debutMs + 364 * 86400000 };
+  return { nom: nom, cn: nom === "passerelle-1-ancien" ? "passerelle-1" : nom, emetteur: pirate ? "AC pirate" : "AC de l'usine",
+    debutMs: usine.debutMs - 86400000, finMs: usine.debutMs + 364 * 86400000 };
 };
 
 // Poignée de main TLS 1.3 avec le courtier (authentification mutuelle).
@@ -392,7 +396,7 @@ function tlsCourtier(usine, cx, certificat) {
   if (!certificat) verdict = { alerte: 116, texte: "alerte TLS 116, certificat client exigé" };
   else if (certificat.emetteur !== "AC de l'usine") verdict = { alerte: 48, texte: "alerte TLS 48, certificat signé par une AC inconnue" };
   else if (heure < certificat.debutMs || heure > certificat.finMs) verdict = { alerte: 45, texte: "alerte TLS 45, certificat expiré (ou horloge fausse)" };
-  else if (usine.revocations[certificat.cn]) verdict = { alerte: 44, texte: "alerte TLS 44, certificat révoqué" };
+  else if (usine.revocations[certificat.nom]) verdict = { alerte: 44, texte: "alerte TLS 44, certificat révoqué" };
   // Le client envoie son certificat (≈ 800 o) puis Finished.
   tcpEnvoyer(usine, cx, certificat ? 860 : 120, "TLS certificat client + Finished");
   if (verdict) {
@@ -436,7 +440,7 @@ function mqttConnecter(usine, machine, options) {
     journaliser(usine, "courtier", "info", "client " + options.idClient + " déjà connecté : ancienne connexion fermée");
   }
   C.clients[options.idClient] = {
-    idClient: options.idClient, utilisateur: cert.cn, ip: usine.machines[machine].ip, machine: machine, cx: t.cx,
+    idClient: options.idClient, utilisateur: cert.cn, certificat: cert.nom, ip: usine.machines[machine].ip, machine: machine, cx: t.cx,
     depuisMs: usine.tMs, dernierPaquetMs: usine.tMs, gardeS: U.mqtt.gardeS, testament: options.testament || null,
     sessionPersistante: !!options.sessionPersistante, publies: 0, refuses: 0
   };
@@ -976,23 +980,22 @@ TPMS.usinePanne = function (usine, idMachine, nom) {
 // Brouilleur radio (x, y en mètres, rayon) ou null pour l'arrêter.
 TPMS.usineBrouiller = function (usine, brouilleur) { usine.brouilleur = brouilleur; };
 
-// Révocation d'un certificat (PROPOSITION : la maquette n'a pas encore de
-// liste de révocation ; le courtier la consulterait à chaque connexion).
-TPMS.usineRevoquer = function (usine, cn) {
-  usine.revocations[cn] = true;
-  var cl = usine.courtier.clients[cn];
-  journaliser(usine, "courtier", "notice", "certificat « " + cn + " » ajouté à la liste de révocation");
-  if (cl) { tcpFermer(usine, cl.cx, true); courtierPerdClient(usine, cn, "certificat révoqué", false); }
+// Révocation d'un certificat (par son fichier, comme generer-certificats.js
+// --revoquer) : le courtier refuse ensuite toute connexion qui le présente,
+// et coupe celles qui l'utilisent.
+TPMS.usineRevoquer = function (usine, nom) {
+  usine.revocations[nom] = true;
+  journaliser(usine, "courtier", "notice", "certificat « " + nom + " » ajouté à la liste de révocation");
   Object.keys(usine.courtier.clients).forEach(function (id) {
     var c = usine.courtier.clients[id];
-    if (c && c.utilisateur === cn) { tcpFermer(usine, c.cx, true); courtierPerdClient(usine, id, "certificat révoqué", false); }
+    if (c && c.certificat === nom) { tcpFermer(usine, c.cx, true); courtierPerdClient(usine, id, "certificat révoqué", false); }
   });
 };
 
 // ---------------------------------------------------------------------
 // 12. Les essais de sécurité et de continuité (attaques jouables)
 // ---------------------------------------------------------------------
-// Les 13 essais de entrepot/demonstration.js, plus 6 que seule la
+// Les 14 essais de entrepot/demonstration.js, plus 6 que seule la
 // simulation permet de rejouer. Chaque essai : ce qui est tenté, ce qu'on
 // attend, puis ce qu'on obtient (avec sa preuve). Un essai « Limite »
 // montre un risque résiduel assumé : il est conforme s'il le montre.
@@ -1225,26 +1228,27 @@ TPMS.USINE_ESSAIS = [
       var persistante = u.machines.supervision.supervision.sessionPersistante;
       return { ok: persistante ? n > 0 : n === 0, obtenu: persistante ? n + " message(s) gardés par le courtier pendant l'arrêt, livrés au redémarrage" : "session propre : les messages de l'arrêt sont PERDUS (les passerelles ont pourtant reçu leur PUBACK)" };
     } },
-  { id: "inondation", couche: "Limite", titre: "Certificat volé : 2 000 lots publiés d'un coup",
-    attendu: "LIMITE : pas de limite de débit par client MQTT ; le serveur trie, mais encaisse tout",
+  { id: "inondation", couche: "Serveur", titre: "Certificat volé : 2 000 lots publiés d'un coup",
+    attendu: "le courtier les transmet (il ne limite que la taille et les messages en vol) ; le serveur n'en traite que 30 par minute et par passerelle, le reste est refusé",
     lancer: function (u) {
       var s = u.machines.supervision.supervision, avant = s.messages;
       brancherIntrus(u);
       var id = "intrus-" + (u.prochainId++);
       var r = mqttConnecter(u, "intrus", { idClient: id, certificat: "passerelle-1" });
       if (!r.ok) return { ok: false, obtenu: "connexion impossible : " + r.texte };
+      var refusAvant = compteurs(u).lotsRefuses;
       for (var i = 0; i < 2000; i++) mqttPublier(u, id, sujetPasserelle(1, "trames"), JSON.stringify(lotVole(u, [])), 1, false);
       tcpFermer(u, r.cx, true); courtierPerdClient(u, id, "DISCONNECT", true);
-      return { ok: s.messages - avant === 2000, obtenu: (s.messages - avant) + " lots reçus par la supervision en un instant (S31 : il faudrait une limite de débit au courtier et une alerte)" };
+      var refuses = compteurs(u).lotsRefuses - refusAvant;
+      return { ok: s.messages - avant === 2000 && refuses >= 1960, obtenu: (s.messages - avant) + " lots arrivés à la supervision, " + refuses + " refusés pour débit anormal (refus noté une fois)" };
     } },
-  { id: "revocation", couche: "Courtier", titre: "PROPOSITION : le certificat volé de la passerelle 1 est révoqué",
-    attendu: "l'intrus est refusé (alerte TLS 44) ; la vraie passerelle 1 aussi, jusqu'à son nouveau certificat",
+  { id: "revocation", couche: "Courtier", titre: "L'intrus présente l'ancien certificat de la passerelle 1, volé avec elle puis révoqué",
+    attendu: "refusé (alerte TLS 44) grâce à la liste de révocation ; la passerelle de remplacement, avec son certificat neuf, reste connectée",
     lancer: function (u) {
       brancherIntrus(u);
-      TPMS.usineRevoquer(u, "passerelle-1");
-      var r = mqttConnecter(u, "intrus", { idClient: "intrus-revoque", certificat: "passerelle-1" });
-      delete u.revocations["passerelle-1"];
-      return { ok: !r.ok && r.alerte === 44, obtenu: (r.ok ? "ACCEPTÉ !" : r.texte) + " ; révocation levée ensuite (la simulation suppose un nouveau certificat posé)" };
+      var r = mqttConnecter(u, "intrus", { idClient: "intrus-revoque", certificat: "passerelle-1-ancien" });
+      var vraie = !!u.courtier.clients["passerelle-1"];
+      return { ok: !r.ok && r.alerte === 44 && vraie, obtenu: (r.ok ? "ACCEPTÉ !" : r.texte) + " ; passerelle 1 (certificat neuf) " + (vraie ? "toujours connectée" : "déconnectée !") };
     } }
 ];
 
