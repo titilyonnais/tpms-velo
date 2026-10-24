@@ -9,8 +9,10 @@
 //   node serveur/flotte-vers-serveur.js --continu             puis continue en temps réel
 //   node serveur/flotte-vers-serveur.js --https               serveur en HTTPS (https://localhost:8443)
 // Autres options : --url http://localhost:8080 --lot-heures 6 --pause-ms 550
-//   --jeton <jeton>  compte utilisé pour LIRE les statistiques (par défaut,
-//                    le compte « technicien » de serveur/cles-demo.json)
+//   --compte <nom> --mot-de-passe <mot de passe>
+//                    compte utilisé pour LIRE les statistiques (par défaut,
+//                    le compte « technicien » de serveur/cles-demo.json) :
+//                    le script ouvre une session, puis la ferme à la fin
 //   --ca <fichier>   certificat à qui faire confiance en HTTPS (par défaut
 //                    serveur/certificats/cert.pem, le certificat de démo)
 //
@@ -98,7 +100,19 @@ function creerClient(urlServeur, cles, options) {
       var r = await requeteJson(requete.url, { methode: "POST", enTetes: requete.enTetes, corps: requete.corps, ca: ca });
       return { statut: r.statut, json: r.json };
     },
-    // Lecture de l'API avec un compte (jeton « Bearer »).
+    // Ouvre une session (POST /api/connexion). Retourne le jeton, ou null.
+    connecter: async function (compte, motDePasse) {
+      var r = await requeteJson(urlServeur + "/api/connexion", {
+        methode: "POST", enTetes: { "Content-Type": "application/json" },
+        corps: JSON.stringify({ compte: compte, motDePasse: motDePasse }), ca: ca
+      });
+      return r.statut === 200 && r.json ? r.json.jeton : null;
+    },
+    // Ferme la session (POST /api/deconnexion) : le jeton ne vaut plus rien.
+    deconnecter: function (jeton) {
+      return requeteJson(urlServeur + "/api/deconnexion", { methode: "POST", enTetes: { Authorization: "Bearer " + jeton }, ca: ca });
+    },
+    // Lecture de l'API avec une session (jeton « Bearer »).
     lire: function (chemin, jeton) {
       return requeteJson(urlServeur + chemin, { enTetes: jeton ? { Authorization: "Bearer " + jeton } : {}, ca: ca });
     }
@@ -126,7 +140,8 @@ function options(argv) {
   var enHttps = argv.indexOf("--https") >= 0;
   return {
     url: valeur("--url", enHttps ? "https://localhost:8443" : "http://localhost:8080").replace(/\/$/, ""),
-    jeton: valeur("--jeton", null),
+    compte: valeur("--compte", null),
+    motDePasse: valeur("--mot-de-passe", null),
     ca: valeur("--ca", path.join(__dirname, "certificats", "cert.pem")),
     jours: Number(valeur("--jours", 14)),
     graine: Number(valeur("--graine", 42)),
@@ -171,12 +186,14 @@ async function principal() {
   var o = options(process.argv);
   var fichierCles = path.join(__dirname, "cles-demo.json");
   var cles = outils.chargerCles(fichierCles);
-  // Jeton de lecture : celui donné en option, sinon le compte « technicien » de démo.
-  var jeton = o.jeton;
-  if (!jeton) {
+  // Compte de lecture : celui donné en option, sinon le compte « technicien » de démo.
+  var nomCompte = o.compte, motDePasse = o.motDePasse;
+  if (!nomCompte) {
     var comptes = JSON.parse(fs.readFileSync(fichierCles, "utf8")).comptes || {};
-    jeton = comptes.technicien ? comptes.technicien.jeton : null;
+    nomCompte = "technicien";
+    motDePasse = comptes.technicien ? comptes.technicien.motDePasse : null;
   }
+  var jeton = null;
   // HTTPS : on fait confiance au certificat de démo (et à lui seul).
   var ca = null;
   if (o.url.indexOf("https://") === 0) {
@@ -190,8 +207,9 @@ async function principal() {
   var client = creerClient(o.url, cles, { ca: ca });
 
   try {
+    jeton = await client.connecter(nomCompte, motDePasse);
+    if (!jeton) throw new Error("connexion refusée : vérifier --compte et --mot-de-passe");
     var essai = await client.lire("/api/velos", jeton);
-    if (essai.statut === 401) throw new Error("jeton refusé (401) : vérifier --jeton");
     if (essai.statut !== 200) throw new Error("HTTP " + essai.statut);
   } catch (e) {
     if (/CERT|certificate/i.test(String(e.code) + " " + e.message)) {
@@ -256,7 +274,13 @@ async function principal() {
   if (o.attaqueRejeu && capturee) await attaqueRejeu(client, capturee);
   if (o.attaqueSignature && lotPourAttaque) await attaqueSignature(client, lotPourAttaque);
 
+  // Le rattrapage peut durer plus que les 15 min d'inactivité d'une
+  // session : on ferme la première et on en ouvre une nouvelle pour lire
+  // les statistiques, puis on la ferme aussi.
+  await client.deconnecter(jeton);
+  jeton = await client.connecter(nomCompte, motDePasse);
   var stats = (await client.lire("/api/statistiques", jeton)).json;
+  await client.deconnecter(jeton);
   var I = stats.indicateurs;
   console.log("\nIndicateurs du serveur : " + I.aRegonfler + " vélo(s) à regonfler (dont " + I.urgents + " urgent(s)), " +
     I.immobilises + " immobilisé(s), " + I.fuitesLentes + " fuite(s) lente(s), " + I.boitiersARecharger + " boîtier(s) à recharger.");

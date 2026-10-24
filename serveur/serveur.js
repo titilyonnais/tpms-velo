@@ -13,12 +13,15 @@
 // AUCUNE dépendance à installer : uniquement des modules intégrés à Node
 //   node:http, node:https   le serveur web (HTTPS = HTTP dans un tunnel TLS chiffré)
 //   node:sqlite             la base de données (fichier serveur/flotte.db)
-//   node:crypto             signature HMAC-SHA256, empreinte SHA-256 des jetons
+//   node:crypto             signature HMAC-SHA256, scrypt des mots de passe,
+//                           jetons de session tirés au hasard (serveur/sessions.js)
 //
 // API REST (JSON) :
 //   POST /api/mesures                   un vélo envoie un lot de mesures (SIGNÉ)
-// Lectures, avec l'en-tête « Authorization: Bearer <jeton> » :
-//   GET  /api/moi                       compte et rôle du jeton présenté
+//   POST /api/connexion                 { compte, motDePasse } → jeton de session
+//   POST /api/deconnexion               détruit la session présentée
+// Lectures, avec l'en-tête « Authorization: Bearer <jeton de session> » :
+//   GET  /api/moi                       compte, rôle et fin de la session
 //   GET  /api/velos                     dernier état de chaque vélo
 //   GET  /api/velos/V07/historique?jours=7
 //   GET  /api/alertes?limite=50
@@ -29,8 +32,9 @@
 //
 // Cybersécurité (détails dans serveur/README.md) :
 //   - chaque vélo signe ses envois (HMAC-SHA256 avec SA clé secrète) ;
-//   - lecture réservée aux comptes identifiés (jeton, rôles technicien
-//     et gestionnaire) ; le serveur ne garde que l'empreinte des jetons ;
+//   - lecture réservée aux comptes identifiés : connexion par mot de
+//     passe (empreinte scrypt), puis session qui expire (15 min sans
+//     requête, 8 h au plus), rôles technicien et gestionnaire ;
 //   - HTTPS (confidentialité) dès qu'un certificat est présent ;
 //   - fenêtre d'horodatage de ±60 s et numéro de séquence : anti-rejeu ;
 //   - validation stricte de chaque champ (flotte/flotte-logique.js) ;
@@ -47,6 +51,7 @@ var fs = require("node:fs");
 var path = require("node:path");
 var TPMS = require("../flotte/node.js");
 var ouvrirBase = require("./base.js").ouvrirBase;
+var sessions = require("./sessions.js");
 
 var RACINE = path.resolve(__dirname, "..");          // racine du dépôt (fichiers statiques)
 var S = TPMS.FLOTTE_SECURITE;
@@ -74,19 +79,13 @@ function signer(cle, message) {
 // ---------------------------------------------------------------------
 // Comptes de lecture (technicien, gestionnaire)
 // ---------------------------------------------------------------------
-// Chaque personne qui consulte l'API présente un JETON (un long texte
-// aléatoire) dans l'en-tête « Authorization: Bearer <jeton> ».
-// Le serveur ne garde PAS les jetons : seulement leur empreinte SHA-256
-// (comme on stocke l'empreinte d'un mot de passe). Si la configuration
-// fuit, on ne peut pas en déduire les jetons. Un jeton de 192 bits tiré
-// au hasard ne se devine pas : un simple SHA-256 suffit (pour un mot de
-// passe choisi par un humain, il faudrait une fonction lente : scrypt).
-// En démo, cles-demo.json donne les jetons en clair (champ « jeton »),
-// hachés dès la lecture ; en production il ne contiendrait que le champ
-// « empreinte ».
-function empreinteJeton(jeton) {
-  return crypto.createHash("sha256").update(jeton, "utf8").digest();
-}
+// Chaque personne qui consulte l'API se connecte avec son nom de compte
+// et son MOT DE PASSE (POST /api/connexion), puis présente le jeton de
+// SESSION reçu (« Authorization: Bearer <jeton> »). La session expire ;
+// voir serveur/sessions.js. Le serveur ne garde que le sel et l'empreinte
+// scrypt de chaque mot de passe. En démo, cles-demo.json donne les mots
+// de passe en clair (champ « motDePasse »), hachés dès la lecture ; en
+// production il ne contiendrait que « sel » et « empreinte ».
 
 // Ce que chaque rôle a le droit de lire. Le technicien prépare sa
 // tournée ; seul le gestionnaire voit le journal de sécurité (il
@@ -99,18 +98,15 @@ function autorise(role, ressource) {
   return Object.prototype.hasOwnProperty.call(DROITS, role) && DROITS[role].indexOf(ressource) >= 0;
 }
 
-// Retourne [{ nom, role, empreinte (Buffer de 32 octets) }].
+// Retourne [{ nom, role, sel, empreinte }].
 function chargerComptes(fichier) {
   var config = JSON.parse(fs.readFileSync(fichier, "utf8"));
   var comptes = [];
   Object.keys(config.comptes || {}).forEach(function (nom) {
     var c = config.comptes[nom];
     if (!Object.prototype.hasOwnProperty.call(DROITS, c.role)) return;          // rôle inconnu : ignoré
-    var empreinte = null;
-    if (typeof c.empreinte === "string" && /^[0-9a-f]{64}$/.test(c.empreinte)) empreinte = Buffer.from(c.empreinte, "hex");
-    else if (typeof c.jeton === "string" && c.jeton.length >= 16) empreinte = empreinteJeton(c.jeton);   // démo
-    // Le jeton en clair n'est PAS gardé en mémoire : seulement son empreinte.
-    if (empreinte) comptes.push({ nom: nom, role: c.role, empreinte: empreinte });
+    var compte = sessions.preparerCompte(nom, c);
+    if (compte) comptes.push(compte);
   });
   return comptes;
 }
@@ -227,6 +223,9 @@ function servirFichier(req, res, cheminUrl) {
 // options = { cheminBase, fichierCles, journal (true : affiche les refus),
 //             requetesParMinute, refusParMinuteMax, blocageMs,
 //             comptes (sinon lus dans fichierCles),
+//             sessions (règles d'expiration, voir sessions.js),
+//             horloge (fonction qui donne l'heure en ms ; Date.now par défaut,
+//               remplacée dans les tests pour « avancer le temps »),
 //             tls: { cert, key } pour HTTPS (contenu des fichiers .pem) }
 function creerServeur(options) {
   var o = options || {};
@@ -243,6 +242,8 @@ function creerServeur(options) {
   var blocages = new Map();                      // ip → fin du blocage (ms)
   var dureeBlocage = o.blocageMs || S.blocageMs;
   var journal = o.journal !== false;
+  var horloge = o.horloge || Date.now;
+  var lesSessions = sessions.creerSessions(o.sessions);
 
   // Toute requête refusée passe par ici : réponse + trace.
   function refuser(req, res, statut, motif, detail, veloAnnonce, enTetesEnPlus) {
@@ -261,22 +262,83 @@ function creerServeur(options) {
     envoyerJson(res, statut, { erreur: detail, motif: motif }, enTetesEnPlus);
   }
 
-  // --- Lecture : qui présente quel jeton ? ------------------------------
-  // Retourne { compte } si le jeton est bon, sinon { detail }.
-  function authentifier(req) {
+  // --- Lecture : quelle session présente-t-on ? ----------------------------
+  // Le jeton présenté, s'il y en a un et s'il est bien formé.
+  function jetonPresente(req) {
     var entete = req.headers.authorization;
-    if (entete === undefined) return { absent: true, detail: "authentification requise (en-tête Authorization: Bearer <jeton>)" };
+    if (entete === undefined) return { absent: true };
     // Format d'un jeton « Bearer » (RFC 6750), longueur bornée.
-    var m = /^Bearer ([A-Za-z0-9._~+\/-]{16,128}=*)$/.exec(entete);
-    if (!m) return { detail: "en-tête Authorization mal formé" };
-    var empreinte = empreinteJeton(m[1]);
-    var trouve = null;
-    // On compare à TOUS les comptes, à temps constant (crypto.timingSafeEqual) :
-    // le temps de réponse ne renseigne pas sur le jeton essayé.
-    comptes.forEach(function (c) {
-      if (crypto.timingSafeEqual(c.empreinte, empreinte) && trouve === null) trouve = c;
+    var m = /^Bearer ([A-Za-z0-9._~+/-]{16,128}=*)$/.exec(entete);
+    return m ? { jeton: m[1] } : { mal: true };
+  }
+  // Retourne { compte, finMs } si la session est valable ; sinon { absent }
+  // (pas d'en-tête), { expiree } (session terminée : c'est normal) ou
+  // { detail } seul (jeton inconnu ou mal formé : suspect).
+  function authentifier(req) {
+    var p = jetonPresente(req);
+    if (p.absent) return { absent: true, detail: "authentification requise : se connecter (POST /api/connexion)" };
+    if (p.mal) return { detail: "en-tête Authorization mal formé" };
+    var v = sessions.verifierSession(lesSessions, p.jeton, horloge());
+    if (v.expiree) return { expiree: true, detail: "session expirée : se reconnecter" };
+    if (v.inconnue) return { detail: "jeton invalide" };
+    return { compte: v.compte, finMs: v.finMs };
+  }
+
+  // Lit un petit corps JSON (au plus maxOctets), puis appelle suite(objet).
+  function lireCorpsJson(req, res, maxOctets, suite) {
+    var type = (req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+    if (type !== "application/json") return refuser(req, res, 415, "type", "Content-Type application/json attendu", null);
+    var morceaux = [], taille = 0, trop = false;
+    req.on("data", function (morceau) {
+      if (trop) return;
+      taille += morceau.length;
+      if (taille > maxOctets) {
+        trop = true;
+        res.setHeader("Connection", "close");
+        refuser(req, res, 413, "taille", "corps trop gros (max " + maxOctets + " octets)", null);
+        return;
+      }
+      morceaux.push(morceau);
     });
-    return trouve ? { compte: trouve } : { detail: "jeton invalide" };
+    req.on("end", function () {
+      if (trop) return;
+      var objet;
+      try { objet = JSON.parse(Buffer.concat(morceaux).toString("utf8")); } catch (e) { objet = null; }
+      if (objet === null || typeof objet !== "object") return refuser(req, res, 400, "json", "JSON invalide", null);
+      suite(objet);
+    });
+  }
+
+  // --- POST /api/connexion -------------------------------------------------
+  // Un mot de passe faux est journalisé (sans le mot de passe essayé) et
+  // compte pour le blocage de l'adresse IP (30 refus par minute au plus,
+  // puis 5 min de blocage). scrypt (≈ 50 ms par essai) ralentit en plus
+  // une attaque sur le fichier des empreintes, s'il était volé.
+  function connexion(req, res) {
+    lireCorpsJson(req, res, 1024, function (objet) {
+      var nom = typeof objet.compte === "string" ? objet.compte.slice(0, 32) : "";
+      var motDePasse = typeof objet.motDePasse === "string" ? objet.motDePasse.slice(0, 256) : "";
+      var compte = sessions.verifierMotDePasse(comptes, nom, motDePasse);
+      // Même message que le compte existe ou non : on ne renseigne pas l'attaquant.
+      if (!compte) return refuser(req, res, 401, "connexion", "compte ou mot de passe incorrect", null);
+      var maintenant = horloge();
+      var s = sessions.ouvrirSession(lesSessions, compte, maintenant);
+      if (journal) console.log("[connexion] " + compte.nom + " depuis " + (req.socket.remoteAddress || "?"));
+      envoyerJson(res, 200, {
+        jeton: s.jeton, compte: compte.nom, role: compte.role, droits: DROITS[compte.role],
+        expireDansS: Math.round((s.finMs - maintenant) / 1000),
+        inactiviteMaxS: Math.round(lesSessions.regles.inactiviteMs / 1000)
+      });
+    });
+  }
+
+  // --- POST /api/deconnexion ---------------------------------------------
+  // Détruit la session côté serveur : le jeton ne vaut plus rien, même
+  // recopié ailleurs. Toujours 204, que la session existe ou non.
+  function deconnexion(req, res) {
+    var p = jetonPresente(req);
+    if (p.jeton) sessions.fermerSession(lesSessions, p.jeton);
+    envoyer(res, 204, "", "text/plain");
   }
 
   // --- POST /api/mesures ---------------------------------------------
@@ -404,15 +466,21 @@ function creerServeur(options) {
         if (req.method !== "POST") return envoyerJson(res, 405, { erreur: "POST attendu" }, { Allow: "POST" });
         return recevoirMesures(req, res);
       }
+      if (chemin === "/api/connexion" || chemin === "/api/deconnexion") {
+        if (req.method !== "POST") return envoyerJson(res, 405, { erreur: "POST attendu" }, { Allow: "POST" });
+        return chemin === "/api/connexion" ? connexion(req, res) : deconnexion(req, res);
+      }
       if (req.method !== "GET") return envoyerJson(res, 405, { erreur: "GET attendu" }, { Allow: "GET" });
 
-      // Toutes les lectures exigent un compte. Sans jeton du tout (page
-      // ouverte avant la connexion), simple 401 : ce n'est pas une attaque,
-      // on ne remplit pas le journal de sécurité. Un jeton FAUX, lui, est
-      // journalisé et compte pour le blocage de l'adresse IP (anti force brute).
+      // Toutes les lectures exigent une session. Sans jeton du tout (page
+      // ouverte avant la connexion) ou avec une session expirée, simple
+      // 401 : ce n'est pas une attaque, on ne remplit pas le journal de
+      // sécurité. Un jeton FAUX, lui, est journalisé et compte pour le
+      // blocage de l'adresse IP (anti force brute).
       var auth = authentifier(req);
-      if (auth.absent) {
-        return envoyerJson(res, 401, { erreur: auth.detail, motif: "authentification" }, { "WWW-Authenticate": "Bearer realm=\"flotte\"" });
+      if (auth.absent || auth.expiree) {
+        return envoyerJson(res, 401, { erreur: auth.detail, motif: auth.expiree ? "session-expiree" : "authentification" },
+          { "WWW-Authenticate": "Bearer realm=\"flotte\"" + (auth.expiree ? ", error=\"invalid_token\"" : "") });
       }
       if (!auth.compte) {
         return refuser(req, res, 401, "authentification", auth.detail, null, { "WWW-Authenticate": "Bearer realm=\"flotte\"" });
@@ -427,7 +495,10 @@ function creerServeur(options) {
         return refuser(req, res, 403, "droits", "le compte « " + compte.nom + " » n'a pas accès à " + chemin, null);
       }
 
-      if (ressource === "moi") return envoyerJson(res, 200, { compte: compte.nom, role: compte.role, droits: DROITS[compte.role] });
+      if (ressource === "moi") {
+        return envoyerJson(res, 200, { compte: compte.nom, role: compte.role, droits: DROITS[compte.role],
+          expireDansS: Math.round((auth.finMs - horloge()) / 1000) });
+      }
       if (ressource === "velos") return lireVelos(res);
       if (ressource === "alertes") return envoyerJson(res, 200, { alertes: base.alertes(entier(url.searchParams.get("limite"), 50, 1, 500)) });
       if (ressource === "statistiques") return lireStatistiques(res, compte);
@@ -451,13 +522,14 @@ function creerServeur(options) {
   serveur.on("close", function () { base.fermer(); });
   serveur.base = base;
   serveur.comptes = comptes;
+  serveur.sessions = lesSessions;
   serveur.https = !!o.tls;
   return serveur;
 }
 
 module.exports = {
   creerServeur: creerServeur, signer: signer, chargerCles: chargerCles,
-  chargerComptes: chargerComptes, empreinteJeton: empreinteJeton, DROITS: DROITS, HSTS: HSTS
+  chargerComptes: chargerComptes, DROITS: DROITS, HSTS: HSTS
 };
 
 // ---------------------------------------------------------------------

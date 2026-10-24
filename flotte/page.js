@@ -10,9 +10,12 @@
 // flotte-logique.js ; ce fichier ne fait que dessiner.
 //
 // Mode « api » : le serveur réserve ses données aux comptes identifiés.
-// La page demande le JETON du compte (technicien ou gestionnaire), le
+// La page demande le nom du compte et son mot de passe, les envoie une
+// seule fois (POST /api/connexion) et reçoit un JETON DE SESSION. Elle le
 // garde dans sessionStorage (oublié à la fermeture de l'onglet, jamais
 // dans l'adresse) et l'envoie dans l'en-tête « Authorization: Bearer ».
+// La session expire (15 min sans activité, 8 h au plus) ; « Se
+// déconnecter » la détruit sur le serveur (POST /api/deconnexion).
 // =====================================================================
 (function () {
   "use strict";
@@ -28,13 +31,13 @@
     filtre: "traiter",
     velos: [], stats: null, alertes: [], refus: [], maintenantMs: 0,
     occupe: false,
-    jeton: null,                // jeton du compte (mode api)
+    jeton: null,                // jeton de session (mode api)
     compte: null,               // { compte, role, droits } renvoyé par /api/moi
     minuteur: null
   };
 
   // -------------------------------------------------------------------
-  // Jeton du compte : sessionStorage (cet onglet seulement)
+  // Jeton de session : sessionStorage (cet onglet seulement)
   // -------------------------------------------------------------------
   var CLE_JETON = "tpms-flotte-jeton";
   function jetonGarde() {
@@ -100,10 +103,14 @@
   function lireJson(adresse) {
     return fetch(adresse, { cache: "no-store", headers: enTetes() }).then(function (r) {
       if (r.status === 401) {
-        // Jeton refusé (retiré du serveur, serveur relancé avec d'autres comptes...)
-        var e = new Error("jeton refusé par le serveur");
-        e.deconnecte = true;
-        throw e;
+        // Session expirée, ou jeton refusé (serveur relancé...) : on le dit.
+        return r.json().catch(function () { return {}; }).then(function (json) {
+          var e = new Error(json.motif === "session-expiree"
+            ? "Session expirée (15 min sans activité, ou 8 h atteintes) : se reconnecter."
+            : "Le serveur ne reconnaît plus la session : se reconnecter.");
+          e.deconnecte = true;
+          throw e;
+        });
       }
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
@@ -131,7 +138,7 @@
   // Le serveur répond-il ? (2 s au plus). On demande « qui suis-je ? »
   // avec le jeton gardé, s'il y en a un. Résultat :
   //   { mode: "api", compte }   serveur présent, jeton accepté ;
-  //   { mode: "connexion", message } serveur présent, il faut un jeton ;
+  //   { mode: "connexion", message } serveur présent, il faut se connecter ;
   //   { mode: "demo" }          pas de serveur (GitHub Pages, fichier local...).
   function detecterServeur() {
     if (location.protocol === "file:") return Promise.resolve({ mode: "demo" });
@@ -146,8 +153,8 @@
         return r.json().then(function (json) {
           if (r.ok) return { mode: "api", jeton: jeton, compte: json };
           if (r.status === 401) {
-            if (jeton) garderJeton(null);           // jeton périmé : on l'oublie
-            return { mode: "connexion", message: jeton ? "Le jeton gardé n'est plus accepté : se reconnecter." : "" };
+            if (jeton) garderJeton(null);           // session finie : on l'oublie
+            return { mode: "connexion", message: jeton ? "La session précédente est terminée : se reconnecter." : "" };
           }
           if (r.status === 429) return { mode: "connexion", message: "Adresse bloquée par le serveur après trop d'essais : réessayer dans quelques minutes." };
           return { mode: "demo" };
@@ -184,11 +191,11 @@
       .then(function (h) { if (h) afficherDetail(h); })
       .catch(function (e) {
         if (e.deconnecte) {
-          // Le serveur ne reconnaît plus le jeton : retour à la connexion.
+          // Plus de session : retour à la connexion, on arrête d'interroger.
           garderJeton(null);
           etat.jeton = null;
           clearInterval(etat.minuteur);
-          afficherConnexion("Le serveur a refusé le jeton : se reconnecter.");
+          afficherConnexion(e.message);
           return;
         }
         $("etatTitre").textContent = "Serveur injoignable";
@@ -689,7 +696,7 @@
     etat.compte = compte;
     $("ecranConnexion").hidden = true;
     $("txtActualise").hidden = false;
-    // HTTP ou HTTPS : on le dit franchement (en HTTP, le jeton circule en clair).
+    // HTTP ou HTTPS : on le dit franchement (en HTTP, mot de passe et jeton circulent en clair).
     $("txtSource").textContent = location.protocol === "https:" ? "Serveur · HTTPS chiffré" : "Serveur · HTTP non chiffré";
     $("txtCompte").textContent = compte.compte === compte.role ? "Compte " + compte.role : "Compte " + compte.compte + " (" + compte.role + ")";
     $("zoneCompte").hidden = false;
@@ -713,25 +720,31 @@
     var erreur = $("erreurConnexion");
     erreur.textContent = message || "";
     erreur.hidden = !message;
-    $("champJeton").value = "";
-    $("champJeton").focus();
+    $("champMotDePasse").value = "";
+    $("champCompte").focus();
   }
 
   function brancherConnexion() {
     $("formConnexion").addEventListener("submit", function (e) {
-      e.preventDefault();                       // pas d'envoi du formulaire : le jeton ne va jamais dans l'adresse
-      var jeton = $("champJeton").value.trim();
+      e.preventDefault();                       // pas d'envoi du formulaire : le mot de passe ne va jamais dans l'adresse
+      var compte = $("champCompte").value.trim();
+      var motDePasse = $("champMotDePasse").value;
+      $("champMotDePasse").value = "";          // on ne le garde pas plus longtemps que nécessaire
       var bouton = $("btnConnexion");
       bouton.disabled = true;
-      fetch("../api/moi", { cache: "no-store", headers: enTetes(jeton) })
+      fetch("../api/connexion", {
+        method: "POST", cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ compte: compte, motDePasse: motDePasse })
+      })
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (json) {
             if (r.ok) {
-              garderJeton(jeton);
-              demarrerApi(jeton, json);
+              garderJeton(json.jeton);
+              demarrerApi(json.jeton, json);
               return;
             }
-            var message = r.status === 401 ? "Jeton refusé par le serveur."
+            var message = r.status === 401 ? "Compte ou mot de passe incorrect."
               : r.status === 429 ? "Trop d'essais : adresse bloquée quelques minutes par le serveur."
               : "Erreur du serveur (HTTP " + r.status + ").";
             $("erreurConnexion").textContent = message;
@@ -744,14 +757,17 @@
         })
         .then(function () { bouton.disabled = false; });
     });
-    // Se déconnecter : le navigateur oublie le jeton, et on recharge la
-    // page pour effacer toutes les données affichées. (Pour RÉVOQUER un
-    // jeton, on retire son empreinte de la configuration du serveur.)
+    // Se déconnecter : le serveur détruit la session (le jeton ne vaut
+    // plus rien, même recopié ailleurs), le navigateur l'oublie, et on
+    // recharge la page pour effacer toutes les données affichées.
     $("btnDeconnexion").addEventListener("click", function () {
+      var jeton = etat.jeton;
       garderJeton(null);
       etat.jeton = null;
       clearInterval(etat.minuteur);
-      location.reload();
+      fetch("../api/deconnexion", { method: "POST", cache: "no-store", headers: enTetes(jeton) })
+        .catch(function () { /* serveur injoignable : la session expirera seule */ })
+        .then(function () { location.reload(); });
     });
   }
 

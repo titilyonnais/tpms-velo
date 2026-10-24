@@ -15,6 +15,7 @@ var outils = require("./serveur.js");
 var client = require("./flotte-vers-serveur.js");
 var certificat = require("./generer-certificat.js");
 var ouvrirBase = require("./base.js").ouvrirBase;
+var sessions = require("./sessions.js");
 
 var resultats = { reussis: 0, rates: 0, lignes: [] };
 
@@ -31,10 +32,10 @@ function verifier(nom, condition, detail) {
 function proche(a, b, tolerance) { return Math.abs(a - b) <= tolerance; }
 
 var CLES = outils.chargerCles(path.join(__dirname, "cles-demo.json"));
-// Jetons des comptes de démo (en clair dans le fichier de démo).
+// Mots de passe des comptes de démo (en clair dans le fichier de démo).
 var COMPTES_DEMO = JSON.parse(fs.readFileSync(path.join(__dirname, "cles-demo.json"), "utf8")).comptes;
-var JETON_TECHNICIEN = COMPTES_DEMO.technicien.jeton;
-var JETON_GESTIONNAIRE = COMPTES_DEMO.gestionnaire.jeton;
+var MDP_TECHNICIEN = COMPTES_DEMO.technicien.motDePasse;
+var MDP_GESTIONNAIRE = COMPTES_DEMO.gestionnaire.motDePasse;
 
 // Démarre un serveur de test ; renvoie { url, serveur, client }.
 function demarrer(options) {
@@ -50,11 +51,27 @@ function demarrer(options) {
 function arreter(s) {
   return new Promise(function (ok) { s.serveur.closeAllConnections(); s.serveur.close(ok); });
 }
-// Lecture de l'API. Par défaut avec le compte « gestionnaire » (tous les
-// droits) ; jeton = null : sans en-tête Authorization ; ou un autre jeton.
+// POST /api/connexion ; renvoie { statut, json }.
+async function connecter(s, compte, motDePasse) {
+  var r = await fetch(s.url + "/api/connexion", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ compte: compte, motDePasse: motDePasse })
+  });
+  var json = null;
+  try { json = await r.json(); } catch (e) { /* pas de JSON */ }
+  return { statut: r.status, json: json };
+}
+// Jeton de session d'un compte de démo.
+async function session(s, nom) {
+  return (await connecter(s, nom, COMPTES_DEMO[nom].motDePasse)).json.jeton;
+}
+// Lecture de l'API. Par défaut avec une session « gestionnaire » (tous
+// les droits), ouverte au premier besoin ; jeton = null : sans en-tête
+// Authorization ; ou un autre jeton (ou un en-tête complet).
 async function lire(s, chemin, jeton) {
   var enTetes = {};
-  var j = jeton === undefined ? JETON_GESTIONNAIRE : jeton;
+  if (jeton === undefined && !s.jetonGestionnaire) s.jetonGestionnaire = await session(s, "gestionnaire");
+  var j = jeton === undefined ? s.jetonGestionnaire : jeton;
   if (j !== null) enTetes.Authorization = j.indexOf(" ") >= 0 ? j : "Bearer " + j;
   var r = await fetch(s.url + chemin, { headers: enTetes });
   var json = null;
@@ -365,7 +382,7 @@ async function testsFuiteRepere() {
 }
 
 // ---------------------------------------------------------------------
-// 5. Lecture de l'API réservée aux comptes (jeton « Bearer », rôles)
+// 5. Lecture de l'API réservée aux comptes (connexion, session, rôles)
 // ---------------------------------------------------------------------
 async function testsComptes() {
   var s = await demarrer();
@@ -382,53 +399,110 @@ async function testsComptes() {
   r = await lire(s, "/api/route-qui-n-existe-pas", null);
   verifier("compte : route inconnue sans jeton → 401 (on ne dévoile pas les routes)", r.statut === 401, r.statut);
 
-  r = await lire(s, "/api/velos", JETON_TECHNICIEN);
-  verifier("compte : bon jeton (technicien) → 200 et 20 vélos", r.statut === 200 && r.json.velos.length === 20, r.statut);
-  r = await lire(s, "/api/moi", JETON_TECHNICIEN);
-  verifier("compte : /api/moi donne le compte et son rôle", r.statut === 200 && r.json.compte === "technicien" && r.json.role === "technicien", JSON.stringify(r.json));
-  r = await lire(s, "/api/velos/V01/historique?jours=1", JETON_TECHNICIEN);
+  // Connexion par mot de passe
+  r = await connecter(s, "technicien", "mauvais-mot-de-passe");
+  verifier("connexion : mauvais mot de passe → 401, pas de jeton", r.statut === 401 && r.json.motif === "connexion" && !r.json.jeton, r.statut);
+  var faux = r.json.erreur;
+  r = await connecter(s, "inconnu", MDP_TECHNICIEN);
+  verifier("connexion : compte inconnu → même réponse (on ne dévoile pas les comptes)", r.statut === 401 && r.json.erreur === faux, r.json.erreur);
+  var res = await fetch(s.url + "/api/connexion", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "x" });
+  verifier("connexion : corps qui n'est pas du JSON → 415", res.status === 415, res.status);
+  res = await fetch(s.url + "/api/connexion");
+  verifier("connexion : GET au lieu de POST → 405", res.status === 405, res.status);
+  r = await connecter(s, "technicien", MDP_TECHNICIEN);
+  verifier("connexion : bon mot de passe → 200, jeton de session de 256 bits, fin dans 15 min",
+    r.statut === 200 && /^[A-Za-z0-9_-]{43}$/.test(r.json.jeton) && r.json.role === "technicien" && r.json.expireDansS === 900,
+    JSON.stringify(r.json));
+  var tech = r.json.jeton;
+  verifier("connexion : deux connexions donnent deux jetons différents", (await session(s, "technicien")) !== tech);
+
+  r = await lire(s, "/api/velos", tech);
+  verifier("compte : session technicien → 200 et 20 vélos", r.statut === 200 && r.json.velos.length === 20, r.statut);
+  r = await lire(s, "/api/moi", tech);
+  verifier("compte : /api/moi donne le compte, son rôle et la fin de la session",
+    r.statut === 200 && r.json.compte === "technicien" && r.json.role === "technicien" && r.json.expireDansS > 890, JSON.stringify(r.json));
+  r = await lire(s, "/api/velos/V01/historique?jours=1", tech);
   verifier("rôle technicien : historique d'un vélo → 200", r.statut === 200 && r.json.mesures.length === 1, r.statut);
-  r = await lire(s, "/api/refus", JETON_TECHNICIEN);
+  r = await lire(s, "/api/refus", tech);
   verifier("rôle technicien : journal de sécurité /api/refus → 403", r.statut === 403 && r.json.motif === "droits", r.statut);
-  r = await lire(s, "/api/statistiques", JETON_TECHNICIEN);
+  r = await lire(s, "/api/statistiques", tech);
   verifier("rôle technicien : statistiques sans les chiffres de sécurité", r.statut === 200 && r.json.securite === null && r.json.indicateurs.nbVelos === 20);
 
-  r = await lire(s, "/api/refus?limite=50", JETON_GESTIONNAIRE);
+  // Déconnexion : la session est détruite côté serveur.
+  res = await fetch(s.url + "/api/deconnexion", { method: "POST", headers: { Authorization: "Bearer " + tech } });
+  verifier("déconnexion : 204", res.status === 204, res.status);
+  r = await lire(s, "/api/velos", tech);
+  verifier("déconnexion : le jeton ne vaut plus rien, même recopié (401)", r.statut === 401 && r.json.erreur === "jeton invalide", r.statut);
+
+  r = await lire(s, "/api/refus?limite=50");
   verifier("rôle gestionnaire : /api/refus → 200", r.statut === 200 && Array.isArray(r.json.refus), r.statut);
   var motifs = r.json.refus.map(function (x) { return x.motif; });
-  // Les lectures au jeton faux (ou mal formé) sont tracées ; une simple
-  // visite sans jeton (page ouverte avant la connexion) ne l'est pas.
+  // Les jetons faux (ou mal formés) et les mots de passe faux sont tracés ;
+  // une simple visite sans jeton (page ouverte avant la connexion) ne l'est pas.
   verifier("journal : les jetons faux sont tracés, pas les visites sans jeton (motif authentification)",
-    motifs.filter(function (m) { return m === "authentification"; }).length === 2, motifs.join(","));
+    motifs.filter(function (m) { return m === "authentification"; }).length === 3, motifs.join(","));
+  verifier("journal : les 2 connexions refusées sont tracées (motif connexion)",
+    motifs.filter(function (m) { return m === "connexion"; }).length === 2, motifs.join(","));
   verifier("journal : l'accès refusé au technicien est tracé (motif droits)", motifs.indexOf("droits") >= 0);
-  verifier("journal : le jeton essayé n'est pas recopié dans le journal",
-    JSON.stringify(r.json.refus).indexOf("AAAAAAAAAAAAAAAA") < 0 && JSON.stringify(r.json.refus).indexOf(JETON_TECHNICIEN) < 0);
-  r = await lire(s, "/api/statistiques", JETON_GESTIONNAIRE);
+  var texteJournal = JSON.stringify(r.json.refus);
+  verifier("journal : ni le jeton ni le mot de passe essayés ne sont recopiés",
+    texteJournal.indexOf("AAAAAAAAAAAAAAAA") < 0 && texteJournal.indexOf("mauvais-mot-de-passe") < 0 &&
+    texteJournal.indexOf(MDP_TECHNICIEN) < 0 && texteJournal.indexOf(tech) < 0);
+  r = await lire(s, "/api/statistiques");
   verifier("rôle gestionnaire : statistiques avec les refus par motif", r.json.securite && r.json.securite.refusParMotif.length > 0);
 
-  // Le serveur ne garde que l'empreinte SHA-256 des jetons.
-  var memoire = JSON.stringify(s.serveur.comptes.map(function (c) { return { nom: c.nom, role: c.role, e: c.empreinte.toString("hex") }; }));
-  verifier("comptes en mémoire : aucun jeton en clair, seulement l'empreinte",
-    memoire.indexOf(JETON_TECHNICIEN) < 0 && memoire.indexOf(JETON_GESTIONNAIRE) < 0 &&
-    s.serveur.comptes[0].empreinte.equals(crypto.createHash("sha256").update(COMPTES_DEMO[s.serveur.comptes[0].nom].jeton).digest()));
-  // Configuration « production » : seulement l'empreinte dans le fichier.
+  // En mémoire : ni mot de passe ni jeton de session en clair.
+  var memoire = JSON.stringify(s.serveur.comptes.map(function (c) { return { nom: c.nom, sel: c.sel.toString("hex"), e: c.empreinte.toString("hex") }; })) +
+    JSON.stringify(Array.from(s.serveur.sessions.parEmpreinte.keys()));
+  verifier("mémoire du serveur : aucun mot de passe ni jeton en clair (sel + scrypt, SHA-256 des sessions)",
+    memoire.indexOf(MDP_TECHNICIEN) < 0 && memoire.indexOf(MDP_GESTIONNAIRE) < 0 && memoire.indexOf(s.jetonGestionnaire) < 0 &&
+    s.serveur.sessions.parEmpreinte.has(sessions.empreinteJeton(s.jetonGestionnaire)));
+  // Configuration « production » : seulement le sel et l'empreinte scrypt dans le fichier.
+  var sel = crypto.randomBytes(16);
   var fichier = path.join(os.tmpdir(), "tpms-comptes-" + process.pid + ".json");
   fs.writeFileSync(fichier, JSON.stringify({ velos: {}, comptes: {
-    chef: { role: "gestionnaire", empreinte: crypto.createHash("sha256").update("jeton-de-test-0123456789").digest("hex") } } }));
+    chef: { role: "gestionnaire", sel: sel.toString("hex"), empreinte: sessions.empreinteMotDePasse("mot-de-passe-du-chef", sel).toString("hex") } } }));
   var comptes = outils.chargerComptes(fichier);
   fs.unlinkSync(fichier);
-  verifier("comptes : un fichier qui ne contient que l'empreinte suffit", comptes.length === 1 && comptes[0].role === "gestionnaire" &&
-    comptes[0].empreinte.equals(outils.empreinteJeton("jeton-de-test-0123456789")));
+  verifier("comptes : un fichier qui ne contient que le sel et l'empreinte suffit", comptes.length === 1 && comptes[0].role === "gestionnaire" &&
+    sessions.verifierMotDePasse(comptes, "chef", "mot-de-passe-du-chef") === comptes[0] &&
+    sessions.verifierMotDePasse(comptes, "chef", "autre-mot-de-passe") === null);
 
   var page = await fetch(s.url + "/flotte/");
   verifier("compte : la page /flotte/ (fichier statique) reste publique", page.status === 200, page.status);
   await arreter(s);
 
-  // Force brute sur les jetons : comptée dans le blocage d'adresse existant.
+  // Expiration : horloge du serveur avancée à la main.
+  var heure = Date.now();
+  s = await demarrer({ horloge: function () { return heure; } });
+  var j = await session(s, "technicien");
+  heure += 14 * 60000;
+  verifier("session : encore valable après 14 min sans requête", (await lire(s, "/api/velos", j)).statut === 200);
+  heure += 14 * 60000;
+  verifier("session : l'inactivité se compte depuis la dernière requête (28 min après la connexion)", (await lire(s, "/api/velos", j)).statut === 200);
+  heure += 16 * 60000;
+  r = await lire(s, "/api/velos", j);
+  verifier("session : expirée après 16 min sans requête (401, motif session-expiree)",
+    r.statut === 401 && r.json.motif === "session-expiree" && /invalid_token/.test(r.enTetes.get("www-authenticate") || ""), r.statut + " " + (r.json && r.json.motif));
+  var j2 = await session(s, "technicien");
+  // Une requête toutes les 10 min pendant 7 h 50, puis une 11 min plus
+  // tard : jamais 15 min d'inactivité, mais 8 h 01 depuis la connexion.
+  for (var minutes = 10; minutes < 8 * 60; minutes += 10) { heure += 10 * 60000; await lire(s, "/api/moi", j2); }
+  heure += 11 * 60000;
+  r = await lire(s, "/api/velos", j2);
+  verifier("session : fermée après 8 h même avec des requêtes régulières", r.statut === 401 && r.json.motif === "session-expiree", r.statut);
+  var refus = (await lire(s, "/api/refus?limite=50")).json.refus;
+  verifier("session : une session expirée n'est pas notée comme une attaque", refus.length === 0, refus.length);
+  var premiere = await session(s, "technicien");
+  await session(s, "technicien"); await session(s, "technicien"); await session(s, "technicien");
+  verifier("session : au plus 3 sessions par compte (la plus ancienne est fermée)", (await lire(s, "/api/moi", premiere)).statut === 401);
+  await arreter(s);
+
+  // Force brute sur les mots de passe : comptée dans le blocage d'adresse existant.
   s = await demarrer({ refusParMinuteMax: 3 });
-  for (var k = 0; k < 4; k++) await lire(s, "/api/velos", "Bearer essai-de-jeton-" + k + "-xxxxxxxx");
-  r = await lire(s, "/api/velos", JETON_GESTIONNAIRE);
-  verifier("4 jetons faux : l'adresse IP est bloquée, même avec ensuite le bon jeton (429)", r.statut === 429 && r.json.motif === "ip-bloquee", r.statut);
+  for (var k = 0; k < 4; k++) await connecter(s, "gestionnaire", "essai-de-mot-de-passe-" + k);
+  r = await connecter(s, "gestionnaire", MDP_GESTIONNAIRE);
+  verifier("4 mots de passe faux : l'adresse IP est bloquée, même avec ensuite le bon (429)", r.statut === 429 && r.json.motif === "ip-bloquee", r.statut);
   await arreter(s);
 }
 
@@ -578,11 +652,15 @@ async function testsHttps() {
     var ca = fs.readFileSync(fichiers.cert);
     var s = await demarrer({ tls: { cert: ca, key: fs.readFileSync(fichiers.cle) }, ca: ca });
     verifier("HTTPS : le serveur démarre en HTTPS avec le certificat", s.serveur.https && s.url.indexOf("https://") === 0);
-    var r = await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + JETON_TECHNICIEN }, ca: ca });
+    var connexion = await client.requeteJson(s.url + "/api/connexion", { methode: "POST", enTetes: { "Content-Type": "application/json" },
+      corps: JSON.stringify({ compte: "technicien", motDePasse: MDP_TECHNICIEN }), ca: ca });
+    verifier("HTTPS : connexion par mot de passe à travers TLS", connexion.statut === 200 && !!connexion.json.jeton, connexion.statut);
+    var jeton = connexion.json.jeton;
+    var r = await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + jeton }, ca: ca });
     verifier("HTTPS : requête réussie en faisant confiance au certificat de démo (option ca)", r.statut === 200 && r.json.velos.length === 20, r.statut);
     verifier("HTTPS : en-tête Strict-Transport-Security présent", r.enTetes["strict-transport-security"] === outils.HSTS, r.enTetes["strict-transport-security"]);
     var erreur = null;
-    try { await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + JETON_TECHNICIEN } }); } catch (e) { erreur = e; }
+    try { await client.requeteJson(s.url + "/api/velos", { enTetes: { Authorization: "Bearer " + jeton } }); } catch (e) { erreur = e; }
     verifier("HTTPS : sans faire confiance au certificat, la connexion est refusée (vérification active)",
       erreur !== null && /SELF_SIGNED|self.signed|unable to verify/i.test(erreur.code + " " + erreur.message), erreur && erreur.code);
     var envoi = await s.client.envoyer(s.client.preparer("V01", [mesure(60000)]));

@@ -202,19 +202,22 @@
 
 <!-- ================= CONNEXION (mode serveur) ================= -->
 <div class="ecran-connexion" id="ecranConnexion" hidden>
-  <form class="tuile carte-connexion" id="formConnexion" autocomplete="off">
+  <form class="tuile carte-connexion" id="formConnexion">
     <header><svg><use href="#i-cle"/></svg><h3>Connexion à la supervision</h3></header>
     <p class="discret">Le serveur de flotte réserve ses données aux comptes identifiés
-      (technicien, gestionnaire). Saisir le jeton d'accès du compte.</p>
-    <label for="champJeton">Jeton d'accès</label>
-    <input type="password" id="champJeton" class="champ-jeton" required minlength="16" maxlength="128"
-           spellcheck="false" autocapitalize="off" autocomplete="off">
+      (technicien, gestionnaire). La session se ferme après 15 min sans activité, et au plus tard après 8 h.</p>
+    <label for="champCompte">Compte</label>
+    <input type="text" id="champCompte" class="champ-jeton" required maxlength="32"
+           spellcheck="false" autocapitalize="off" autocomplete="username">
+    <label for="champMotDePasse">Mot de passe</label>
+    <input type="password" id="champMotDePasse" class="champ-jeton" required minlength="12" maxlength="256"
+           spellcheck="false" autocapitalize="off" autocomplete="current-password">
     <p class="erreur-connexion" id="erreurConnexion" role="alert" hidden></p>
-    <p class="avert-http" id="avertHttp" hidden>Connexion HTTP non chiffrée : le jeton circule en clair sur le réseau.
+    <p class="avert-http" id="avertHttp" hidden>Connexion HTTP non chiffrée : le mot de passe circule en clair sur le réseau.
       Pour une démo sur ce PC seulement.</p>
     <button type="submit" class="bouton principal grand" id="btnConnexion">Se connecter</button>
-    <p class="discret petit-texte">Jetons de démonstration : <code>serveur/cles-demo.json</code>. Le jeton est gardé
-      pour cet onglet seulement et oublié à sa fermeture.</p>
+    <p class="discret petit-texte">Mots de passe de démonstration : <code>serveur/cles-demo.json</code>. Le jeton de
+      session reçu est gardé pour cet onglet seulement, et « Se déconnecter » le détruit sur le serveur.</p>
   </form>
 </div>
 
