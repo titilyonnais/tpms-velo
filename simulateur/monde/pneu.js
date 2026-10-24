@@ -60,11 +60,15 @@ TPMS.volumePneuL = function (largeurMm, diametreJanteMm) {
 //   - butyle : très étanche, ≈ 0,1 bar par semaine sur 2 bar → 1,5 %/jour
 //   - latex  : poreux, « regonfler avant chaque sortie », ≈ 20 %/jour
 //   - tubeless (pneu + préventif) : ≈ 5 %/jour
+//   - industriel (pneu de chariot élévateur, chambre épaisse, entrepot/) :
+//     ≈ 2 % par mois, soit 0,07 %/jour (HYPOTHÈSE : ordre de grandeur
+//     des pertes admises entre deux contrôles mensuels)
 // ---------------------------------------------------------------------
 TPMS.PERMEATION_PAR_JOUR = {
   butyle: 0.015,
   latex: 0.20,
-  tubeless: 0.05
+  tubeless: 0.05,
+  industriel: 0.0007
 };
 // La perméation double environ tous les 15 °C (loi d'Arrhenius,
 // hypothèse sur l'ordre de grandeur pour les élastomères).

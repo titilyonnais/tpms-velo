@@ -95,9 +95,11 @@ TPMS.creerVerification = function () {
 //   valeur de confiance, et aucune confirmation : sinon un pirate obtient
 //   ses 3 trames de confirmation avant que le rythme ait réuni ses
 //   3 anomalies.
+// pressionMaxBar : facultatif, TPMS.PRESSION_MAX_BAR (8 bar, vélo) par
+//   défaut ; 13 bar pour les pneus de chariots (entrepot/chariots.js).
 // Retourne "ok", "hors-limites", "suspecte" ou "confirmee".
-TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, maintenantMs, confirmationPermise) {
-  if (nouvelle.pressionBar > TPMS.PRESSION_MAX_BAR ||
+TPMS.verifierVraisemblance = function (v, ancienne, ancienneMs, nouvelle, maintenantMs, confirmationPermise, pressionMaxBar) {
+  if (nouvelle.pressionBar > (pressionMaxBar || TPMS.PRESSION_MAX_BAR) ||
       nouvelle.temperatureC < TPMS.TEMPERATURE_MIN_C ||
       nouvelle.temperatureC > TPMS.TEMPERATURE_MAX_C) {
     return "hors-limites";

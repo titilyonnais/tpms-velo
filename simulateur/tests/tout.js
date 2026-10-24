@@ -7,7 +7,8 @@ var execFileSync = require("child_process").execFileSync;
 var path = require("path");
 
 var suites = ["tests.js", "pneu.tests.js", "velo.tests.js", "radio.tests.js", "electronique.tests.js", "moteur.tests.js",
-  "../../serveur/serveur.tests.js"];   // serveur et flotte (mode entreprise)
+  "../../serveur/serveur.tests.js",    // serveur et flotte (mode entreprise)
+  "../../entrepot/entrepot.tests.js"]; // version industrielle : MQTT, passerelles, entrepôt
 var echecs = 0;
 suites.forEach(function (suite) {
   var sortie;
