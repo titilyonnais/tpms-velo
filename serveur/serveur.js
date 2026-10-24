@@ -52,6 +52,8 @@ var path = require("node:path");
 var TPMS = require("../flotte/node.js");
 var ouvrirBase = require("./base.js").ouvrirBase;
 var sessions = require("./sessions.js");
+var chariots = require("./chariots.js");
+var mqtt = require("../entrepot/mqtt.js");
 
 var RACINE = path.resolve(__dirname, "..");          // racine du dépôt (fichiers statiques)
 var S = TPMS.FLOTTE_SECURITE;
@@ -91,8 +93,8 @@ function signer(cle, message) {
 // tournée ; seul le gestionnaire voit le journal de sécurité (il
 // contient des adresses IP).
 var DROITS = {
-  technicien:   ["moi", "velos", "historique", "alertes", "statistiques"],
-  gestionnaire: ["moi", "velos", "historique", "alertes", "statistiques", "refus"]
+  technicien:   ["moi", "velos", "historique", "alertes", "statistiques", "chariots", "passerelles"],
+  gestionnaire: ["moi", "velos", "historique", "alertes", "statistiques", "refus", "chariots", "passerelles"]
 };
 function autorise(role, ressource) {
   return Object.prototype.hasOwnProperty.call(DROITS, role) && DROITS[role].indexOf(ressource) >= 0;
@@ -226,6 +228,9 @@ function servirFichier(req, res, cheminUrl) {
 //             sessions (règles d'expiration, voir sessions.js),
 //             horloge (fonction qui donne l'heure en ms ; Date.now par défaut,
 //               remplacée dans les tests pour « avancer le temps »),
+//             registreChariots (sinon lu dans serveur/capteurs-chariots.json),
+//             mqtt: { hote, port, ca, cert, cle, nomServeur } pour recevoir
+//               les trames des chariots (version industrielle),
 //             tls: { cert, key } pour HTTPS (contenu des fichiers .pem) }
 function creerServeur(options) {
   var o = options || {};
@@ -244,6 +249,51 @@ function creerServeur(options) {
   var journal = o.journal !== false;
   var horloge = o.horloge || Date.now;
   var lesSessions = sessions.creerSessions(o.sessions);
+
+  // Version industrielle : réception des trames des chariots par MQTT.
+  var reception = chariots.creerReception(base.db, base.noterRefus, o.registreChariots || chariots.lireRegistre());
+  var clientMqtt = null, arretMqtt = false;
+  var etatMqtt = { configure: !!o.mqtt, connecte: false, depuisMs: null, derniereErreur: null, refus: 0 };
+  // Le serveur s'abonne aux sujets des passerelles, avec SON certificat
+  // (les droits du courtier ne lui permettent que de LIRE). En cas de
+  // coupure, il se reconnecte toutes les 5 s ; les passerelles, elles,
+  // gardent leurs lots en attendant.
+  function connecterMqtt() {
+    if (arretMqtt) return;
+    var m = o.mqtt;
+    mqtt.connecter({ hote: m.hote, port: m.port || 8883, ca: m.ca, cert: m.cert, cle: m.cle, nomServeur: m.nomServeur,
+      tls: m.tls !== false, idClient: "serveur-supervision", gardeS: 30 })
+      .then(function (c) {
+        clientMqtt = c;
+        etatMqtt.connecte = true;
+        etatMqtt.depuisMs = Date.now();
+        if (journal) console.log("[mqtt] connecté au courtier " + m.hote + ":" + (m.port || 8883));
+        function surMessage(sujet, contenu) {
+          try {
+            var probleme = reception.recevoirMessage(sujet, contenu, Date.now());
+            if (probleme) {
+              etatMqtt.refus++;
+              if (journal) console.warn("[mqtt] message refusé (" + sujet + ") : " + probleme);
+            }
+          } catch (e) {
+            console.error("[mqtt] erreur de traitement : " + e.message);
+          }
+        }
+        c.abonner("entrepot/+/passerelle/+/trames", 1, surMessage);
+        c.abonner("entrepot/+/passerelle/+/etat", 1, surMessage);
+        c.surFermeture(function () {
+          clientMqtt = null;
+          etatMqtt.connecte = false;
+          if (!arretMqtt) setTimeout(connecterMqtt, 5000);
+        });
+      })
+      .catch(function (e) {
+        etatMqtt.derniereErreur = e.message;
+        if (journal) console.warn("[mqtt] courtier injoignable : " + e.message);
+        setTimeout(connecterMqtt, 5000);
+      });
+  }
+  if (o.mqtt) connecterMqtt();
 
   // Toute requête refusée passe par ici : réponse + trace.
   function refuser(req, res, statut, motif, detail, veloAnnonce, enTetesEnPlus) {
@@ -487,8 +537,10 @@ function creerServeur(options) {
       }
       var compte = auth.compte;
       var m = /^\/api\/velos\/([^/]+)\/historique$/.exec(chemin);
+      var mc = /^\/api\/chariots\/([^/]+)\/historique$/.exec(chemin);
       var ressource = chemin === "/api/moi" ? "moi" : chemin === "/api/velos" ? "velos" : chemin === "/api/alertes" ? "alertes" :
-        chemin === "/api/statistiques" ? "statistiques" : chemin === "/api/refus" ? "refus" : m ? "historique" : null;
+        chemin === "/api/statistiques" ? "statistiques" : chemin === "/api/refus" ? "refus" : m ? "historique" :
+        chemin === "/api/chariots" || mc ? "chariots" : chemin === "/api/passerelles" ? "passerelles" : null;
       if (ressource === null) return envoyerJson(res, 404, { erreur: "route inconnue" });
       // Rôle : le compte a-t-il le droit de lire CETTE ressource ?
       if (!autorise(compte.role, ressource)) {
@@ -503,6 +555,19 @@ function creerServeur(options) {
       if (ressource === "alertes") return envoyerJson(res, 200, { alertes: base.alertes(entier(url.searchParams.get("limite"), 50, 1, 500)) });
       if (ressource === "statistiques") return lireStatistiques(res, compte);
       if (ressource === "refus") return envoyerJson(res, 200, { refus: base.refus(entier(url.searchParams.get("limite"), 20, 1, 200)) });
+      // Version industrielle : chariots et passerelles (serveur/chariots.js).
+      if (ressource === "chariots" && !mc) {
+        return envoyerJson(res, 200, { maintenantMs: Date.now(), chariots: reception.chariots(Date.now()),
+          alertes: reception.alertes(entier(url.searchParams.get("limite"), 30, 1, 500)), compteurs: reception.compteurs });
+      }
+      if (ressource === "chariots") {
+        var idChariot;
+        try { idChariot = decodeURIComponent(mc[1]); } catch (e) { return envoyerJson(res, 400, { erreur: "adresse invalide" }); }
+        if (!/^C[0-9]{2}$/.test(idChariot) || !reception.connu(idChariot)) return envoyerJson(res, 404, { erreur: "chariot inconnu" });
+        var heures = entier(url.searchParams.get("heures"), 24, 1, 24 * 30);
+        return envoyerJson(res, 200, { chariot: idChariot, mesures: reception.historique(idChariot, Date.now() - heures * 3600000) });
+      }
+      if (ressource === "passerelles") return envoyerJson(res, 200, { passerelles: reception.passerelles(), mqtt: etatMqtt });
       var id;
       try { id = decodeURIComponent(m[1]); } catch (e) { return envoyerJson(res, 400, { erreur: "adresse invalide" }); }
       return lireHistorique(res, id, url.searchParams);
@@ -519,8 +584,13 @@ function creerServeur(options) {
   serveur.headersTimeout = 10000;
   serveur.requestTimeout = 15000;
   serveur.keepAliveTimeout = 5000;
-  serveur.on("close", function () { base.fermer(); });
+  serveur.on("close", function () {
+    arretMqtt = true;
+    if (clientMqtt) clientMqtt.fermer();
+    base.fermer();
+  });
   serveur.base = base;
+  serveur.reception = reception;
   serveur.comptes = comptes;
   serveur.sessions = lesSessions;
   serveur.https = !!o.tls;
@@ -551,9 +621,20 @@ if (require.main === module) {
   if (i > 0) port = Number(argv[i + 1]);
   var j = argv.indexOf("--base");
   var cheminBase = j > 0 ? path.resolve(argv[j + 1]) : path.join(__dirname, "flotte.db");
+  // Maquette industrielle (entrepot/) : le courtier MQTT et les fichiers
+  // de certificats sont donnés par des variables d'environnement.
+  var env = process.env;
+  var optionsMqtt = env.MQTT_HOTE ? {
+    hote: env.MQTT_HOTE, port: Number(env.MQTT_PORT || 8883), nomServeur: env.MQTT_NOM || env.MQTT_HOTE,
+    ca: env.MQTT_CA ? fs.readFileSync(env.MQTT_CA) : undefined,
+    cert: env.MQTT_CERT ? fs.readFileSync(env.MQTT_CERT) : undefined,
+    cle: env.MQTT_CLE ? fs.readFileSync(env.MQTT_CLE) : undefined,
+    tls: !env.MQTT_SANS_TLS
+  } : null;
   var serveur = creerServeur({
     cheminBase: cheminBase,
-    tls: enHttps ? { cert: fs.readFileSync(fichierCert), key: fs.readFileSync(fichierCle) } : null
+    tls: enHttps ? { cert: fs.readFileSync(fichierCert), key: fs.readFileSync(fichierCle) } : null,
+    mqtt: optionsMqtt
   });
   serveur.listen(port, function () {
     console.log("Serveur de flotte TPMS : " + (enHttps ? "https" : "http") + "://localhost:" + port + "/flotte/");

@@ -1,0 +1,175 @@
+{
+  "_role": "Liste blanche des capteurs TPMS des chariots (saisie par la maintenance à la pose). Produite par entrepot/generer-registre.js.",
+  "chariots": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08"
+  ],
+  "capteurs": [
+    {
+      "adresse": "C4:10:01:00:01",
+      "chariot": "C01",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:01:00:02",
+      "chariot": "C01",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:01:00:03",
+      "chariot": "C01",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:01:00:04",
+      "chariot": "C01",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:02:00:01",
+      "chariot": "C02",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:02:00:02",
+      "chariot": "C02",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:02:00:03",
+      "chariot": "C02",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:02:00:04",
+      "chariot": "C02",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:03:00:01",
+      "chariot": "C03",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:03:00:02",
+      "chariot": "C03",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:03:00:03",
+      "chariot": "C03",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:03:00:04",
+      "chariot": "C03",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:04:00:01",
+      "chariot": "C04",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:04:00:02",
+      "chariot": "C04",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:04:00:03",
+      "chariot": "C04",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:04:00:04",
+      "chariot": "C04",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:05:00:01",
+      "chariot": "C05",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:05:00:02",
+      "chariot": "C05",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:05:00:03",
+      "chariot": "C05",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:05:00:04",
+      "chariot": "C05",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:06:00:01",
+      "chariot": "C06",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:06:00:02",
+      "chariot": "C06",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:06:00:03",
+      "chariot": "C06",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:06:00:04",
+      "chariot": "C06",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:07:00:01",
+      "chariot": "C07",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:07:00:02",
+      "chariot": "C07",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:07:00:03",
+      "chariot": "C07",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:07:00:04",
+      "chariot": "C07",
+      "position": "ARD"
+    },
+    {
+      "adresse": "C4:10:08:00:01",
+      "chariot": "C08",
+      "position": "AVG"
+    },
+    {
+      "adresse": "C4:10:08:00:02",
+      "chariot": "C08",
+      "position": "AVD"
+    },
+    {
+      "adresse": "C4:10:08:00:03",
+      "chariot": "C08",
+      "position": "ARG"
+    },
+    {
+      "adresse": "C4:10:08:00:04",
+      "chariot": "C08",
+      "position": "ARD"
+    }
+  ]
+}

@@ -222,12 +222,115 @@ async function testsReseau() {
 }
 
 // ---------------------------------------------------------------------
+// 5. Le serveur reçoit les lots des passerelles (serveur/chariots.js)
+// ---------------------------------------------------------------------
+var DatabaseSync = require("node:sqlite").DatabaseSync;
+var receptionChariots = require("../serveur/chariots.js");
+function trameHexa(adresse, numero, pressionBar, temperatureC) {
+  return Buffer.from(TPMS.encoderTrame({ numero: numero, adresse: adresse, pressionBar: pressionBar, temperatureC: temperatureC || 16, batteriePct: 90, alarme: 0 })).toString("hex");
+}
+function testsReception() {
+  var db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE refus (id INTEGER PRIMARY KEY, t INTEGER, ip TEXT, velo TEXT, motif TEXT, detail TEXT)");
+  var refus = [];
+  function noterRefus(t, ip, velo, motif, detail) { refus.push({ ip: ip, motif: motif, detail: detail }); }
+  var monde = TPMS.creerEntrepot({ graine: 2026, nbChariots: 8, debutMs: 0 });
+  var r = receptionChariots.creerReception(db, noterRefus, TPMS.entrepotRegistreCapteurs(monde));
+  var t0 = Date.now();
+  var adr = TPMS.adresseCapteurChariot(3, 0);   // C03, AVG
+  function lot(passerelle, zone, annonces) { return Buffer.from(JSON.stringify({ passerelle: passerelle, site: "lyon", zone: zone, envoiMs: t0, annonces: annonces })); }
+
+  var probleme = r.recevoirMessage("entrepot/lyon/passerelle/1/trames",
+    lot(1, "quais", [{ t: t0 - 1000, rssi: -80, trame: trameHexa(adr, 1, 8.42) }]), t0);
+  var c3 = r.chariots(t0).filter(function (c) { return c.id === "C03"; })[0];
+  verifier("réception : lot valable accepté, pression du pneu AVG de C03 connue, zone « quais »",
+    probleme === "" && c3.pneus.AVG.pression === 8.42 && c3.zone === "quais" && c3.pneus.AVG.etat === "OK", JSON.stringify(c3.pneus.AVG));
+
+  // La même annonce, entendue plus fort par la passerelle 2 : un seul comptage, nouvelle zone.
+  r.recevoirMessage("entrepot/lyon/passerelle/2/trames", lot(2, "allees", [{ t: t0 - 900, rssi: -70, trame: trameHexa(adr, 1, 8.42) }]), t0);
+  c3 = r.chariots(t0).filter(function (c) { return c.id === "C03"; })[0];
+  verifier("réception : même annonce par deux passerelles → comptée une fois, zone de la meilleure réception",
+    r.compteurs.acceptees === 1 && r.compteurs.doublons === 1 && c3.zone === "allees", JSON.stringify(r.compteurs));
+  var nbMesures = db.prepare("SELECT COUNT(*) AS n FROM mesures_pneus").get().n;
+  r.recevoirMessage("entrepot/lyon/passerelle/2/trames", lot(2, "allees", [{ t: t0 - 500, rssi: -71, trame: trameHexa(adr, 1, 8.41) }]), t0);
+  verifier("réception : au plus une mesure par pneu et par minute en base",
+    nbMesures === 1 && db.prepare("SELECT COUNT(*) AS n FROM mesures_pneus").get().n === 1 && r.compteurs.acceptees === 2);
+
+  // Lots piégés
+  var p1 = r.recevoirMessage("entrepot/lyon/passerelle/2/trames", lot(1, "quais", [{ t: t0, rssi: -70, trame: trameHexa(adr, 1, 8.4) }]), t0);
+  verifier("lot refusé : la passerelle 2 se fait passer pour la 1 (sujet ≠ contenu)", /se dit de la passerelle 1/.test(p1), p1);
+  var p2 = r.recevoirMessage("entrepot/lyon/passerelle/1/trames", lot(1, "quais", [{ t: t0 + 3600000, rssi: -70, trame: trameHexa(adr, 1, 8.4) }]), t0);
+  var p3 = r.recevoirMessage("entrepot/lyon/passerelle/1/trames", lot(1, "quais", [{ t: t0 - 3 * 3600000, rssi: -70, trame: trameHexa(adr, 1, 8.4) }]), t0);
+  verifier("lot refusé : annonce datée du futur, ou trop ancienne (rejeu)", /futur/.test(p2) && /ancienne/.test(p3), p2 + " / " + p3);
+  var p4 = r.recevoirMessage("entrepot/lyon/passerelle/1/trames", lot(1, "quais", [{ t: t0, rssi: -70, trame: "zz' OR 1=1 --" }]), t0);
+  verifier("lot refusé : trame qui n'est pas de l'hexadécimal (injection)", /hexadécimal/.test(p4), p4);
+  verifier("lots refusés : tracés dans le journal des refus (motif lot-mqtt)",
+    refus.filter(function (x) { return x.motif === "lot-mqtt"; }).length === 4);
+
+  // Capteur inconnu (autre véhicule, ou pirate)
+  var pirate = [0xDE, 0xAD, 0xBE, 0xEF, 0x01];
+  r.recevoirMessage("entrepot/lyon/passerelle/3/trames", lot(3, "cour", [
+    { t: t0 - 3000, rssi: -60, trame: trameHexa(pirate, 1, 2.0) }, { t: t0 - 2000, rssi: -60, trame: trameHexa(pirate, 1, 2.0) }]), t0);
+  verifier("liste blanche : capteur inconnu ignoré, tracé une seule fois par minute",
+    r.compteurs.inconnues === 2 && refus.filter(function (x) { return x.motif === "capteur-inconnu"; }).length === 1);
+
+  // Vraisemblance : un saut à 12,9 bar n'est pas cru tant qu'il n'est pas confirmé.
+  var adr2 = TPMS.adresseCapteurChariot(5, 1);
+  r.recevoirMessage("entrepot/lyon/passerelle/1/trames", lot(1, "quais", [
+    { t: t0 - 30000, rssi: -70, trame: trameHexa(adr2, 2, 8.5) }, { t: t0 - 27000, rssi: -70, trame: trameHexa(adr2, 2, 12.9) }]), t0);
+  var c5 = r.chariots(t0).filter(function (c) { return c.id === "C05"; })[0];
+  verifier("vraisemblance : un saut de 8,5 à 12,9 bar en 3 s est mis en doute", r.compteurs.invraisemblables === 1 && c5.pneus.AVD.pression === 8.5);
+
+  // Crevaison : la chute est confirmée par 3 trames, puis l'alerte est notée.
+  var adr3 = TPMS.adresseCapteurChariot(7, 3);
+  var chute = [8.5, 3.20, 3.18, 3.16].map(function (p, k) { return { t: t0 - 20000 + k * 1000, rssi: -65, trame: trameHexa(adr3, 4, p) }; });
+  r.recevoirMessage("entrepot/lyon/passerelle/2/trames", lot(2, "allees", chute), t0);
+  var c7 = r.chariots(t0).filter(function (c) { return c.id === "C07"; })[0];
+  verifier("crevaison : chute confirmée, état CREVAISON et alerte en base",
+    c7.etat === "CREVAISON" && r.alertes(10).some(function (a) { return a.chariot_id === "C07" && a.type === "CREVAISON" && a.position === "ARD"; }), c7.etat);
+
+  // État des passerelles (publié par elles, ou par le courtier : testament)
+  r.recevoirMessage("entrepot/lyon/passerelle/3/etat", Buffer.from(JSON.stringify({ etat: "hors ligne", passerelle: 3, zone: "cour" })), t0);
+  var p = r.passerelles().filter(function (x) { return x.id === 3; })[0];
+  verifier("passerelle : le testament « hors ligne » est enregistré", p && p.etat === "hors ligne" && p.zone === "cour");
+  verifier("sujet inconnu refusé", r.recevoirMessage("entrepot/lyon/autre/1/trames", Buffer.from("{}"), t0) === "sujet inconnu");
+  db.close();
+}
+
+// API : /api/chariots, réservée aux sessions, comme le reste.
+async function testsApiChariots() {
+  var outils = require("../serveur/serveur.js");
+  var serveur = outils.creerServeur({ cheminBase: ":memory:", journal: false });
+  await new Promise(function (ok) { serveur.listen(0, "127.0.0.1", ok); });
+  var url = "http://127.0.0.1:" + serveur.address().port;
+  var adr = TPMS.adresseCapteurChariot(1, 2);
+  serveur.reception.recevoirMessage("entrepot/lyon/passerelle/1/trames", Buffer.from(JSON.stringify({
+    passerelle: 1, site: "lyon", zone: "quais", envoiMs: Date.now(), annonces: [{ t: Date.now() - 500, rssi: -75, trame: trameHexa(adr, 3, 8.3) }]
+  })), Date.now());
+  var sans = await fetch(url + "/api/chariots");
+  var comptes = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "serveur", "cles-demo.json"), "utf8")).comptes;
+  var connexion = await (await fetch(url + "/api/connexion", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ compte: "technicien", motDePasse: comptes.technicien.motDePasse }) })).json();
+  var avec = await (await fetch(url + "/api/chariots", { headers: { Authorization: "Bearer " + connexion.jeton } })).json();
+  var c1 = avec.chariots.filter(function (c) { return c.id === "C01"; })[0];
+  var histo = await (await fetch(url + "/api/chariots/C01/historique?heures=1", { headers: { Authorization: "Bearer " + connexion.jeton } })).json();
+  var inconnu = await fetch(url + "/api/chariots/C99/historique", { headers: { Authorization: "Bearer " + connexion.jeton } });
+  verifier("API : /api/chariots sans session → 401 ; avec session → 8 chariots et la pression du pneu ARG de C01",
+    sans.status === 401 && avec.chariots.length === 8 && c1.pneus.ARG.pression === 8.3 && c1.zone === "quais", sans.status);
+  verifier("API : historique d'un chariot (une mesure), chariot inconnu → 404", histo.mesures.length === 1 && inconnu.status === 404, inconnu.status);
+  serveur.closeAllConnections();
+  await new Promise(function (ok) { serveur.close(ok); });
+}
+
+// ---------------------------------------------------------------------
 // Lancement et bilan
 // ---------------------------------------------------------------------
 (async function () {
   try {
     await testsClient();
     await testsReseau();
+    testsReception();
+    await testsApiChariots();
   } catch (e) {
     verifier("exécution sans exception", false, e.stack);
   }
