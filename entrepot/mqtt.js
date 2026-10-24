@@ -86,9 +86,12 @@ function paquet(octet1, corps) {
 // Fabrication des paquets
 // ---------------------------------------------------------------------
 // options = { idClient, gardeS (keepalive), testament: { sujet, message, qos, retenu },
-//             utilisateur, motDePasse }
+//             utilisateur, motDePasse, sessionPersistante }
+// sessionPersistante : le courtier garde les abonnements du client, et les
+// messages QoS 1 publiés pendant son absence (la supervision ne perd plus
+// les lots de son redémarrage). Sinon : session propre (bit 0x02).
 function paquetConnect(o) {
-  var drapeaux = 0x02;                                        // session propre
+  var drapeaux = o.sessionPersistante ? 0x00 : 0x02;
   var contenu = [texte(o.idClient)];
   if (o.testament) {
     drapeaux |= 0x04 | ((o.testament.qos || 0) << 3) | (o.testament.retenu ? 0x20 : 0);
@@ -162,7 +165,15 @@ function lirePaquet(octet1, corps) {
 // Client
 // ---------------------------------------------------------------------
 // options = { hote, port, tls (true par défaut), ca, cert, cle (contenus PEM),
-//             idClient, gardeS, testament, utilisateur, motDePasse, delaiMs }
+//             idClient, gardeS, testament, utilisateur, motDePasse, delaiMs,
+//             sessionPersistante, surMessage(sujet, contenu) : messages reçus
+//             avant le premier abonnement (session persistante : le courtier
+//             livre ce qu'il a gardé juste après le CONNACK) }
+// Garde dans les deux sens : un PINGREQ toutes les 0,75 × gardeS, et si le
+// courtier ne répond plus rien pendant 1,5 × gardeS (courant coupé, câble
+// arraché : aucun FIN n'arrive), la connexion est fermée et le client le
+// signale (surFermeture) : sans cela, il pouvait se croire connecté de
+// longues minutes (défaut trouvé en simulant l'usine, entrepot/usine.js).
 // Retourne une promesse résolue quand le courtier a accepté la connexion.
 function connecter(options) {
   var o = Object.assign({ port: 8883, tls: true, gardeS: 30, delaiMs: 10000 }, options);
@@ -175,6 +186,7 @@ function connecter(options) {
     var attentes = new Map();            // idPaquet → { ok, echec } (PUBACK, SUBACK)
     var abonnements = [];                // { filtre, rappel }
     var connecte = false, ferme = false, minuteurPing = null;
+    var derniereReceptionMs = Date.now();
     var surFermeture = [];
     var delai = setTimeout(function () { socket.destroy(new Error("délai de connexion MQTT dépassé")); }, o.delaiMs);
 
@@ -224,6 +236,7 @@ function connecter(options) {
       envoyer(paquetConnect(o));
     });
     socket.on("data", function (morceau) {
+      derniereReceptionMs = Date.now();
       tampon = Buffer.concat([tampon, morceau]);
       var r;
       try { r = decouper(tampon); } catch (e) { socket.destroy(e); return; }
@@ -255,7 +268,13 @@ function connecter(options) {
         connecte = true;
         // « Garde » : sans trafic, un PINGREQ avant la fin du délai pour que
         // le courtier sache que la passerelle est toujours là.
-        minuteurPing = setInterval(function () { envoyer(paquetPingreq()); }, o.gardeS * 1000 * 0.75);
+        minuteurPing = setInterval(function () {
+          if (Date.now() - derniereReceptionMs > o.gardeS * 1500) {
+            socket.destroy(new Error("aucune réponse du courtier depuis " + 1.5 * o.gardeS + " s"));
+            return;
+          }
+          envoyer(paquetPingreq());
+        }, o.gardeS * 1000 * 0.75);
         ok(client);
       } else if (p.type === "puback") {
         var a = attentes.get(p.idPaquet);
@@ -265,7 +284,9 @@ function connecter(options) {
         if (s) { attentes.delete(p.idPaquet); s.ok(p.codes); }
       } else if (p.type === "publish") {
         if (p.qos === 1) envoyer(paquetPuback(p.idPaquet));
-        abonnements.forEach(function (ab) { if (filtreCorrespond(ab.filtre, p.sujet)) ab.rappel(p.sujet, p.contenu); });
+        var traite = false;
+        abonnements.forEach(function (ab) { if (filtreCorrespond(ab.filtre, p.sujet)) { traite = true; ab.rappel(p.sujet, p.contenu); } });
+        if (!traite && o.surMessage) o.surMessage(p.sujet, p.contenu);
       }
     }
   });

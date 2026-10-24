@@ -53,14 +53,14 @@
   }
 
   var TYPES = {
-    OK: "OK", ATTENTE: "En attente", BASSE: "Pression basse", HAUTE: "Pression haute", FUITE: "Fuite",
-    CREVAISON: "Crevaison", PERDU: "Capteur perdu", INTRUSION: "Signal suspect"
+    OK: "OK", ATTENTE: "En attente", BASSE: "Pression basse", HAUTE: "Pression haute", FUITE: "Fuite rapide",
+    FUITE_LENTE: "Fuite lente", CREVAISON: "Crevaison", PERDU: "Capteur perdu", INTRUSION: "Signal suspect"
   };
   // Classe de couleur d'un état (mêmes pastilles que la flotte de vélos).
   function classeEtat(e) {
     if (e === "OK") return "ok";
     if (e === "ATTENTE" || !e) return "muet";
-    if (e === "BASSE" || e === "HAUTE" || e === "FUITE") return "regonfler";
+    if (e === "BASSE" || e === "HAUTE" || e === "FUITE" || e === "FUITE_LENTE") return "regonfler";
     return "urgent";
   }
   function classePuce(e) {
@@ -139,101 +139,36 @@
   }
 
   // -------------------------------------------------------------------
-  // Source « demo » : l'entrepôt simulé dans la page
+  // Source « demo » : l'usine simulée dans la page (entrepot/usine.js)
   // -------------------------------------------------------------------
-  // Le monde (chariots, pneus, capteurs) avance ; chaque annonce est
-  // « entendue » par les passerelles à portée (TPMS.entrepotRssi), qui en
-  // font un lot toutes les 10 s, comme entrepot/passerelle.js. Les lots
-  // sont remis à la logique de réception du serveur (entrepot/reception.js).
+  // Le MÊME modèle que le simulateur de l'usine : chariots, radio,
+  // passerelles (NTP, MQTT, lots, testament), pare-feu, courtier,
+  // supervision (entrepot/reception.js), technicien. La page n'affiche que
+  // ce que voit la supervision, comme sur la vraie maquette.
   function creerDemo() {
-    var debut = new Date();
-    debut.setHours(6, 0, 0, 0);                          // début du poste du matin
-    var monde = TPMS.creerEntrepot({ graine: 2026, nbChariots: 8, debutMs: debut.getTime() });
-    var d = {
-      monde: monde, cibleMs: monde.tMs, facteur: 10, pause: false,
-      passerelles: {}, alertes: [], refus: [], historique: {},
-      tampons: {}, aleas: {}, coupees: {}, prochainLotMs: monde.tMs + 10000, prochainEtatMs: monde.tMs
-    };
-    E.passerelles.forEach(function (p) {
-      d.tampons[p.id] = [];
-      d.aleas[p.id] = TPMS.creerAleaNomme(2026, "radio-passerelle" + p.id);
-      d.passerelles[p.id] = { id: p.id, zone: p.zone, etat: "en ligne", t: monde.tMs, version: "1.0",
-        decalage_ntp_ms: 9 + 4 * p.id, lots: 0, annonces: 0 };
-    });
-    monde.chariots.forEach(function (c) { d.historique[c.id] = []; });
-
-    d.reception = TPMS.creerReceptionLots(TPMS.entrepotRegistreCapteurs(monde), {
-      refus: function (t, source, motif, detail) { d.refus.unshift({ t: t, ip: source, motif: motif, detail: detail }); d.refus.length = Math.min(d.refus.length, 30); },
-      mesure: function (chariot, position, t, m) {
-        var h = d.historique[chariot];
-        h.push({ position: position, t: t, pression: m.pressionBar, temperature: m.temperatureC });
-        while (h.length && h[0].t < t - 8 * 3600000) h.shift();
-      },
-      alerte: function (chariot, t, position, type, pression) {
-        d.alertes.unshift({ chariot_id: chariot, t: t, position: position, type: type, pression: pression });
-        d.alertes.length = Math.min(d.alertes.length, 60);
-      },
-      passerelle: function (id, p) {
-        var q = d.passerelles[id];
-        q.zone = p.zone || q.zone; q.etat = p.etat; q.t = p.t;
-        if (p.annonces !== null) { q.lots++; q.annonces += p.annonces; }
-      }
-    });
-    return d;
+    var u = TPMS.creerUsine({ graine: 2026 });
+    return { usine: u, cibleMs: u.tMs, facteur: 10, pause: false, coupees: {} };
   }
-
   function sujet(id, type) { return "entrepot/lyon/passerelle/" + id + "/" + type; }
   function hexa(octets) { return Array.prototype.map.call(octets, function (o) { return (o < 16 ? "0" : "") + o.toString(16); }).join(""); }
-
-  // Chaque passerelle à portée garde l'annonce dans son lot en cours.
-  function entendre(d, annonces) {
-    annonces.forEach(function (a) {
-      var trame = hexa(a.octets);
-      E.passerelles.forEach(function (p) {
-        if (d.coupees[p.id]) return;                    // passerelle coupée : elle n'entend plus rien
-        var rssi = TPMS.entrepotRssi(p, a.x, a.y, d.aleas[p.id]);
-        if (rssi !== null) d.tampons[p.id].push({ t: a.tMs, rssi: rssi, trame: trame });
-      });
-    });
-  }
-
-  // Fait avancer la simulation de dtS secondes de temps simulé, par
-  // tranches de 10 s au plus : à chaque fin de tranche, chaque passerelle
-  // publie son lot (et son état toutes les minutes).
   function avancerDemo(d, dtS) {
     d.cibleMs += dtS * 1000;
-    for (;;) {
-      entendre(d, TPMS.entrepotAvancer(d.monde, Math.min(d.cibleMs, d.prochainLotMs), 1));
-      var t = d.monde.tMs;
-      if (t < d.prochainLotMs) break;                   // la tranche n'est pas finie
-      E.passerelles.forEach(function (p) {
-        if (d.coupees[p.id] || d.tampons[p.id].length === 0) return;
-        var lot = { passerelle: p.id, site: "lyon", zone: p.zone, envoiMs: t, annonces: d.tampons[p.id] };
-        d.tampons[p.id] = [];
-        d.reception.recevoirMessage(sujet(p.id, "trames"), JSON.stringify(lot), t);
-      });
-      d.prochainLotMs += 10000;
-      if (t >= d.prochainEtatMs) {
-        E.passerelles.forEach(function (p) {
-          if (!d.coupees[p.id]) d.reception.recevoirMessage(sujet(p.id, "etat"), JSON.stringify({ etat: "en ligne", zone: p.zone, version: "1.0" }), t);
-        });
-        d.prochainEtatMs = t + 60000;
-      }
-    }
+    TPMS.usineAvancer(d.usine, d.cibleMs);
   }
-
   function lireDemo() {
-    var d = etat.demo, t = d.monde.tMs;
-    var pneus = d.reception.etatDesPneus(t);
+    var u = etat.demo.usine, s = u.machines.supervision.supervision, t = TPMS.usineHeure(u, "supervision");
+    var pneus = s.reception.etatDesPneus(t);
+    var courtier = u.machines.courtier;
     return Promise.resolve({
       maintenantMs: t,
-      chariots: d.monde.chariots.map(function (c) {
+      chariots: u.monde.chariots.map(function (c) {
         var p = pneus[c.id] || { etat: "ATTENTE", pneus: {} };
-        return { id: c.id, nom: "Chariot " + c.id.slice(1), zone: d.reception.zoneDe(c.id), etat: p.etat, pneus: p.pneus };
+        return { id: c.id, nom: "Chariot " + c.id.slice(1), zone: s.reception.zoneDe(c.id), etat: p.etat, pneus: p.pneus };
       }),
-      alertes: d.alertes, compteurs: d.reception.compteurs,
-      passerelles: E.passerelles.map(function (p) { return d.passerelles[p.id]; }),
-      mqtt: null, refus: d.refus, historique: d.historique[etat.choisi] || []
+      alertes: s.alertes, compteurs: s.reception.compteurs,
+      passerelles: Object.keys(s.passerelles).map(function (id) { return s.passerelles[id]; }),
+      mqtt: { configure: true, connecte: !!(s.connexion && s.connexion.ouverte && courtier.alimentee && courtier.programme) },
+      refus: s.refus, historique: s.historique[etat.choisi] || []
     });
   }
 
@@ -277,9 +212,10 @@
   // -------------------------------------------------------------------
   function afficherIndicateurs(d) {
     var enEtat = d.chariots.filter(function (c) { return c.etat === "OK"; }).length;
-    var attente = d.chariots.filter(function (c) { return c.etat === "ATTENTE"; }).length;
+    var attente = 0;
+    d.chariots.forEach(function (c) { POSITIONS.forEach(function (p) { if (!c.pneus[p] || c.pneus[p].etat === "ATTENTE") attente++; }); });
     $("kpiChariots").textContent = enEtat + " / " + d.chariots.length;
-    $("kpiChariotsDetail").textContent = attente ? attente + " en attente de mesures" : "Tous les capteurs ont parlé";
+    $("kpiChariotsDetail").textContent = attente ? attente + " pneu(s) en attente de mesures" : "Tous les capteurs ont parlé";
 
     var alertes = [];
     d.chariots.forEach(function (c) {
@@ -300,7 +236,7 @@
     var c = d.compteurs || {};
     var rejets = (c.inconnues || 0) + (c.invraisemblables || 0) + (c.invalides || 0);
     $("kpiRejets").textContent = rejets + (c.lotsRefuses || 0);
-    $("kpiRejetsDetail").textContent = rejets + " annonce(s) et " + (c.lotsRefuses || 0) + " lot(s) entier(s) · " + (c.acceptees || 0) + " annonces acceptées";
+    $("kpiRejetsDetail").textContent = rejets + " annonce(s) et " + (c.lotsRefuses || 0) + " lot(s) entier(s) · " + ((c.acceptees || 0) + (c.enRetard || 0)) + " annonces acceptées";
 
     // État global : le plus grave d'abord.
     var urgents = d.chariots.filter(function (ch) { return classeEtat(ch.etat) === "urgent"; });
@@ -410,7 +346,9 @@
     $("detailMesures").innerHTML = POSITIONS.map(function (p) {
       var pn = c.pneus[p];
       var texte = pn && pn.pression !== undefined
-        ? nombre(pn.pression) + " bar <small>" + nombre(pn.temperature, 1) + " °C · " + pn.pile + " %</small>" : "en attente";
+        ? nombre(pn.pression) + " bar <small>" + nombre(pn.temperature, 1) + " °C · " + pn.pile + " % · " +
+          (pn.pression20 !== undefined ? nombre(pn.pression20) + " à 20 °C" : "") +
+          (pn.tendanceBarJour !== null && pn.tendanceBarJour !== undefined ? " · " + nombre(pn.tendanceBarJour, 3) + " bar/j" : "") + "</small>" : "en attente";
       var cls = pn ? classeEtat(pn.etat) : "muet";
       return "<div><dt>" + NOMS_POSITIONS[p] + "</dt><dd class=\"" + (cls === "urgent" ? "alerte-texte" : cls === "regonfler" ? "attention-texte" : "") + "\">" + texte + "</dd></div>";
     }).join("");
@@ -433,7 +371,7 @@
     else if (!m.configure) { puce.className = "puce muet"; puce.textContent = "MQTT non configuré"; }
     else if (m.connecte) { puce.className = "puce ok"; puce.textContent = "Courtier connecté (TLS)"; }
     else { puce.className = "puce alerte"; puce.textContent = "Courtier injoignable"; }
-    if (etat.demo) $("btnCouper").textContent = etat.demo.coupees[2] ? "Rebrancher la passerelle 2" : "Couper la passerelle 2";
+    if (etat.demo) $("btnCouper").textContent = etat.demo.coupees[2] ? "Rétablir le courant de la passerelle 2" : "Couper le courant de la passerelle 2 (testament après 45 s)";
   }
 
   // -------------------------------------------------------------------
@@ -456,6 +394,7 @@
     var lignes = [
       { nom: "Annonces acceptées", n: c.acceptees || 0, classe: "" },
       { nom: "Doublons (2 passerelles)", n: c.doublons || 0, classe: "" },
+      { nom: "En retard (déjà plus récentes)", n: c.enRetard || 0, classe: "" },
       { nom: "Capteurs inconnus", n: c.inconnues || 0, classe: "alerte" },
       { nom: "Invraisemblables", n: c.invraisemblables || 0, classe: "alerte" },
       { nom: "Trames invalides", n: c.invalides || 0, classe: "alerte" },
@@ -481,8 +420,8 @@
   // Banc d'essai (mode démo) : des lots piégés, comme entrepot/intrus.js,
   // remis à la même logique de réception que le serveur.
   function bancEssai(nom) {
-    var d = etat.demo, t = d.monde.tMs;
-    var registre = TPMS.entrepotRegistreCapteurs(d.monde)[0];        // C01, AVG
+    var u = etat.demo.usine, rec = u.machines.supervision.supervision.reception, t = TPMS.usineHeure(u, "supervision");
+    var registre = TPMS.entrepotRegistreCapteurs(u.monde)[0];        // C01, AVG
     function trame(adresse, pressionBar) {
       var octets = adresse.split(":").map(function (x) { return parseInt(x, 16); });
       return hexa(TPMS.encoderTrame({ numero: 1, adresse: octets, pressionBar: pressionBar, temperatureC: 15, batteriePct: 80, alarme: 0 }));
@@ -499,9 +438,9 @@
     if (nom === "injection") annonce.trame = "zz' OR 1=1 --";
     lot.annonces = [annonce];
 
-    var avant = Object.assign({}, d.reception.compteurs);
-    var probleme = d.reception.recevoirMessage(sujet(1, "trames"), JSON.stringify(lot), t);
-    var apres = d.reception.compteurs, verdict;
+    var avant = Object.assign({}, rec.compteurs);
+    var probleme = rec.recevoirMessage(sujet(1, "trames"), JSON.stringify(lot), t);
+    var apres = rec.compteurs, verdict;
     if (probleme) verdict = "lot refusé : " + probleme;
     else if (apres.inconnues > avant.inconnues) verdict = "annonce rejetée : capteur absent du registre (liste blanche)";
     else if (apres.invraisemblables > avant.invraisemblables) verdict = "annonce rejetée : invraisemblable (plage 0-13 bar) ; la pression affichée ne change pas";
@@ -573,11 +512,12 @@
     });
     // Couper la passerelle 2 : plus rien n'en sort ; le courtier publie
     // son testament « hors ligne », comme dans la maquette Docker.
+    // Couper le courant de la passerelle 2 : le courtier ne le voit qu'à la
+    // fin du délai de garde (45 s), puis publie son testament « hors ligne ».
     $("btnCouper").addEventListener("click", function () {
-      var d = etat.demo, t = d.monde.tMs;
+      var d = etat.demo;
       d.coupees[2] = !d.coupees[2];
-      d.tampons[2] = [];
-      d.reception.recevoirMessage(sujet(2, "etat"), JSON.stringify(d.coupees[2] ? { etat: "hors ligne", zone: "allees" } : { etat: "en ligne", zone: "allees", version: "1.0" }), t);
+      TPMS.usinePanne(d.usine, "passerelle-2", d.coupees[2] ? "couper-courant" : "rebrancher");
       rafraichir();
     });
     document.querySelectorAll("[data-essai]").forEach(function (b) {

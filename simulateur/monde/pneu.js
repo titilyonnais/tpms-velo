@@ -232,7 +232,11 @@ TPMS.pneuDebitTrousMolS = function (pneu, pExtPa, tExtK) {
 // ---------------------------------------------------------------------
 // Faire évoluer le pneu pendant dtS secondes.
 // contexte = { temperatureAmbianteC, ensoleillement (0..1), vitesseMs,
-//              altitudeM, freinage (0..1), pluie }
+//              altitudeM, freinage (0..1), pluie,
+//              echauffementC (facultatif : chaleur de plus à l'équilibre, en °C,
+//              par exemple un pneu de chariot chargé qui se déforme) }
+// pneu.constanteTempsS (facultatif) remplace la constante de temps thermique
+// (un pneu de chariot de 15 kg met bien plus longtemps à chauffer).
 // ---------------------------------------------------------------------
 // Méthode : on découpe dtS en pas d'au plus 1 s (Euler explicite). Pour
 // les trous, chaque pas est encore redécoupé pour qu'un petit pas ne
@@ -268,6 +272,7 @@ TPMS.pneuTemperatureEquilibreC = function (ctx) {
     t += th.soleilC * (ctx.ensoleillement || 0) / ventilation;
   }
   t += th.freinageC * Math.max(0, Math.min(1, ctx.freinage || 0));
+  t += ctx.echauffementC || 0;
   return t;
 };
 
@@ -283,7 +288,7 @@ TPMS.pneuUnPas = function (pneu, dtS, ctx) {
   //       T ← T + (Téq − T) × (1 − e^(−dt/τ))
   //    (solution exacte sur le pas : jamais de dépassement, même si dt > τ)
   var v = Math.max(0, ctx.vitesseMs || 0);
-  var tau = th.constanteTempsS / (1 + v / th.ventilationMs);
+  var tau = (pneu.constanteTempsS || th.constanteTempsS) / (1 + v / th.ventilationMs);
   if (ctx.pluie) tau /= th.pluieAccelere;
   var tEq = TPMS.pneuTemperatureEquilibreC(ctx);
   pneu.temperatureAirC += (tEq - pneu.temperatureAirC) * (1 - Math.exp(-dtS / tau));

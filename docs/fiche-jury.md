@@ -179,6 +179,14 @@ Elle reproduit le **découpage** et le **filtrage** (10 conteneurs, un réseau D
 Oui : le serveur sert les fichiers du dépôt, et dans la maquette le dépôt est monté en entier : l'adresse `/entrepot/certificats/courtier.cle` donnait la **clé privée du courtier**. Puis, après correction, `/Entrepot/...` en majuscules passait encore, car le disque Windows ne distingue pas la casse. Corrigé, deux tests, et un essai de la démonstration. Leçon : un serveur web ne doit voir que ses fichiers publics.
 → rapport § 10.7, analyse de risques S30.
 
+**Q39. À quoi sert le simulateur de l'usine, si vous avez déjà la maquette Docker ?**
+La maquette prouve que le vrai code marche en réseau. Le simulateur montre ce qu'on ne voit pas : chaque paquet et la règle qui l'a laissé passer, et la réalité face à ce que voit la supervision. Il permet aussi des pannes impossibles avec Docker : couper le courant d'une passerelle (le testament arrive après 45 s, contre aussitôt pour un plantage), fausser une horloge, brouiller la radio. Des tests vérifient qu'il applique les mêmes règles que la maquette, lues dans ses fichiers.
+→ rapport § 10.9, `entrepot/README.md` § 7.
+
+**Q40. Qu'avez-vous trouvé en le construisant ?**
+Des défauts de logique, corrigés dans le vrai code. Par exemple, mon client MQTT n'attendait jamais de réponse à ses PINGREQ : face à un courtier sans courant, une passerelle se croyait connectée de longues minutes. Autre exemple : la supervision perdait les lots publiés pendant son redémarrage (session propre au lieu de persistante). La réception, elle, comptait deux fois certaines annonces et ne détectait pas les fuites lentes des chariots.
+→ `entrepot/README.md` § 6.
+
 ## 7. Les démonstrations à avoir prêtes
 
 1. **Simulateur** (https://titilyonnais.github.io/tpms-velo/simulateur/) : une crevaison (alerte en quelques secondes), puis l'attaque d'un pirate (« SIGNAL SUSPECT »).
@@ -186,7 +194,7 @@ Oui : le serveur sert les fichiers du dépôt, et dans la maquette le dépôt es
 3. **Altitude** : parcours du col de la Luère, page Électronique → baromètre et correction ; Configuration → « BMP280 sans évent » pour montrer la différence.
 4. **Grand froid** : Configuration → météo « Hiver, gel », départ à 6 h et « Recharge du boîtier : dehors », puis brancher le chargeur → « FROID » près de la batterie, et la page Électronique montre la recharge coupée.
 5. **Flotte** : serveur local, connexion par mot de passe, puis « Se déconnecter » ; attaques de rejeu et de signature avec `flotte-vers-serveur.js`.
-6. **Entrepôt, sans Docker** (https://titilyonnais.github.io/tpms-velo/flotte/chariots.html) : banc d'essai des lots piégés (tous rejetés), puis « Couper la passerelle 2 » → « hors ligne ».
+6. **Entrepôt, sans Docker** : le simulateur de l'usine (https://titilyonnais.github.io/tpms-velo/entrepot/simulateur.html), page « Attaques et pannes » → « Tout lancer » (×60), puis page « Réseau et pare-feu » pour voir les paquets refusés ; ou la supervision seule (`/flotte/chariots.html`).
 7. **Entrepôt, maquette Docker** (lancer `docker compose up -d` dans `entrepot/` **avant** l'oral, Docker Desktop démarré) : `node entrepot/demonstration.js` (13 essais, environ 3 min, ou un seul : `node entrepot/demonstration.js 7`) ; `docker compose exec pare-feu nft list ruleset` pour montrer les compteurs ; `journaux/central.log` pour le journal central.
 
 ## 8. À compléter avant le jour J

@@ -212,8 +212,8 @@ var ESSAIS = [
       return { obtenu: r + " → lots refusés : +" + (apres - avant), ok: apres > avant };
     } },
 
-  { titre: "Panne : la passerelle 2 s'arrête net (alimentation coupée)",
-    attendu: "le courtier publie son « testament » : la supervision la voit « hors ligne » en quelques secondes",
+  { titre: "Panne : le programme de la passerelle 2 s'arrête net (docker kill)",
+    attendu: "le système ferme sa connexion sans DISCONNECT : le courtier publie aussitôt le « testament », la supervision la voit « hors ligne » (une vraie coupure de courant, sans FIN, ne se voit qu'après 45 s : voir le simulateur de l'usine)",
     lancer: async function () {
       compose(["kill", "passerelle-2"]);
       var t0 = Date.now();

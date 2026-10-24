@@ -75,8 +75,9 @@
 
     <div class="bandeau-demo" id="bandeauDemo" hidden>
       <b>Mode démo.</b> Aucun serveur n'a répondu : l'entrepôt (8 chariots, 3 passerelles) est simulé dans votre
-      navigateur, et ses lots passent par la MÊME logique de réception que le serveur
-      (<code>entrepot/reception.js</code>). Version réseau complète (pare-feu, courtier MQTT en TLS, NTP, syslog) :
+      navigateur par le même modèle que le simulateur de l'usine (<code>entrepot/usine.js</code> : passerelles, NTP,
+      MQTT, pare-feu, courtier), et ses lots passent par la MÊME logique de réception que le serveur
+      (<code>entrepot/reception.js</code>). Pour tout voir (réseau, attaques) : <a href="../entrepot/simulateur.html">le simulateur de l'usine</a>. Version réseau complète (pare-feu, courtier MQTT en TLS, NTP, syslog) :
       <code>cd entrepot</code>, <code>docker compose up -d</code>, puis https://localhost:8443/flotte/chariots.html.
     </div>
 
@@ -233,6 +234,7 @@
 <script src="../simulateur/monde/capteur.js"></script>
 <script src="../entrepot/chariots.js"></script>
 <script src="../entrepot/reception.js"></script>
+<script src="../entrepot/usine.js"></script>
 <!-- Affichage -->
 <script src="../simulateur/vues/graphe.js"></script>
 <script src="chariots.js"></script>

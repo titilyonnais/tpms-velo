@@ -49,6 +49,7 @@
 10. [Version industrielle : l'entrepôt et son réseau](#10-version-industrielle--lentrepôt-et-son-réseau)
    - [10.6 La démonstration de sécurité du réseau](#106-la-démonstration-de-sécurité-du-réseau)
    - [10.7 Une faille trouvée dans ma propre maquette](#107-une-faille-trouvée-dans-ma-propre-maquette)
+   - [10.9 Le simulateur de l'usine](#109-le-simulateur-de-lusine)
 11. [Bilan et perspectives](#11-bilan-et-perspectives)
 - [Annexe A – Glossaire](#annexe-a--glossaire)
 - [Annexe B – Documents du dépôt et liens](#annexe-b--documents-du-dépôt-et-liens)
@@ -1799,7 +1800,42 @@ La page `flotte/chariots.html` montre le plan de l'entrepôt (zones, passerelles
 - **avec le serveur** (la maquette) : connexion par compte, données réelles reçues par MQTT, journal des refus pour le gestionnaire ;
 - **sans serveur** (GitHub Pages) : l'entrepôt est simulé dans le navigateur ; un **banc d'essai** envoie des lots piégés à la même logique de réception, et un bouton coupe la passerelle 2 pour voir son testament.
 
-### 10.9 Limites
+### 10.9 Le simulateur de l'usine
+
+La maquette Docker prouve que le réseau fonctionne, mais elle ne montre pas tout : on ne voit pas les paquets, on ne peut pas couper le courant d'une passerelle (seulement arrêter un conteneur, ce qui ferme proprement ses connexions), ni fausser une horloge, ni brouiller la radio. J'ai donc écrit un **simulateur de l'usine** (`entrepot/usine.js`, logique pure testée, et `entrepot/simulateur.html`), dans le même esprit que celui du vélo.
+
+Il reproduit **machine par machine** ce que fait la maquette :
+- l'entrepôt et sa physique : chariots chargés jusqu'à 2 t, échauffement des pneus selon la charge, météo de la cour selon le mois, chauffage réduit la nuit ;
+- la radio, avec un brouilleur possible ;
+- les passerelles : quartz qui dérivent de ±30 ppm et se recalent par SNTP, lots, stocker puis transmettre ;
+- chaque paquet IP avec sa vraie longueur. Ceux qui changent de zone traversent le pare-feu, avec les **mêmes règles dans le même ordre** que `regles.nft` et le suivi des connexions « à états » ;
+- le courtier : certificats, ACL, QoS 1, testament, messages retenus ;
+- les journaux, la supervision et le poste du bureau ;
+- un **technicien qui agit d'après la supervision**, et non d'après la vérité de la simulation : s'il ne voit rien, il ne fait rien.
+
+Des tests vérifient que le simulateur reste fidèle à la maquette : règles lues dans `regles.nft`, droits lus dans `courtier/acl`, même règle des fichiers interdits que le serveur, mêmes tailles de paquets MQTT que mon client.
+
+On y rejoue **20 essais** : les 13 de la maquette, et 7 que seule la simulation permet.
+- Coupure de courant (le testament arrive après 45 s, contre aussitôt pour un plantage).
+- Horloge faussée de 90 s : 22 lots refusés « datés du futur » jusqu'au réglage NTP suivant.
+- Brouillage radio.
+- Redémarrage de la supervision.
+- Inondation de 2 000 lots.
+- Balayage à l'intérieur de l'atelier, où le pare-feu ne voit rien.
+- Révocation d'un certificat volé.
+
+Les 20 sont conformes.
+
+Surtout, **écrire ce simulateur et faire vérifier chaque valeur affichée a révélé des défauts de logique**, que j'ai corrigés dans le vrai code (détail : `entrepot/README.md`, § 6) :
+- **mon client MQTT n'attendait jamais de PINGRESP** : avec un courtier sans courant, une passerelle se croyait connectée de longues minutes. Elle ferme maintenant la connexion après 45 s de silence ;
+- **la supervision se connectait en « session propre »** : pendant son redémarrage, les lots étaient perdus alors que les passerelles avaient reçu leur accusé de réception. Elle utilise maintenant une session persistante ;
+- **le dédoublonnage** comptait deux fois une annonce entendue par deux passerelles, et **la zone** pouvait être changée par une trame refusée ;
+- **« capteur perdu »** n'était jamais inscrit dans les alertes ; **les seuils** sur la pression brute donnaient des alertes en série dans la cour froide (ils portent maintenant sur la pression ramenée à 20 °C) ;
+- **les fuites lentes des chariots** (0,15 à 0,3 bar par jour) n'étaient jamais détectées. Une tendance en bar/jour depuis le dernier regonflage les repère maintenant en 12 h.
+
+C'est la même leçon que pour le vélo (§ 6.8) : **la simulation trouve des défauts que les tests unitaires et la maquette ne montrent pas**, parce qu'elle fait tourner tout le système longtemps, avec des pannes.
+
+### 10.10 Limites
 
 - La maquette reproduit le **découpage** et le **filtrage**, mais toutes les zones tournent sur le même PC : elle ne remplace ni un vrai commutateur ni un vrai pare-feu. Le même plan peut être refait dans Packet Tracer.
 - Une passerelle volée garde un certificat valable tant qu'on ne le révoque pas : il faudrait une liste de révocation et une clé protégée dans la passerelle.

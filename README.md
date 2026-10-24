@@ -17,6 +17,7 @@ Depuis le 24/10/2026, un baromètre BMP280 placé sous un évent corrige l'erreu
 
 - Application : https://titilyonnais.github.io/tpms-velo/app/ (sur iPhone, à ouvrir dans Bluefy)
 - Simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
+- Simulateur de l'usine (réseau, pare-feu, MQTT, attaques) : https://titilyonnais.github.io/tpms-velo/entrepot/simulateur.html
 - Supervision de l'entrepôt (mode démo, sans serveur) : https://titilyonnais.github.io/tpms-velo/flotte/chariots.html
 - Supervision de la flotte de vélos (mode démo, sans serveur) : https://titilyonnais.github.io/tpms-velo/flotte/
 - Présentation : https://titilyonnais.github.io/tpms-velo/presentation/
@@ -103,7 +104,7 @@ Le temps peut être accéléré jusqu'à ×3600. Avec la **semaine type** (traje
 node simulateur/tests/tout.js
 ```
 
-8 suites, 717 tests : logique et boîtier (208), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (86), monde complet de bout en bout (45), serveur et flotte (135), version industrielle (47 : MQTT, passerelles, réception des lots).
+9 suites : logique et boîtier, pneu, météo et capteur, vélo et parcours, radio, électronique, monde complet de bout en bout, serveur et flotte, version industrielle (MQTT, passerelles, réception des lots), simulateur de l'usine (fidélité à la maquette, réseau, pare-feu, courtier, 20 essais).
 
 On peut aussi ouvrir `simulateur/tests/tests.html` dans le navigateur.
 

@@ -17,10 +17,17 @@
 //      registre des capteurs posés sur chaque chariot) et contrôle de
 //      vraisemblance (logique/securite.js, plage 13 bar) ;
 //   4. DÉDOUBLONNER : une annonce entendue par deux passerelles n'est
-//      comptée qu'une fois, et la passerelle qui l'a entendue le plus
-//      fort donne la ZONE du chariot ;
-//   5. évaluer l'état de chaque pneu (logique/alertes.js) et la fuite
-//      lente (logique/fuite.js), signaler les alertes ;
+//      comptée qu'une fois (les lots des passerelles arrivent l'un après
+//      l'autre : on garde les trames des dernières secondes de chaque
+//      capteur) ; la ZONE du chariot vient de la passerelle qui l'entend
+//      le mieux EN MOYENNE (puissance lissée, hystérésis de 3 dB : une
+//      seule annonce bruitée ne fait plus changer de zone) ;
+//   5. évaluer l'état de chaque pneu (logique/alertes.js) sur la pression
+//      RAMENÉE À 20 °C (un pneu qui sort dans la cour froide n'est pas
+//      « bas » pour autant), la fuite rapide (logique/fuite.js, en bar/h)
+//      et la FUITE LENTE sur plusieurs jours (tendance depuis le dernier
+//      regonflage, en bar/jour) ; signaler les alertes, y compris
+//      « capteur perdu » (contrôle des silences à chaque message) ;
 //   6. garder une mesure par pneu et par minute au plus (la base ne
 //      grossit pas de 40 000 lignes par heure).
 // Ce qui doit être enregistré est confié à des « rappels » (voir plus bas).
@@ -35,9 +42,16 @@ TPMS.RECEPTION = {
   ageMaxMs: 2 * 3600000,       // une passerelle garde au plus 1 h de lots : 2 h de marge
   avanceMaxMs: 60000,          // une date dans le futur au-delà de 60 s : horloge fausse ou rejeu
   memeAnnonceMs: 3000,         // même trame, même capteur, à moins de 3 s : une seule annonce
-  zoneValableMs: 30000,        // la zone d'un chariot vient de la meilleure réception des 30 s
+  zoneValableMs: 30000,        // une passerelle qui n'a rien entendu depuis 30 s ne compte plus pour la zone
+  zoneLissage: 0.3,            // moyenne glissante de la puissance reçue (poids de la nouvelle annonce)
+  zoneHystereseDb: 3,          // il faut 3 dB de mieux, en moyenne, pour changer de zone
+  // Fuite lente : tendance de la pression ramenée à 20 °C depuis le dernier
+  // regonflage (une remontée de plus de 0,1 bar coupe la série), sur 12 h
+  // au moins, un point toutes les 10 min.
+  fuiteLente: { seuilBarJour: -0.1, dureeMinH: 12, periodePointMs: 600000, regonflageBar: 0.1, conserverH: 96 },
   periodeStockageMs: 60000,    // une mesure par pneu et par minute en base
-  // Seuils des pneus de chariot (HYPOTHÈSE : pression constructeur 8,5 bar).
+  // Seuils des pneus de chariot (HYPOTHÈSE : pression constructeur 8,5 bar),
+  // comparés à la pression ramenée à 20 °C.
   seuils: { basBar: 7.8, hautBar: 9.5, crevaisonBar: 4.0, fuiteBarH: -0.15, delaiPerteMs: 600000 }
 };
 
@@ -64,13 +78,14 @@ TPMS.creerReceptionLots = function (registre, rappels) {
       pneus.set(adresse, {
         mesure: null, dernierRecuMs: -1, penteBarH: 0, intrusionJusquaMs: -1, etat: TPMS.ETAT.ATTENTE,
         verification: TPMS.creerVerification(), historique: TPMS.creerHistorique(),
-        derniereTrame: null, derniereTrameMs: -Infinity, dernierStockageMs: -Infinity
+        recentes: [], dernierStockageMs: -Infinity,
+        tendance: [], tendanceBarJour: null, dernierPointMs: -Infinity
       });
     }
     return pneus.get(adresse);
   }
-  var zones = new Map();         // chariot → { zone, rssi, t }
-  var compteurs = { lots: 0, acceptees: 0, doublons: 0, inconnues: 0, invalides: 0, invraisemblables: 0, lotsRefuses: 0 };
+  var zones = new Map();         // chariot → { zone, passerelle, t, puissances: { passerelle: { moy, t, zone } } }
+  var compteurs = { lots: 0, acceptees: 0, doublons: 0, enRetard: 0, inconnues: 0, invalides: 0, invraisemblables: 0, lotsRefuses: 0 };
   var dernierRefusInconnuMs = new Map();
 
   // Seuils au format de logique/alertes.js (une entrée par position).
@@ -125,34 +140,119 @@ TPMS.creerReceptionLots = function (registre, rappels) {
     }
     var roue = roueDe(mesure.adresse);
     // Même annonce entendue par plusieurs passerelles : on ne la compte
-    // qu'une fois, mais la meilleure réception décide de la zone.
-    var doublon = roue.derniereTrame === a.trame && Math.abs(a.t - roue.derniereTrameMs) < R.memeAnnonceMs;
-    var z = zones.get(capteur.chariot);
-    if (!z || a.t - z.t > R.zoneValableMs || a.rssi > z.rssi) {
-      zones.set(capteur.chariot, { zone: zonePasserelle, rssi: a.rssi, t: a.t });
-      if (!z || z.zone !== zonePasserelle) appeler("zone", capteur.chariot, zonePasserelle, a.t);
+    // qu'une fois. On garde les trames acceptées des 15 dernières secondes
+    // du capteur ; une trame identique à moins de 3 s est un doublon.
+    roue.recentes = roue.recentes.filter(function (r) { return Math.abs(a.t - r.t) < 15000; });
+    var doublon = roue.recentes.some(function (r) { return r.trame === a.trame && Math.abs(a.t - r.t) < R.memeAnnonceMs; });
+    if (doublon) {
+      compteurs.doublons++;
+      noterPuissance(capteur.chariot, passerelle, zonePasserelle, a);   // une vraie réception : elle compte pour la zone
+      return;
     }
-    if (doublon) { compteurs.doublons++; return; }
-    roue.derniereTrame = a.trame;
-    roue.derniereTrameMs = a.t;
+    // Annonce plus ancienne que la dernière acceptée (lot d'une passerelle
+    // en retard) : valable, mais elle ne doit pas faire reculer la mesure.
+    if (roue.mesure && a.t <= roue.dernierRecuMs) {
+      if (mesure.pressionBar > R.pressionMaxBar) { compteurs.invraisemblables++; return; }
+      compteurs.enRetard++;
+      roue.recentes.push({ t: a.t, trame: a.trame });
+      noterPuissance(capteur.chariot, passerelle, zonePasserelle, a);
+      return;
+    }
 
     var verdict = TPMS.verifierVraisemblance(roue.verification, roue.mesure, roue.dernierRecuMs, mesure, a.t, true, R.pressionMaxBar);
     if (verdict === "hors-limites" || verdict === "suspecte") { compteurs.invraisemblables++; return; }
+    roue.recentes.push({ t: a.t, trame: a.trame });
+    // La zone ne bouge que sur une trame acceptée (une fausse trame
+    // émise tout près d'une passerelle ne déplace pas le chariot).
+    noterPuissance(capteur.chariot, passerelle, zonePasserelle, a);
     roue.mesure = mesure;
     roue.dernierRecuMs = a.t;
-    TPMS.historiqueAjouter(roue.historique, a.t, TPMS.pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC));
+    var p20 = TPMS.pressionCompenseeBar(mesure.pressionBar, mesure.temperatureC);
+    TPMS.historiqueAjouter(roue.historique, a.t, p20);
     roue.penteBarH = TPMS.historiquePenteBarH(roue.historique);
+    noterTendance(roue, a.t, p20);
     compteurs.acceptees++;
 
-    var etat = TPMS.evaluerRoue(roue, capteur.position, seuils, a.t, 0, false);
-    if (etat !== roue.etat) {
-      roue.etat = etat;
-      if (TPMS.estAlerte(etat)) appeler("alerte", capteur.chariot, a.t, capteur.position, etat, mesure.pressionBar);
-    }
+    reevaluer(roue, capteur, a.t, mesure.pressionBar);
     if (a.t - roue.dernierStockageMs >= R.periodeStockageMs) {
       roue.dernierStockageMs = a.t;
       appeler("mesure", capteur.chariot, capteur.position, a.t, mesure, passerelle, a.rssi);
     }
+  }
+
+  // État d'un pneu : seuils sur la pression ramenée à 20 °C, puis fuite
+  // lente sur plusieurs jours (si l'état est OK).
+  function etatRoue(roue, position, t) {
+    var vue = roue;
+    if (roue.mesure) {
+      vue = Object.assign({}, roue, { mesure: Object.assign({}, roue.mesure,
+        { pressionBar: TPMS.pressionCompenseeBar(roue.mesure.pressionBar, roue.mesure.temperatureC) }) });
+    }
+    var etat = TPMS.evaluerRoue(vue, position, seuils, t, 0, false);
+    if (etat === TPMS.ETAT.OK && roue.tendanceBarJour !== null && roue.tendanceBarJour < R.fuiteLente.seuilBarJour) etat = "FUITE_LENTE";
+    return etat;
+  }
+  // Si l'état change, on le note ; une entrée en alerte est signalée.
+  function reevaluer(roue, capteur, t, pressionBar) {
+    var etat = etatRoue(roue, capteur.position, t);
+    if (etat === roue.etat) return;
+    roue.etat = etat;
+    if (TPMS.estAlerte(etat)) appeler("alerte", capteur.chariot, t, capteur.position, etat, etat === TPMS.ETAT.PERDU ? null : pressionBar);
+  }
+
+  // Tendance sur plusieurs jours : un point toutes les 10 min, série
+  // coupée à chaque regonflage, pente des moindres carrés en bar/jour.
+  function noterTendance(roue, t, p20) {
+    var F = R.fuiteLente;
+    if (t - roue.dernierPointMs < F.periodePointMs) return;
+    roue.dernierPointMs = t;
+    var serie = roue.tendance;
+    if (serie.length && p20 - serie[serie.length - 1].p > F.regonflageBar) serie.length = 0;   // regonflage
+    serie.push({ t: t, p: p20 });
+    while (serie.length && serie[0].t < t - F.conserverH * 3600000) serie.shift();
+    roue.tendanceBarJour = null;
+    if (serie.length < 3 || serie[serie.length - 1].t - serie[0].t < F.dureeMinH * 3600000) return;
+    var n = serie.length, mx = 0, my = 0;
+    serie.forEach(function (s) { mx += s.t / 86400000; my += s.p; });
+    mx /= n; my /= n;
+    var num = 0, den = 0;
+    serie.forEach(function (s) { var dx = s.t / 86400000 - mx; num += dx * (s.p - my); den += dx * dx; });
+    roue.tendanceBarJour = den > 0 ? num / den : null;
+  }
+
+  // Puissance reçue, lissée par passerelle ; la zone change si une autre
+  // passerelle fait mieux de 3 dB en moyenne, ou si l'actuelle n'entend
+  // plus rien depuis 30 s.
+  function noterPuissance(chariot, passerelle, zonePasserelle, a) {
+    var z = zones.get(chariot) || { zone: null, passerelle: null, t: 0, puissances: {} };
+    var pu = z.puissances[passerelle];
+    if (!pu || a.t - pu.t > R.zoneValableMs) pu = z.puissances[passerelle] = { moy: a.rssi, t: a.t, zone: zonePasserelle };
+    else { pu.moy += R.zoneLissage * (a.rssi - pu.moy); pu.t = Math.max(pu.t, a.t); pu.zone = zonePasserelle; }
+    var meilleure = null;
+    Object.keys(z.puissances).forEach(function (id) {
+      var q = z.puissances[id];
+      if (a.t - q.t > R.zoneValableMs) return;
+      if (!meilleure || q.moy > z.puissances[meilleure].moy) meilleure = id;
+    });
+    var actuelle = z.passerelle !== null ? z.puissances[z.passerelle] : null;
+    var actuelleValable = actuelle && a.t - actuelle.t <= R.zoneValableMs;
+    if (meilleure !== null && String(meilleure) !== String(z.passerelle) &&
+        (!actuelleValable || z.puissances[meilleure].moy >= actuelle.moy + R.zoneHystereseDb)) {
+      var ancienne = z.zone;
+      z.passerelle = meilleure; z.zone = z.puissances[meilleure].zone;
+      if (z.zone !== ancienne) appeler("zone", chariot, z.zone, a.t);
+    }
+    z.t = a.t;
+    zones.set(chariot, z);
+  }
+
+  // Les silences : un pneu dont on n'a plus rien reçu depuis 10 min passe
+  // « capteur perdu », même si aucune annonce n'arrive pour le dire.
+  function controlerSilences(t) {
+    capteurs.forEach(function (c, adresse) {
+      var roue = pneus.get(adresse);
+      if (roue && roue.mesure) reevaluer(roue, { chariot: c.chariot, position: c.position }, t, roue.mesure.pressionBar);
+    });
   }
 
   // -------------------------------------------------------------------
@@ -167,10 +267,14 @@ TPMS.creerReceptionLots = function (registre, rappels) {
     var idSujet = Number(m[1]);
     var objet;
     try { objet = JSON.parse(String(contenu)); } catch (e) { objet = null; }
+    controlerSilences(maintenantMs);
     if (m[2] === "etat") {
       if (!objet || typeof objet.etat !== "string") return "état illisible";
+      // « Dernière nouvelle » : l'heure du message s'il la donne (un message
+      // retenu relu après un redémarrage n'est pas récent), sinon l'arrivée.
+      var tEtat = typeof objet.t === "number" && objet.t <= maintenantMs + R.avanceMaxMs && objet.t > maintenantMs - R.ageMaxMs ? Math.min(objet.t, maintenantMs) : maintenantMs;
       appeler("passerelle", idSujet, { zone: typeof objet.zone === "string" ? objet.zone.slice(0, 16) : null, etat: objet.etat.slice(0, 16),
-        t: maintenantMs, version: typeof objet.version === "string" ? objet.version.slice(0, 16) : null,
+        t: tEtat, version: typeof objet.version === "string" ? objet.version.slice(0, 16) : null,
         decalageNtpMs: typeof objet.decalageNtpMs === "number" ? Math.round(objet.decalageNtpMs) : null, annonces: null });
       return "";
     }
@@ -199,14 +303,16 @@ TPMS.creerReceptionLots = function (registre, rappels) {
       var ch = parChariot[c.chariot] || (parChariot[c.chariot] = { pneus: {} });
       ch.pneus[c.position] = roue && roue.mesure ? {
         pression: roue.mesure.pressionBar, temperature: roue.mesure.temperatureC, pile: roue.mesure.batteriePct,
-        etat: TPMS.evaluerRoue(roue, c.position, seuils, maintenantMs, 0, false), penteBarH: roue.penteBarH, t: roue.dernierRecuMs
+        pression20: Math.round(TPMS.pressionCompenseeBar(roue.mesure.pressionBar, roue.mesure.temperatureC) * 100) / 100,
+        etat: etatRoue(roue, c.position, maintenantMs), penteBarH: roue.penteBarH,
+        tendanceBarJour: roue.tendanceBarJour === null ? null : Math.round(roue.tendanceBarJour * 1000) / 1000, t: roue.dernierRecuMs
       } : { etat: TPMS.ETAT.ATTENTE };
     });
     Object.keys(parChariot).forEach(function (id) {
       var ch = parChariot[id];
       var etats = TPMS.POSITIONS_PNEU_CHARIOT.map(function (p) { return ch.pneus[p] ? ch.pneus[p].etat : TPMS.ETAT.ATTENTE; });
       // Le pire état du chariot, du plus grave au moins grave.
-      var ordre = ["CREVAISON", "PERDU", "INTRUSION", "BASSE", "HAUTE", "FUITE", "ATTENTE", "OK"];
+      var ordre = ["CREVAISON", "PERDU", "INTRUSION", "BASSE", "HAUTE", "FUITE", "FUITE_LENTE", "ATTENTE", "OK"];
       ch.etat = etats.slice().sort(function (a, b) { return ordre.indexOf(a) - ordre.indexOf(b); })[0];
     });
     return parChariot;
@@ -217,6 +323,7 @@ TPMS.creerReceptionLots = function (registre, rappels) {
     verifierLot: verifierLot,
     compteurs: compteurs,
     etatDesPneus: etatDesPneus,
-    zoneDe: function (chariot) { var z = zones.get(chariot); return z ? z.zone : null; }
+    zoneDe: function (chariot) { var z = zones.get(chariot); return z ? z.zone : null; },
+    controlerSilences: controlerSilences
   };
 };

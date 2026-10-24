@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TPMS · Simulateur de l'usine</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Même identité visuelle que le simulateur du vélo et la supervision -->
+  <link rel="stylesheet" href="../simulateur/style.css">
+  <link rel="stylesheet" href="../flotte/flotte.css">
+  <link rel="stylesheet" href="simulateur.css">
+</head>
+<body>
+
+<svg width="0" height="0" class="cache" aria-hidden="true">
+  <symbol id="i-accueil" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></symbol>
+  <symbol id="i-chariot" viewBox="0 0 24 24"><path d="M3 17V7h7l3 5v5M13 12h3V4M16 17h6M16 12h5"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></symbol>
+  <symbol id="i-antenne" viewBox="0 0 24 24"><path d="M12 12v9M8 21h8"/><circle cx="12" cy="10" r="2"/><path d="M7.5 5.5a6.5 6.5 0 0 0 0 9M16.5 5.5a6.5 6.5 0 0 1 0 9M4.5 3a10.5 10.5 0 0 0 0 14M19.5 3a10.5 10.5 0 0 1 0 14"/></symbol>
+  <symbol id="i-reseau" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></symbol>
+  <symbol id="i-courrier" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-bouclier" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></symbol>
+  <symbol id="i-oeil" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-pneu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+  <symbol id="i-soleil" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</svg>
+
+<div class="appli">
+  <!-- ================= NAVIGATION ================= -->
+  <nav class="navigation" id="navigation">
+    <div class="marque"><span class="marque-logo"></span><span>TPMS<b>usine</b></span></div>
+    <button type="button" data-page="accueil" class="actif"><svg><use href="#i-accueil"/></svg><span>Vue d'ensemble</span></button>
+    <button type="button" data-page="chariots"><svg><use href="#i-chariot"/></svg><span>Chariots et pneus</span></button>
+    <button type="button" data-page="radio"><svg><use href="#i-antenne"/></svg><span>Radio</span></button>
+    <button type="button" data-page="reseau"><svg><use href="#i-reseau"/></svg><span>Réseau et pare-feu</span></button>
+    <button type="button" data-page="mqtt"><svg><use href="#i-courrier"/></svg><span>Courtier MQTT</span></button>
+    <button type="button" data-page="heure"><svg><use href="#i-horloge"/></svg><span>Heure et journaux</span></button>
+    <button type="button" data-page="essais"><svg><use href="#i-bouclier"/></svg><span>Attaques et pannes</span></button>
+    <button type="button" data-page="supervision"><svg><use href="#i-oeil"/></svg><span>Supervision</span></button>
+    <div class="navigation-pied">
+      <div id="infoGraine"></div>
+      <a href="../flotte/chariots.html">Page de supervision →</a>
+      <a href="../simulateur/">Simulateur du vélo →</a>
+    </div>
+  </nav>
+
+  <div class="contenu">
+    <!-- ================= BARRE DU HAUT ================= -->
+    <header class="barre-haute">
+      <div class="etat-global" id="etatGlobal">
+        <span class="point-etat"></span>
+        <div>
+          <div class="etat-titre" id="etatTitre">Préparation…</div>
+          <div class="etat-detail" id="etatDetail"></div>
+        </div>
+      </div>
+      <div class="temps">
+        <div class="horloge"><span id="txtJour">Lundi</span><b id="horloge">06:00:00</b></div>
+        <button type="button" class="bouton-rond" id="btnPause" title="Pause / lecture"><svg><use href="#i-pause"/></svg></button>
+        <div class="pilules" id="choixFacteur" role="group" aria-label="Vitesse du temps">
+          <button type="button" data-facteur="1">×1</button>
+          <button type="button" data-facteur="10" class="actif">×10</button>
+          <button type="button" data-facteur="60">×60</button>
+          <button type="button" data-facteur="600">×600</button>
+          <button type="button" data-facteur="3600">×3600</button>
+        </div>
+        <button type="button" class="bouton" id="btnHeure">+1 h</button>
+        <span class="charge" id="txtCharge"></span>
+      </div>
+    </header>
+
+    <main>
+      <!-- =============== VUE D'ENSEMBLE =============== -->
+      <section class="page" id="page-accueil">
+        <div class="grille">
+          <article class="tuile large-3 indicateur">
+            <header><svg><use href="#i-chariot"/></svg><h3>Chariots en état</h3></header>
+            <div class="grand-chiffre"><span id="kChariots">–</span></div>
+            <p class="discret" id="kChariotsDetail"></p>
+          </article>
+          <article class="tuile large-3 indicateur">
+            <header><svg><use href="#i-pneu"/></svg><h3>Pneus à traiter</h3></header>
+            <div class="grand-chiffre"><span id="kPneus">–</span><small>vus par la supervision</small></div>
+            <p class="discret" id="kPneusDetail"></p>
+          </article>
+          <article class="tuile large-3 indicateur">
+            <header><svg><use href="#i-reseau"/></svg><h3>Réseau</h3></header>
+            <div class="grand-chiffre"><span id="kDebit">–</span><small>kbit/s</small></div>
+            <p class="discret" id="kDebitDetail"></p>
+          </article>
+          <article class="tuile large-3 indicateur">
+            <header><svg><use href="#i-soleil"/></svg><h3>Cour extérieure</h3></header>
+            <div class="grand-chiffre"><span id="kMeteo">–</span><small>°C</small></div>
+            <p class="discret" id="kMeteoDetail"></p>
+          </article>
+
+          <article class="tuile large-12">
+            <header><svg><use href="#i-accueil"/></svg><h3>L'entrepôt, en vrai</h3>
+              <span class="discret">positions réelles · couleur = état vu par la supervision · cliquer sur un chariot</span></header>
+            <svg class="carte plan-entrepot" id="plan" viewBox="0 0 960 300" role="img" aria-label="Plan de l'entrepôt avec la position réelle des chariots"></svg>
+            <div class="legende">
+              <span><i class="pastille ok"></i>OK</span>
+              <span><i class="pastille regonfler"></i>Basse, haute, fuite</span>
+              <span><i class="pastille urgent"></i>Crevaison, perdu</span>
+              <span><i class="pastille muet"></i>En attente</span>
+              <span><i class="cercle-portee"></i>Portée d'une passerelle</span>
+              <span><i class="pastille brouille"></i>Brouilleur</span>
+              <span>Le chiffre sous un chariot : sa charge</span>
+            </div>
+          </article>
+
+          <article class="tuile large-6">
+            <header><svg><use href="#i-oeil"/></svg><h3>Réalité et supervision</h3></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Grandeur</th><th>En vrai</th><th>Vu par la supervision</th></tr></thead>
+              <tbody id="corpsComparaison"></tbody></table></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-horloge"/></svg><h3>Événements</h3></header>
+            <ul class="fil-evenements long" id="filEvenements"></ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== CHARIOTS ET PNEUS =============== -->
+      <section class="page" id="page-chariots" hidden>
+        <div class="grille">
+          <article class="tuile large-12">
+            <header><svg><use href="#i-chariot"/></svg><h3>Les 32 pneus : réalité, capteur, supervision</h3>
+              <span class="discret">bar · « réel » = pression du pneu · « capteur » = dernière annonce · « vu » = supervision (ramenée à 20 °C pour les seuils)</span></header>
+            <div class="tableau-defile">
+              <table class="tableau tableau-chariots tableau-pneus-sim">
+                <thead><tr><th>Chariot</th><th>Où</th><th>Charge</th><th>Pneu</th><th>Réel</th><th>Air</th><th>Capteur</th><th>Vu</th><th>À 20 °C</th><th>Tendance</th><th>Pile</th><th>État vu</th></tr></thead>
+                <tbody id="corpsPneus"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="tuile large-7">
+            <header><svg><use href="#i-pneu"/></svg><h3 id="detailTitre">Chariot</h3><span class="puce" id="detailEtat"></span></header>
+            <svg class="graphe" id="grapheDetail" viewBox="0 0 640 240" role="img" aria-label="Pression réelle et pression vue par la supervision"></svg>
+            <div class="legende">Dernières 12 h : <span class="trait"></span> réel AV G <span class="trait s2"></span> réel AV D
+              <span class="trait s3"></span> réel AR G <span class="trait s4"></span> réel AR D · points : ce qu'a reçu la supervision</div>
+            <div class="rangee petits" id="actionsChariot"></div>
+          </article>
+          <article class="tuile large-5">
+            <header><svg><use href="#i-horloge"/></svg><h3>Interventions du technicien</h3></header>
+            <p class="discret">Il agit d'après la supervision : tournée de regonflage à 5 h 30 (pneus sous 8,0 bar à 20 °C, fuites lentes), crevaison signalée → chariot arrêté, réparation 20 min après.</p>
+            <ul class="fil-evenements long" id="listeInterventions"></ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== RADIO =============== -->
+      <section class="page" id="page-radio" hidden>
+        <div class="grille">
+          <article class="tuile large-12">
+            <header><svg><use href="#i-antenne"/></svg><h3>Ce qu'entend chaque passerelle</h3>
+              <span class="discret">BLE, canaux d'annonce 37/38/39 (2 402, 2 426, 2 480 MHz) · seuil de réception −92 dBm · portée ≈ 24 m (exposant 2,4)</span></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Passerelle</th><th>Zone</th><th>État</th><th>Entendues</th><th>Par seconde</th><th>Hors de portée</th><th>Lot en cours</th><th>Lots en attente</th></tr></thead>
+              <tbody id="corpsRadio"></tbody></table></div>
+          </article>
+          <article class="tuile large-7">
+            <header><svg><use href="#i-antenne"/></svg><h3>Puissance reçue (dBm), chariot par chariot</h3><span class="discret">dernière annonce entendue, moins de 60 s</span></header>
+            <div class="tableau-defile"><table class="tableau tableau-rssi"><thead><tr><th>Chariot</th><th>Distance P1 / P2 / P3</th><th>P1</th><th>P2</th><th>P3</th><th>Zone réelle</th><th>Zone vue</th></tr></thead>
+              <tbody id="corpsRssi"></tbody></table></div>
+            <p class="discret">Puissance reçue = −59 dBm à 1 m − 24 × log10(distance) + bruit (σ = 4 dB) ; la passerelle est au plafond, à 6 m. La supervision lisse la puissance par passerelle et ne change de zone que pour 3 dB de mieux.</p>
+          </article>
+          <article class="tuile large-5">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Brouilleur 2,4 GHz</h3></header>
+            <p class="discret">Un émetteur qui sature la bande couvre les annonces des chariots proches et rend sourde une passerelle proche. On ne peut pas l'empêcher ; on le voit : « capteur perdu » après 10 min.</p>
+            <div class="rangee" id="choixBrouilleur">
+              <button type="button" class="bouton" data-brouilleur="">Aucun</button>
+              <button type="button" class="bouton" data-brouilleur="20">Quais</button>
+              <button type="button" class="bouton" data-brouilleur="60">Allées</button>
+              <button type="button" class="bouton" data-brouilleur="100">Cour</button>
+            </div>
+            <dl class="petites-mesures" id="mesuresRadio"></dl>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== RÉSEAU ET PARE-FEU =============== -->
+      <section class="page" id="page-reseau" hidden>
+        <div class="grille">
+          <article class="tuile large-12">
+            <header><svg><use href="#i-reseau"/></svg><h3>Le réseau de l'usine</h3>
+              <span class="discret">4 zones (VLAN), un seul passage : le pare-feu · les points sont les paquets des dernières secondes</span></header>
+            <svg class="carte schema-sim" id="schema" viewBox="0 0 960 420" role="img" aria-label="Schéma du réseau de l'usine avec les paquets"></svg>
+          </article>
+          <article class="tuile large-7">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Règles du pare-feu (nftables)</h3><span class="discret">même ordre que entrepot/pare-feu/regles.nft</span></header>
+            <div class="tableau-defile"><table class="tableau tableau-regles"><thead><tr><th>Règle</th><th>Verdict</th><th>Paquets</th><th>Octets</th><th>Par seconde</th></tr></thead>
+              <tbody id="corpsRegles"></tbody></table></div>
+            <p class="discret" id="txtConntrack"></p>
+          </article>
+          <article class="tuile large-5">
+            <header><svg><use href="#i-reseau"/></svg><h3>Machines</h3></header>
+            <div class="tableau-defile"><table class="tableau tableau-machines"><thead><tr><th>Machine</th><th>Adresse</th><th>État</th><th>Action</th></tr></thead>
+              <tbody id="corpsMachines"></tbody></table></div>
+            <p class="discret">« Courant » : plus rien ne sort, les autres ne le voient qu'à la fin des délais. « Plantage » : le système ferme les connexions (FIN), on le sait aussitôt. « Câble » : comme le courant, mais la machine continue de tourner (et garde ses lots).</p>
+          </article>
+          <article class="tuile large-12">
+            <header><svg><use href="#i-reseau"/></svg><h3>Derniers paquets</h3><span class="discret">longueur IP (en-têtes compris), comme les compteurs de nftables</span></header>
+            <div class="tableau-defile tableau-haut"><table class="tableau tableau-flux"><thead><tr><th>Heure</th><th>De</th><th>Vers</th><th>Port</th><th>Contenu</th><th>Octets</th><th>Pare-feu</th></tr></thead>
+              <tbody id="corpsFlux"></tbody></table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== COURTIER MQTT =============== -->
+      <section class="page" id="page-mqtt" hidden>
+        <div class="grille">
+          <article class="tuile large-12">
+            <header><svg><use href="#i-courrier"/></svg><h3>Clients connectés au courtier (Mosquitto, 8883, TLS mutuel)</h3><span class="puce" id="puceCourtier"></span></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Identifiant</th><th>Certificat</th><th>Adresse</th><th>Connecté depuis</th><th>Dernier paquet</th><th>Publiés</th><th>Refusés (ACL)</th><th>Testament</th></tr></thead>
+              <tbody id="corpsClients"></tbody></table></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-antenne"/></svg><h3>Côté passerelles</h3></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Passerelle</th><th>Connexion</th><th>Lots en attente</th><th>Envoyés</th><th>Perdus</th><th>Tentatives</th><th>Prochain essai</th></tr></thead>
+              <tbody id="corpsPasserellesMqtt"></tbody></table></div>
+            <p class="discret">QoS 1 : un lot n'est retiré de la file qu'à l'accusé de réception (PUBACK). Sans réponse du courtier pendant 45 s (1,5 × la garde de 30 s), la passerelle se reconnecte : 1, 2, 4… 30 s entre deux essais.</p>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-courrier"/></svg><h3>Messages retenus et file de la supervision</h3></header>
+            <dl class="petites-mesures" id="mesuresMqtt"></dl>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Sujet retenu</th><th>Contenu</th></tr></thead><tbody id="corpsRetenus"></tbody></table></div>
+          </article>
+          <article class="tuile large-12">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Certificats et droits</h3></header>
+            <div class="grille" style="gap:16px">
+              <div class="large-6"><div class="tableau-defile"><table class="tableau"><thead><tr><th>Certificat</th><th>Signé par</th><th>Valable jusqu'au</th><th>État</th></tr></thead><tbody id="corpsCertificats"></tbody></table></div></div>
+              <div class="large-6"><div class="tableau-defile"><table class="tableau"><thead><tr><th>Utilisateur (CN)</th><th>Droit</th><th>Sujets</th></tr></thead><tbody id="corpsAcl"></tbody></table></div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== HEURE ET JOURNAUX =============== -->
+      <section class="page" id="page-heure" hidden>
+        <div class="grille">
+          <article class="tuile large-12">
+            <header><svg><use href="#i-horloge"/></svg><h3>Horloges</h3><span class="discret">quartz ±30 ppm (≈ ±2,6 s par jour sans NTP) ; réglage SNTP toutes les 10 min</span></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>Machine</th><th>Heure de la machine</th><th>Écart à l'heure vraie</th><th>Dérive</th><th>Dernier réglage</th><th>Écart mesuré</th></tr></thead>
+              <tbody id="corpsHorloges"></tbody></table></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-horloge"/></svg><h3>Journal central (syslog, RFC 5424)</h3></header>
+            <ul class="fil-evenements long journal-mono" id="journalCentral"></ul>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-courrier"/></svg><h3>Journal du courtier</h3></header>
+            <ul class="fil-evenements long journal-mono" id="journalCourtier"></ul>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-oeil"/></svg><h3>Journal de la supervision</h3></header>
+            <ul class="fil-evenements long journal-mono" id="journalSupervision"></ul>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Journal du pare-feu</h3></header>
+            <ul class="fil-evenements long journal-mono" id="journalPareFeu"></ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== ATTAQUES ET PANNES =============== -->
+      <section class="page" id="page-essais" hidden>
+        <div class="grille">
+          <article class="tuile large-6">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Essais</h3><span class="discret">les 13 de la maquette Docker, et 7 que seule la simulation permet</span></header>
+            <div id="listeEssais"></div>
+            <div class="rangee" style="margin-top:14px"><button type="button" class="bouton principal" id="btnTousEssais">Tout lancer, l'un après l'autre</button></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Résultats</h3><span class="puce" id="puceEssais"></span></header>
+            <ul class="fil-evenements long" id="resultatsEssais"></ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- =============== SUPERVISION =============== -->
+      <section class="page" id="page-supervision" hidden>
+        <div class="grille">
+          <article class="tuile large-7">
+            <header><svg><use href="#i-oeil"/></svg><h3>Ce que voit la supervision</h3><span class="puce" id="puceSupervision"></span></header>
+            <div class="tableau-defile"><table class="tableau tableau-chariots"><thead><tr><th>Chariot</th><th>Zone</th><th>AV G</th><th>AV D</th><th>AR G</th><th>AR D</th><th>État</th></tr></thead>
+              <tbody id="corpsSupervision"></tbody></table></div>
+          </article>
+          <article class="tuile large-5">
+            <header><svg><use href="#i-antenne"/></svg><h3>Passerelles vues</h3></header>
+            <div class="tableau-defile"><table class="tableau"><thead><tr><th>N°</th><th>État</th><th>Écart NTP</th><th>Lots</th><th>Dernière nouvelle</th></tr></thead>
+              <tbody id="corpsSupPasserelles"></tbody></table></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-bouclier"/></svg><h3>Contrôles du serveur</h3></header>
+            <div class="barres-horizontales" id="supCompteurs"></div>
+            <div class="tableau-defile" style="margin-top:14px"><table class="tableau"><thead><tr><th>Heure</th><th>Source</th><th>Motif</th></tr></thead><tbody id="supRefus"></tbody></table></div>
+          </article>
+          <article class="tuile large-6">
+            <header><svg><use href="#i-pneu"/></svg><h3>Alertes</h3></header>
+            <ul class="fil-evenements long" id="supAlertes"></ul>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Logique partagée (mêmes fichiers que le serveur, les passerelles et le boîtier) -->
+<script src="../logique/trame.js"></script>
+<script src="../logique/fuite.js"></script>
+<script src="../logique/alertes.js"></script>
+<script src="../logique/securite.js"></script>
+<script src="../simulateur/monde/alea.js"></script>
+<script src="../simulateur/monde/atmosphere.js"></script>
+<script src="../simulateur/monde/pneu.js"></script>
+<script src="../simulateur/monde/capteur.js"></script>
+<script src="chariots.js"></script>
+<script src="reception.js"></script>
+<script src="usine.js"></script>
+<!-- Affichage -->
+<script src="../simulateur/vues/graphe.js"></script>
+<script src="simulateur.js"></script>
+</body>
+</html>

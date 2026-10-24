@@ -268,27 +268,32 @@ function creerServeur(options) {
   // (les droits du courtier ne lui permettent que de LIRE). En cas de
   // coupure, il se reconnecte toutes les 5 s ; les passerelles, elles,
   // gardent leurs lots en attendant.
+  function surMessageMqtt(sujet, contenu) {
+    try {
+      var probleme = reception.recevoirMessage(sujet, contenu, horloge());
+      if (probleme) {
+        etatMqtt.refus++;
+        if (journal) console.warn("[mqtt] message refusé (" + sujet + ") : " + probleme);
+      }
+    } catch (e) {
+      console.error("[mqtt] erreur de traitement : " + e.message);
+    }
+  }
   function connecterMqtt() {
     if (arretMqtt) return;
     var m = o.mqtt;
     mqtt.connecter({ hote: m.hote, port: m.port || 8883, ca: m.ca, cert: m.cert, cle: m.cle, nomServeur: m.nomServeur,
-      tls: m.tls !== false, idClient: "serveur-supervision", gardeS: 30 })
+      tls: m.tls !== false, idClient: "serveur-supervision", gardeS: 30,
+      // Session persistante : pendant un redémarrage du serveur, le courtier
+      // garde les lots (QoS 1) au lieu de les jeter ; ils arrivent avant
+      // même le SUBSCRIBE, d'où surMessage (défaut trouvé en simulant l'usine).
+      sessionPersistante: true, surMessage: function (sujet, contenu) { surMessageMqtt(sujet, contenu); } })
       .then(function (c) {
         clientMqtt = c;
         etatMqtt.connecte = true;
         etatMqtt.depuisMs = Date.now();
         if (journal) console.log("[mqtt] connecté au courtier " + m.hote + ":" + (m.port || 8883));
-        function surMessage(sujet, contenu) {
-          try {
-            var probleme = reception.recevoirMessage(sujet, contenu, Date.now());
-            if (probleme) {
-              etatMqtt.refus++;
-              if (journal) console.warn("[mqtt] message refusé (" + sujet + ") : " + probleme);
-            }
-          } catch (e) {
-            console.error("[mqtt] erreur de traitement : " + e.message);
-          }
-        }
+        function surMessage(sujet, contenu) { surMessageMqtt(sujet, contenu); }
         c.abonner("entrepot/+/passerelle/+/trames", 1, surMessage);
         c.abonner("entrepot/+/passerelle/+/etat", 1, surMessage);
         c.surFermeture(function () {
@@ -567,7 +572,7 @@ function creerServeur(options) {
       if (ressource === "refus") return envoyerJson(res, 200, { refus: base.refus(entier(url.searchParams.get("limite"), 20, 1, 200)) });
       // Version industrielle : chariots et passerelles (serveur/chariots.js).
       if (ressource === "chariots" && !mc) {
-        return envoyerJson(res, 200, { maintenantMs: Date.now(), chariots: reception.chariots(Date.now()),
+        return envoyerJson(res, 200, { maintenantMs: horloge(), chariots: reception.chariots(horloge()),
           alertes: reception.alertes(entier(url.searchParams.get("limite"), 30, 1, 500)), compteurs: reception.compteurs });
       }
       if (ressource === "chariots") {
@@ -609,7 +614,8 @@ function creerServeur(options) {
 
 module.exports = {
   creerServeur: creerServeur, signer: signer, chargerCles: chargerCles,
-  chargerComptes: chargerComptes, DROITS: DROITS, HSTS: HSTS
+  chargerComptes: chargerComptes, DROITS: DROITS, HSTS: HSTS,
+  cheminInterdit: cheminInterdit    // pour vérifier que le simulateur de l'usine applique la même règle
 };
 
 // ---------------------------------------------------------------------

@@ -73,7 +73,12 @@ function fauxCourtier(options) {
         var corps = tampon.subarray(1 + lg.taille, 1 + lg.taille + lg.valeur);
         tampon = tampon.subarray(1 + lg.taille + lg.valeur);
         recus.push(type);
-        if (type === mqtt.TYPE.CONNECT) socket.write(Buffer.from([0x20, 2, 0, o.codeConnack || 0]));
+        if (type === mqtt.TYPE.CONNECT) {
+          socket.write(Buffer.from([0x20, 2, 0, o.codeConnack || 0]));
+          recus.push("drapeaux-" + corps[7]);
+          // Session persistante : le courtier livre aussitôt ce qu'il a gardé.
+          if (o.publierApresConnack) socket.write(mqtt.paquetPublish("entrepot/lyon/passerelle/2/trames", "garde", 1, false, 7));
+        }
         if (type === mqtt.TYPE.PUBLISH && qos === 1) {
           var lgSujet = corps.readUInt16BE(0);
           socket.write(mqtt.paquetPuback(corps.readUInt16BE(2 + lgSujet)));
@@ -124,6 +129,28 @@ async function testsClient() {
   erreur = null;
   try { await client.abonner("entrepot/#", 1, function () {}); } catch (e) { erreur = e; }
   verifier("client MQTT : abonnement refusé par les droits (0x80) → erreur", erreur && /refusé/.test(erreur.message), erreur && erreur.message);
+  client.fermer();
+  fc.fermer();
+
+  // Garde dans les deux sens : ce faux courtier ne répond jamais aux PINGREQ.
+  fc = await fauxCourtier();
+  client = await mqtt.connecter({ hote: "127.0.0.1", port: fc.port, tls: false, idClient: "passerelle-1", gardeS: 1 });
+  var t0 = Date.now(), fermeApres = null;
+  client.surFermeture(function () { fermeApres = Date.now() - t0; });
+  await attendre(2600);
+  verifier("client MQTT : courtier muet (aucun PINGRESP) → connexion fermée après 1,5 × la garde, et signalée",
+    fermeApres !== null && fermeApres >= 1400 && fermeApres <= 2500, fermeApres);
+  fc.fermer();
+
+  // Session persistante : drapeau « session propre » à 0, et le message
+  // livré juste après le CONNACK (avant tout SUBSCRIBE) n'est pas perdu.
+  fc = await fauxCourtier({ publierApresConnack: true });
+  var avantAbonnement = [];
+  client = await mqtt.connecter({ hote: "127.0.0.1", port: fc.port, tls: false, idClient: "serveur-supervision", sessionPersistante: true,
+    surMessage: function (sujet, contenu) { avantAbonnement.push(sujet + "=" + contenu); } });
+  await attendre(100);
+  verifier("client MQTT : session persistante (drapeaux CONNECT = 0x00), message gardé reçu par surMessage et accusé",
+    fc.recus.indexOf("drapeaux-0") >= 0 && avantAbonnement[0] === "entrepot/lyon/passerelle/2/trames=garde" && fc.recus.indexOf("puback-7") >= 0, avantAbonnement.join(","));
   client.fermer();
   fc.fermer();
 }

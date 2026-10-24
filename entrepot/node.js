@@ -8,12 +8,16 @@ var path = require("path");
 
 [
   "../logique/trame.js",
+  "../logique/fuite.js",
+  "../logique/alertes.js",
   "../logique/securite.js",
   "../simulateur/monde/alea.js",
   "../simulateur/monde/atmosphere.js",
   "../simulateur/monde/pneu.js",
   "../simulateur/monde/capteur.js",
-  "chariots.js"
+  "chariots.js",
+  "reception.js",
+  "usine.js"
 ].forEach(function (fichier) {
   require(path.join(__dirname, fichier));
 });
