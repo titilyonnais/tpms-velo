@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kit TPMS vélo</title>
+  <title>TPMS · entrepôt et vélo</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <!-- Page d'accueil de GitHub Pages : elle ne fait que renvoyer vers les
-       quatre pages du projet. Sans elle, l'adresse racine du site donnait 404. -->
+       pages du projet. Sans elle, l'adresse racine du site donnait 404. -->
   <style>
     :root {
       --fond: #000; --carte: #111114; --bord: #26262e; --texte: #f4f4f6; --texte-2: #a1a1aa;
@@ -36,16 +36,19 @@
 </head>
 <body>
 <main>
-  <h1>Kit TPMS <span>vélo</span></h1>
+  <h1>Surveillance des pneus <span>TPMS</span></h1>
   <p class="sous-titre">Projet BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité » :
-    surveillance de la pression des pneus (capteurs TPMS BLE, boîtier de guidon à écran e-paper, application)
-    et son logiciel de simulation complète.</p>
+    capteurs de pression TPMS en Bluetooth sur les pneus gonflables d'une flotte de chariots élévateurs,
+    remontés par des passerelles MQTT jusqu'à une supervision, à travers un réseau d'usine segmenté.
+    Le vélo sert de démonstrateur : même capteur, même logique, boîtier de guidon et application.</p>
   <div class="grille">
-    <a class="carte" href="simulateur/"><span class="etiquette">Outil principal</span><b>Simulateur</b>
+    <a class="carte" href="flotte/chariots.html"><span class="etiquette">Industrie</span><b>Supervision de l'entrepôt</b>
+      <p>8 chariots, 3 passerelles BLE → MQTT : pneus, zones, contrôles de sécurité (mode démonstration).</p></a>
+    <a class="carte" href="simulateur/"><span class="etiquette">Démonstrateur</span><b>Simulateur du capteur</b>
       <p>Physique du pneu et du vélo, radio BLE, électronique animée, attaques, plusieurs jours de sorties.</p></a>
     <a class="carte" href="app/"><span class="etiquette">Téléphone</span><b>Application</b>
       <p>Pressions, historique, détection de fuite lente et réglages, par Web Bluetooth.</p></a>
-    <a class="carte" href="flotte/"><span class="etiquette">Entreprise</span><b>Supervision de flotte</b>
+    <a class="carte" href="flotte/"><span class="etiquette">Location</span><b>Flotte de vélos</b>
       <p>20 vélos de location : tendances, priorités de la tournée, statistiques (mode démonstration).</p></a>
     <a class="carte" href="presentation/"><span class="etiquette">Soutenance</span><b>Présentation</b>
       <p>Le diaporama de l'épreuve E6.</p></a>

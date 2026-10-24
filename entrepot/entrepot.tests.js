@@ -297,6 +297,35 @@ function testsReception() {
   db.close();
 }
 
+// La même logique de réception, SEULE (sans base) : c'est ainsi que le
+// mode démo de flotte/chariots.html l'utilise dans le navigateur.
+function testsReceptionPure() {
+  require("./reception.js");
+  var monde = TPMS.creerEntrepot({ graine: 2026, nbChariots: 8, debutMs: 0 });
+  var appels = { mesure: [], zone: [], passerelle: [], refus: [], alerte: [] };
+  var r = TPMS.creerReceptionLots(TPMS.entrepotRegistreCapteurs(monde), {
+    mesure: function (chariot, position, t, m) { appels.mesure.push(chariot + position + " " + m.pressionBar); },
+    zone: function (chariot, zone) { appels.zone.push(chariot + " " + zone); },
+    passerelle: function (id, p) { appels.passerelle.push(id + " " + p.etat + " " + p.annonces); },
+    refus: function (t, source, motif) { appels.refus.push(source + " " + motif); },
+    alerte: function (chariot, t, position, etat) { appels.alerte.push(chariot + position + " " + etat); }
+  });
+  var t0 = 1792800000000;
+  // Contenu en TEXTE (pas de Buffer dans le navigateur).
+  var texte = JSON.stringify({ passerelle: 2, site: "lyon", zone: "allees", envoiMs: t0, annonces: [
+    { t: t0 - 2000, rssi: -75, trame: trameHexa(TPMS.adresseCapteurChariot(4, 1), 2, 8.37) },
+    { t: t0 - 1000, rssi: -75, trame: trameHexa([0xDE, 0xAD, 0xBE, 0xEF, 0x01], 1, 8.5) }] });
+  var probleme = r.recevoirMessage("entrepot/lyon/passerelle/2/trames", texte, t0);
+  verifier("réception pure : lot en texte accepté, rappels mesure, zone et passerelle appelés",
+    probleme === "" && appels.mesure.join() === "C04AVD 8.37" && appels.zone.join() === "C04 allees" && appels.passerelle.join() === "2 en ligne 2",
+    JSON.stringify(appels));
+  verifier("réception pure : capteur inconnu signalé par le rappel refus", appels.refus.join() === "passerelle-2 capteur-inconnu", appels.refus.join());
+  var etat = r.etatDesPneus(t0).C04;
+  verifier("réception pure : état des pneus de C04 (AVD connu, les autres en attente → pire état ATTENTE)",
+    etat.pneus.AVD.pression === 8.37 && etat.pneus.AVG.etat === "ATTENTE" && etat.etat === "ATTENTE" && r.zoneDe("C04") === "allees",
+    JSON.stringify(etat));
+}
+
 // API : /api/chariots, réservée aux sessions, comme le reste.
 async function testsApiChariots() {
   var outils = require("../serveur/serveur.js");
@@ -330,6 +359,7 @@ async function testsApiChariots() {
     await testsClient();
     await testsReseau();
     testsReception();
+    testsReceptionPure();
     await testsApiChariots();
   } catch (e) {
     verifier("exécution sans exception", false, e.stack);

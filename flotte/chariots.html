@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TPMS · Entrepôt</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Même identité visuelle que le simulateur et la flotte de vélos -->
+  <link rel="stylesheet" href="../simulateur/style.css">
+  <link rel="stylesheet" href="flotte.css">
+</head>
+<body>
+
+<svg width="0" height="0" class="cache" aria-hidden="true">
+  <symbol id="i-accueil" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></symbol>
+  <symbol id="i-carte" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+  <symbol id="i-chariot" viewBox="0 0 24 24"><path d="M3 17V7h7l3 5v5M13 12h3V4M16 17h6M16 12h5"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></symbol>
+  <symbol id="i-antenne" viewBox="0 0 24 24"><path d="M12 12v9M8 21h8"/><circle cx="12" cy="10" r="2"/><path d="M7.5 5.5a6.5 6.5 0 0 0 0 9M16.5 5.5a6.5 6.5 0 0 1 0 9M4.5 3a10.5 10.5 0 0 0 0 14M19.5 3a10.5 10.5 0 0 1 0 14"/></symbol>
+  <symbol id="i-cloche" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-bouclier" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></symbol>
+  <symbol id="i-pneu" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></symbol>
+  <symbol id="i-reseau" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></symbol>
+  <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+  <symbol id="i-cle" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l2.5 2.5M18.5 4.5 21 7"/></symbol>
+</svg>
+
+<div class="appli">
+  <!-- ================= NAVIGATION ================= -->
+  <nav class="navigation" id="navigation">
+    <div class="marque"><span class="marque-logo"></span><span>TPMS<b>entrepôt</b></span></div>
+    <a href="#haut" class="actif"><svg><use href="#i-accueil"/></svg><span>Vue d'ensemble</span></a>
+    <a href="#zonePlan"><svg><use href="#i-carte"/></svg><span>Plan</span></a>
+    <a href="#zoneChariots"><svg><use href="#i-chariot"/></svg><span>Chariots</span></a>
+    <a href="#zonePasserelles"><svg><use href="#i-antenne"/></svg><span>Passerelles</span></a>
+    <a href="#zoneAlertes"><svg><use href="#i-cloche"/></svg><span>Alertes</span></a>
+    <a href="#zoneSecurite"><svg><use href="#i-bouclier"/></svg><span>Sécurité</span></a>
+    <div class="navigation-pied">
+      <div id="txtSource">Recherche du serveur…</div>
+      <a href="index.html">Flotte de vélos →</a>
+      <a href="../simulateur/">Simulateur d'un capteur →</a>
+    </div>
+  </nav>
+
+  <div class="contenu" id="haut">
+    <!-- ================= BARRE DU HAUT ================= -->
+    <header class="barre-haute">
+      <div class="etat-global repos" id="etatGlobal">
+        <span class="point-etat"></span>
+        <div>
+          <div class="etat-titre" id="etatTitre">Préparation…</div>
+          <div class="etat-detail" id="etatDetail"></div>
+        </div>
+      </div>
+      <div class="temps">
+        <div class="horloge"><span id="txtJour">Entrepôt de Lyon</span><b id="horloge">--:--</b></div>
+        <div class="commandes-temps" id="commandesTemps" hidden>
+          <button type="button" class="bouton-rond" id="btnPause" title="Pause / lecture"><svg><use href="#i-pause"/></svg></button>
+          <div class="pilules" id="choixFacteur" role="group" aria-label="Vitesse du temps">
+            <button type="button" data-facteur="1">×1</button>
+            <button type="button" data-facteur="10" class="actif">×10</button>
+            <button type="button" data-facteur="60">×60</button>
+          </div>
+        </div>
+        <div class="actualise" id="txtActualise" hidden></div>
+        <div class="zone-compte" id="zoneCompte" hidden>
+          <span id="txtCompte"></span>
+          <button type="button" class="bouton petit-bouton" id="btnDeconnexion">Se déconnecter</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="bandeau-demo" id="bandeauDemo" hidden>
+      <b>Mode démo.</b> Aucun serveur n'a répondu : l'entrepôt (8 chariots, 3 passerelles) est simulé dans votre
+      navigateur, et ses lots passent par la MÊME logique de réception que le serveur
+      (<code>entrepot/reception.js</code>). Version réseau complète (pare-feu, courtier MQTT en TLS, NTP, syslog) :
+      <code>cd entrepot</code>, <code>docker compose up -d</code>, puis https://localhost:8443/flotte/chariots.html.
+    </div>
+
+    <main>
+      <div class="grille">
+        <!-- ===== Indicateurs ===== -->
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-chariot"/></svg><h3>Chariots</h3></header>
+          <div class="grand-chiffre"><span id="kpiChariots">–</span><small id="kpiChariotsUnite">en état</small></div>
+          <p class="discret" id="kpiChariotsDetail"></p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-pneu"/></svg><h3>Pneus en alerte</h3></header>
+          <div class="grand-chiffre"><span id="kpiPneus">–</span><small>sur <span id="kpiPneusTotal">32</span></small></div>
+          <p class="discret" id="kpiPneusDetail"></p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-antenne"/></svg><h3>Passerelles</h3></header>
+          <div class="grand-chiffre"><span id="kpiPasserelles">–</span><small>en ligne</small></div>
+          <p class="discret" id="kpiPasserellesDetail"></p>
+        </section>
+        <section class="tuile large-3 indicateur">
+          <header><svg><use href="#i-bouclier"/></svg><h3>Rejets de sécurité</h3></header>
+          <div class="grand-chiffre"><span id="kpiRejets">–</span><small>depuis le démarrage</small></div>
+          <p class="discret" id="kpiRejetsDetail"></p>
+        </section>
+
+        <!-- ===== Plan de l'entrepôt ===== -->
+        <section class="tuile large-12" id="zonePlan">
+          <header><svg><use href="#i-carte"/></svg><h3>Plan de l'entrepôt</h3>
+            <span class="discret">120 m × 30 m · la zone d'un chariot = la passerelle qui l'entend le mieux</span></header>
+          <svg class="carte plan-entrepot" id="plan" viewBox="0 0 960 300" role="img" aria-label="Plan de l'entrepôt : zones, passerelles et chariots"></svg>
+          <div class="legende">
+            <span><i class="pastille ok"></i>OK</span>
+            <span><i class="pastille regonfler"></i>Pression basse ou haute, fuite</span>
+            <span><i class="pastille urgent"></i>Crevaison, capteur perdu ou suspect</span>
+            <span><i class="pastille muet"></i>En attente de mesures</span>
+            <span><i class="cercle-portee"></i>Portée radio d'une passerelle (≈ 24 m)</span>
+          </div>
+        </section>
+
+        <!-- ===== Tableau des chariots ===== -->
+        <section class="tuile large-7" id="zoneChariots">
+          <header><svg><use href="#i-chariot"/></svg><h3>Pneus des chariots</h3>
+            <span class="discret">bar · consigne 8,5 · alerte sous 7,8 et au-dessus de 9,5</span></header>
+          <div class="tableau-defile">
+            <table class="tableau tableau-chariots">
+              <thead><tr><th>Chariot</th><th>Zone</th><th>AV G</th><th>AV D</th><th>AR G</th><th>AR D</th><th>État</th></tr></thead>
+              <tbody id="corpsChariots"></tbody>
+            </table>
+          </div>
+          <p class="discret">Cliquer sur un chariot pour voir ses courbes.</p>
+        </section>
+
+        <!-- ===== Détail d'un chariot ===== -->
+        <section class="tuile large-5" id="zoneDetail">
+          <header><svg><use href="#i-pneu"/></svg><h3 id="detailTitre">Chariot</h3><span class="puce" id="detailEtat"></span></header>
+          <svg class="graphe" id="grapheDetail" viewBox="0 0 520 220" role="img" aria-label="Courbes de pression des 4 pneus"></svg>
+          <div class="legende">Dernières heures :
+            <span class="trait"></span> AV G <span class="trait s2"></span> AV D <span class="trait s3"></span> AR G <span class="trait s4"></span> AR D</div>
+          <dl class="petites-mesures" id="detailMesures"></dl>
+        </section>
+
+        <!-- ===== Passerelles ===== -->
+        <section class="tuile large-7" id="zonePasserelles">
+          <header><svg><use href="#i-antenne"/></svg><h3>Passerelles BLE → MQTT</h3>
+            <span class="puce" id="txtMqtt"></span></header>
+          <div class="tableau-defile">
+            <table class="tableau">
+              <thead><tr><th>N°</th><th>Zone</th><th>État</th><th>Heure (NTP)</th><th>Lots</th><th>Annonces</th><th>Dernière nouvelle</th></tr></thead>
+              <tbody id="corpsPasserelles"></tbody>
+            </table>
+          </div>
+          <p class="discret">Chaque passerelle publie toutes les 10 s, en MQTT sur TLS, le lot des annonces Bluetooth entendues.
+            Si elle disparaît sans prévenir, le courtier publie son « testament » : « hors ligne ».</p>
+          <div class="rangee banc" id="commandesPasserelles" hidden>
+            <button type="button" class="bouton" id="btnCouper">Couper la passerelle 2</button>
+          </div>
+        </section>
+
+        <!-- ===== Alertes ===== -->
+        <section class="tuile large-5" id="zoneAlertes">
+          <header><svg><use href="#i-cloche"/></svg><h3>Alertes des pneus</h3></header>
+          <ul class="fil-evenements long" id="listeAlertes"></ul>
+        </section>
+
+        <!-- ===== Réseau ===== -->
+        <section class="tuile large-6" id="zoneReseau">
+          <header><svg><use href="#i-reseau"/></svg><h3>Réseau de l'usine</h3><span class="discret">zones et conduits (IEC 62443)</span></header>
+          <svg class="carte schema-reseau" id="schemaReseau" viewBox="0 0 520 300" role="img" aria-label="Zones du réseau et flux autorisés"></svg>
+          <p class="discret">Un seul passage entre les zones : le pare-feu, qui refuse tout sauf les conduits numérotés.
+            Détails : <code>docs/orientation-industrielle.md</code> et <code>entrepot/pare-feu/regles.nft</code>.</p>
+        </section>
+
+        <!-- ===== Sécurité ===== -->
+        <section class="tuile large-6" id="zoneSecurite">
+          <header><svg><use href="#i-bouclier"/></svg><h3>Contrôles du serveur</h3><span class="puce accent" id="txtSecuMode"></span></header>
+          <p class="discret">Ce que la supervision a fait des annonces reçues (même logique que le boîtier du vélo) :</p>
+          <div class="barres-horizontales" id="secuCompteurs"></div>
+          <div id="secuRefusBloc" hidden>
+            <h4>Derniers refus</h4>
+            <div class="tableau-defile">
+              <table class="tableau"><thead><tr><th>Heure</th><th>Source</th><th>Motif</th></tr></thead>
+                <tbody id="secuRefus"></tbody></table>
+            </div>
+          </div>
+          <p class="discret" id="secuReserve" hidden>Le journal des refus est réservé au compte <b>gestionnaire</b>.</p>
+          <div id="secuBanc" hidden>
+            <h4>Banc d'essai : lots piégés</h4>
+            <p class="discret">Comme un pirate qui aurait volé le certificat de la passerelle 1
+              (voir aussi <code>node entrepot/demonstration.js</code> sur la maquette Docker).</p>
+            <div class="rangee banc">
+              <button type="button" class="bouton" data-essai="faux-lot">Se dire passerelle 2</button>
+              <button type="button" class="bouton" data-essai="capteur-inconnu">Capteur inconnu</button>
+              <button type="button" class="bouton" data-essai="valeur-aberrante">Pneu à 20 bar</button>
+              <button type="button" class="bouton" data-essai="rejeu">Rejouer (3 h)</button>
+              <button type="button" class="bouton" data-essai="injection">Trame « ' OR 1=1 »</button>
+            </div>
+            <ul class="fil-evenements" id="secuEssais"></ul>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= CONNEXION (mode serveur) ================= -->
+<div class="ecran-connexion" id="ecranConnexion" hidden>
+  <form class="tuile carte-connexion" id="formConnexion">
+    <header><svg><use href="#i-cle"/></svg><h3>Connexion à la supervision</h3></header>
+    <p class="discret">Les données de l'entrepôt sont réservées aux comptes identifiés (technicien, gestionnaire).
+      La session se ferme après 15 min sans activité, et au plus tard après 8 h.</p>
+    <label for="champCompte">Compte</label>
+    <input type="text" id="champCompte" class="champ-jeton" required maxlength="32"
+           spellcheck="false" autocapitalize="off" autocomplete="username">
+    <label for="champMotDePasse">Mot de passe</label>
+    <input type="password" id="champMotDePasse" class="champ-jeton" required minlength="12" maxlength="256"
+           spellcheck="false" autocapitalize="off" autocomplete="current-password">
+    <p class="erreur-connexion" id="erreurConnexion" role="alert" hidden></p>
+    <p class="avert-http" id="avertHttp" hidden>Connexion HTTP non chiffrée : le mot de passe circule en clair sur le réseau.</p>
+    <button type="submit" class="bouton principal grand" id="btnConnexion">Se connecter</button>
+    <p class="discret petit-texte">Mots de passe de démonstration : <code>serveur/cles-demo.json</code>.</p>
+  </form>
+</div>
+
+<!-- Logique partagée (mêmes fichiers que le serveur Node et les passerelles) -->
+<script src="../logique/trame.js"></script>
+<script src="../logique/fuite.js"></script>
+<script src="../logique/alertes.js"></script>
+<script src="../logique/securite.js"></script>
+<script src="../simulateur/monde/alea.js"></script>
+<script src="../simulateur/monde/atmosphere.js"></script>
+<script src="../simulateur/monde/pneu.js"></script>
+<script src="../simulateur/monde/capteur.js"></script>
+<script src="../entrepot/chariots.js"></script>
+<script src="../entrepot/reception.js"></script>
+<!-- Affichage -->
+<script src="../simulateur/vues/graphe.js"></script>
+<script src="chariots.js"></script>
+</body>
+</html>

@@ -135,6 +135,55 @@ section[id] { scroll-margin-top: 90px; }
 .carte-connexion .bouton:disabled { opacity: .6; cursor: wait; }
 .petit-texte { font-size: 12px; }
 
+/* =================================================================
+   Entrepôt (chariots.html) : plan, pneus, schéma du réseau
+   ================================================================= */
+.plan-entrepot .zone-plan { fill: #0d0d12; stroke: var(--bord-fort); stroke-width: 1.5; }
+.plan-entrepot .zone-plan.exterieur { fill: #0a0f0c; stroke-dasharray: 6 5; }
+.plan-entrepot .zone-nom { fill: var(--texte-2); font: 500 13px var(--police); }
+.plan-entrepot .rack { fill: #1a1a22; stroke: #2a2a34; }
+.plan-entrepot .portee { fill: rgba(167, 139, 250, .06); stroke: rgba(167, 139, 250, .35); stroke-width: 1; stroke-dasharray: 4 5; }
+.plan-entrepot .portee.coupee { fill: rgba(248, 113, 113, .04); stroke: rgba(248, 113, 113, .35); }
+.plan-entrepot .passerelle-plan { fill: var(--accent); stroke: var(--fond); stroke-width: 3; }
+.plan-entrepot .passerelle-plan.coupee { fill: var(--alerte); }
+.plan-entrepot .passerelle-texte { fill: var(--texte); font: 600 12px var(--mono); }
+.plan-entrepot .chariot-plan { cursor: pointer; }
+.plan-entrepot .chariot-plan .velo { stroke: var(--fond); stroke-width: 2; }
+.plan-entrepot .chariot-plan.choisi .velo { stroke: #fff; stroke-width: 2.5; }
+.plan-entrepot .chariot-plan:focus { outline: none; }
+.plan-entrepot .chariot-plan:focus .velo { stroke: var(--accent); }
+.plan-entrepot .chariot-texte { fill: #0b0b0d; font: 600 12px var(--mono); text-anchor: middle; pointer-events: none; }
+.cercle-portee { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin: 0 5px 0 10px; vertical-align: -2px;
+  border: 1px dashed rgba(167, 139, 250, .7); background: rgba(167, 139, 250, .1); }
+
+.tableau-chariots tbody tr { cursor: pointer; }
+.tableau-chariots tbody tr:hover td { background: var(--tuile-2); }
+.tableau-chariots tbody tr.choisi td { background: var(--accent-doux); }
+.tableau-chariots td:first-child { color: var(--texte); font-weight: 600; }
+.tableau-chariots td.pneu { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tableau-chariots td.pneu.ok { color: var(--ok); }
+.tableau-chariots td.pneu.regonfler { color: var(--attention); }
+.tableau-chariots td.pneu.urgent { color: var(--alerte); font-weight: 600; }
+.tableau-chariots td.pneu.muet { color: var(--texte-3); }
+
+.graphe .serie.s4 { stroke: var(--ok); }
+.legende .trait.s4 { background: var(--ok); }
+#secuRefus .raison { display: block; font-size: 12px; color: var(--texte-2); margin-top: 3px; white-space: normal; }
+
+.schema-reseau .boite-reseau { fill: var(--tuile-2); stroke: var(--bord-fort); stroke-width: 1.5; }
+.schema-reseau .boite-reseau.ot { stroke: rgba(251, 191, 36, .6); }
+.schema-reseau .boite-reseau.serveurs { stroke: rgba(167, 139, 250, .7); }
+.schema-reseau .boite-reseau.bureau { stroke: rgba(96, 165, 250, .6); }
+.schema-reseau .boite-reseau.dmz { stroke: var(--bord-fort); stroke-dasharray: 5 4; }
+.schema-reseau .boite-reseau.pare-feu { fill: var(--accent-doux); stroke: var(--accent); }
+.schema-reseau .boite-titre { fill: var(--texte); font: 600 12px var(--police); }
+.schema-reseau .boite-texte { fill: var(--texte-2); font: 400 11px var(--police); }
+.schema-reseau .centre { text-anchor: middle; }
+.schema-reseau .conduit { stroke: var(--ok); stroke-width: 2; }
+.schema-reseau .conduit.refuse { stroke: var(--alerte); stroke-dasharray: 5 5; }
+.schema-reseau .conduit-texte { fill: var(--ok); font: 500 11px var(--police); }
+.schema-reseau .conduit-texte.refuse { fill: var(--alerte); }
+
 /* ---------- Écrans plus petits ---------- */
 @media (max-width: 1250px) {
   .large-3 { grid-column: span 6; }
