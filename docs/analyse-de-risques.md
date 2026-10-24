@@ -12,7 +12,7 @@ L'analyse suit une version **simplifiée** de la méthode **EBIOS Risk Manager**
 4. **Évaluation** : gravité × vraisemblance, avant puis après les mesures.
 5. **Traitement** : mesures mises en place et **risques résiduels assumés**.
 
-Chaque mesure citée renvoie au fichier du dépôt qui l'implémente, et au test automatique qui la vérifie (`node simulateur/tests/tout.js` lance les 7 suites ; la plupart des tests cités sont dans `simulateur/tests/tests.js`, ceux de bout en bout dans `simulateur/tests/moteur.tests.js`, ceux du serveur de flotte dans `serveur/serveur.tests.js`). La traduction C++ de ces protections est vérifiée par ses propres tests (`firmware/tests_pc`), lancés comme les tests JavaScript par GitHub Actions à chaque envoi de code.
+Chaque mesure citée renvoie au fichier du dépôt qui l'implémente, et au test automatique qui la vérifie (`node simulateur/tests/tout.js` lance les 8 suites ; la plupart des tests cités sont dans `simulateur/tests/tests.js`, ceux de bout en bout dans `simulateur/tests/moteur.tests.js`, ceux du serveur de flotte dans `serveur/serveur.tests.js`, ceux de la version industrielle dans `entrepot/entrepot.tests.js`). Les défenses du réseau de l'entrepôt sont vérifiées en plus sur la maquette Docker par `entrepot/demonstration.js` (§ 5.7). La traduction C++ de ces protections est vérifiée par ses propres tests (`firmware/tests_pc`), lancés comme les tests JavaScript par GitHub Actions à chaque envoi de code.
 
 Point de départ : les études publiques sur les TPMS automobiles, en particulier **Rouf et al., « Security and Privacy Vulnerabilities of In-Car Wireless Networks: A Tire Pressure Monitoring System Case Study », USENIX Security 2010**, ont montré que les messages des capteurs de pression n'étaient ni chiffrés ni authentifiés, que leur identifiant fixe permettait de suivre un véhicule, et que de faux messages pouvaient déclencher le voyant d'alerte du tableau de bord. Les capteurs TPMS BLE du commerce utilisés ici présentent le même défaut de conception : ils diffusent leurs mesures en clair, sans signature ni compteur.
 
@@ -29,6 +29,7 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 - L'application web (Chrome ou Bluefy) et les données qu'elle conserve.
 - Ce que des tiers peuvent capter le long des trajets du cycliste : les annonces des capteurs sont reçues bien au-delà du vélo (vie privée).
 - Le **mode flotte** (entreprise de location, § 5.6) : serveur Node.js et base SQLite (`serveur/`), API REST, page de supervision (`flotte/`), et liaison boîtier → serveur. Cette liaison est une **hypothèse** : le boîtier n'a pas de modem, on suppose une passerelle dans chaque station ou un module LTE-M.
+- La **version industrielle** (entrepôt, § 5.7 ; conception dans `orientation-industrielle.md`) : capteurs « poids lourd » sur les pneus des chariots élévateurs, passerelles BLE → MQTT au plafond, réseau de l'usine découpé en zones (OT atelier, serveurs, bureautique, DMZ) par un pare-feu, courtier MQTT, serveurs NTP et syslog, supervision `flotte/chariots.html`. Évaluée sur la maquette Docker (`entrepot/`).
 
 ### 1.2 Biens essentiels
 
@@ -43,6 +44,7 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 | Données de la flotte | Mesures des 20 vélos (pressions, positions en station, kilomètres, locations), alertes, regonflages, journal des refus (adresses IP), dans la base du serveur | **Intégrité** (la tournée du technicien en dépend) et **confidentialité** (horaires des locations, adresses IP) |
 | Vie privée des clients de la location | Position du vélo pendant une location, durée et distance des locations : rattachées à un contrat, ce sont des données personnelles du client | **Confidentialité** et respect du RGPD (minimisation, durée de conservation limitée) |
 | Service de supervision | API et page de la flotte, tournée triée par priorité | **Disponibilité** |
+| Données des chariots (version industrielle) | Pression et état des pneus de chaque chariot, zone où il se trouve, alertes, état des passerelles | **Intégrité** (un pneu sous-gonflé caché peut faire basculer un chariot chargé : sécurité au travail) et **disponibilité** (la supervision doit savoir qu'elle ne reçoit plus rien) |
 
 ### 1.3 Biens supports
 
@@ -58,6 +60,10 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 | Clés secrètes des vélos (HMAC) et mots de passe des comptes | En démonstration, publics dans le dépôt (`serveur/cles-demo.json`) |
 | Jetons de session des comptes (depuis le 24/10/2026) | Gardés par la page de supervision dans `sessionStorage`, lisibles par un script de la page ; valables jusqu'à la fin de la session |
 | Liaison boîtier → serveur | Supposée (passerelle ou LTE-M) ; en HTTPS dès qu'un certificat est présent (auto-signé en démonstration), sinon en HTTP avec un avertissement |
+| Passerelles BLE → MQTT (version industrielle) | Au plafond de l'atelier, accessibles avec une échelle : peuvent être volées, ouvertes ou remplacées ; chacune porte un certificat et sa clé privée |
+| Réseau de l'usine et pare-feu | Une prise réseau de l'atelier, ou un poste de bureau infecté, donne un point d'entrée ; dans la maquette, toutes les zones tournent sur le même PC |
+| Courtier MQTT, NTP, syslog | Services partagés : s'ils tombent, ou si l'heure est fausse, toute la chaîne en souffre |
+| Autorité de certification (AC) de l'usine | Qui détient sa clé privée fabrique des certificats acceptés partout ; dans la maquette, ses fichiers sont sur le PC (`entrepot/certificats/`, hors de Git) |
 
 ---
 
@@ -70,7 +76,8 @@ Point de départ : les études publiques sur les TPMS automobiles, en particulie
 | Voleur de vélo | Repérer un vélo équipé et savoir s'il est dans un local | Faibles à moyennes | Scanner BLE posé à proximité |
 | Collecteur de données (espion) | Connaître les trajets et les horaires d'une personne : harcèlement, repérage avant un cambriolage, revente de données de fréquentation | **Aucune en piratage** : il suffit de noter ce qui passe | Récepteurs BLE posés le long des rues (type Raspberry Pi, environ 40 € pièce), dans une vitrine, un abribus, une voiture garée |
 | Attaquant sur Internet | Fausser les données de la flotte (cacher un vélo abîmé, vider la tournée), lire les positions des vélos, rendre le service indisponible | Moyennes : outils et listes d'attaques publics (injection SQL, envoi massif de requêtes) | Un PC, `curl`, des scripts |
-| Source non malveillante | Aucune | – | Vélo voisin équipé des mêmes capteurs, perturbations de la bande 2,4 GHz (Wi-Fi…) |
+| Intrus sur le site (version industrielle) : visiteur, prestataire, employé mécontent | Saboter la surveillance (cacher un pneu dégonflé, déclencher de fausses alertes), voler des données, rebondir vers d'autres machines de l'usine | Moyennes | Un PC portable branché sur une prise réseau de l'atelier ; une passerelle volée et sa clé ; ou, à distance, un poste de bureau infecté par un courriel piégé |
+| Source non malveillante | Aucune | – | Vélo voisin équipé des mêmes capteurs, perturbations de la bande 2,4 GHz (Wi-Fi…) ; pour l'entrepôt : panne de courant, câble arraché, redémarrage d'un serveur |
 
 Hypothèse réaliste retenue : l'attaquant dispose d'une carte ESP32 ou nRF52 à quelques euros, à moins d'une dizaine de mètres du vélo. C'est exactement ce que simule `simulateur/sources/pirate.js`. L'espion, lui, ne s'approche jamais du vélo : il est simulé par `simulateur/sources/mouchards.js` (page « Vie privée » du simulateur).
 
@@ -176,6 +183,42 @@ Une personne placée sur le chemin du réseau (Wi-Fi d'une station, passerelle, 
 
 Pendant une location, la position du vélo est celle du client. Gardée sans limite de durée, elle permettrait de reconstituer ses trajets et ses lieux de vie, que la base soit volée, lue par un employé ou réutilisée pour autre chose que l'entretien des vélos. C'est un risque pour le client et un risque juridique pour l'entreprise : le RGPD (art. 5) impose de ne collecter que les données nécessaires (minimisation) et de fixer une durée de conservation. C'était le cas dans la première version : le boîtier simulé envoyait sa position en permanence et le serveur la gardait sans limite.
 
+### Scénarios de la version industrielle (réseau de l'entrepôt)
+
+Les scénarios S24 à S31 visent l'infrastructure de l'entrepôt : passerelles, réseau de l'usine, courtier MQTT, supervision. Ils sont rejoués sur la maquette Docker par `entrepot/demonstration.js` (13 essais, § 5.7), avec un conteneur « intrus » branché sur le réseau de l'atelier.
+
+### S24 – Rebond depuis la bureautique vers l'atelier
+
+Un poste de bureau est infecté par un courriel piégé. Le logiciel malveillant balaie le réseau, trouve les passerelles de l'atelier et les attaque (mot de passe par défaut, faille non corrigée), ou vise directement le courtier MQTT. C'est le chemin classique des attaques contre les systèmes industriels : on entre par l'informatique de bureau, on frappe la production.
+
+### S25 – Faux client MQTT branché sur l'atelier
+
+L'intrus branche un PC sur une prise de l'atelier et se connecte au courtier pour publier de fausses trames (cacher un pneu dégonflé) ou lire tout ce qui passe. Variantes : sans certificat, ou avec un certificat qu'il a fabriqué lui-même.
+
+### S26 – Passerelle volée : certificat et clé dans les mains de l'intrus
+
+L'intrus décroche une passerelle et récupère son certificat et sa clé privée. Avec cette identité valide, il essaie de publier au nom d'une autre passerelle, d'envoyer des lots incohérents, des capteurs inventés, des pressions absurdes ou de vieilles annonces rejouées.
+
+### S27 – Écoute ou modification du trafic sur le réseau de l'usine
+
+Une personne placée sur le chemin (commutateur de l'atelier, port miroir) lit les lots des passerelles ou les modifie au passage, ou se fait passer pour le courtier (homme du milieu).
+
+### S28 – Rejeu de lots et heure faussée
+
+L'intrus renvoie plus tard des lots enregistrés (pressions normales d'hier pendant la crevaison d'aujourd'hui), ou fausse l'heure d'une passerelle pour que ses annonces soient mal datées.
+
+### S29 – Panne ou coupure : passerelle, courtier, câble
+
+Une passerelle perd son alimentation, un câble est arraché, le courtier redémarre. Non malveillant le plus souvent, mais aussi un moyen simple de saboter : sans surveillance, un pneu peut se dégonfler sans que personne ne le voie, et la supervision affiche les dernières valeurs connues comme si tout allait bien.
+
+### S30 – Fuite des secrets par le serveur web de la supervision
+
+Le serveur de supervision sert aussi la page et ses scripts, à partir des fichiers du dépôt. Si ces fichiers contiennent des secrets (clés privées des certificats, base de données, journaux), une simple requête HTTP les donne. **Scénario constaté, pas théorique** : dans la maquette, `https://localhost:8443/entrepot/certificats/courtier.cle` donnait la clé privée du courtier (§ 6.15).
+
+### S31 – Inondation du courtier par une passerelle compromise
+
+Avec un certificat volé (S26), l'intrus publie des milliers de lots par seconde pour saturer le courtier, le serveur ou la base, et rendre la supervision indisponible.
+
 ---
 
 ## 4. Évaluation
@@ -231,6 +274,14 @@ La colonne « Après » correspond au produit actuel, avec les capteurs du comme
 | S21 Secrets de démo publics | N'importe qui signe un lot pour un vélo de démo, ou se connecte avec un mot de passe de démo | 3 × 4 = **12 élevé** | Clés et mots de passe marqués « DÉMONSTRATION » ; `generer-cles-demo.js --nouveaux-mots-de-passe` en tire d'autres ; en production : une clé par boîtier, gravée à la fabrication, coffre à secrets côté serveur, chaque personne choisit son mot de passe et la configuration ne garde que le sel et l'empreinte scrypt | **12 élevé en démonstration** ; sans objet en production (S16, S20) | = |
 | S22 Écoute du trafic réseau | Lots, réponses, mots de passe et jetons de session lus en chemin ; faux serveur | 2 × 2 = **4 moyen** | La signature empêche de **modifier** un lot ; HTTPS (TLS 1.2 minimum) dès qu'un certificat est présent, en-tête HSTS ; le script de la flotte vérifie le certificat (confiance explicite, vérification jamais coupée) ; avertissement si le serveur démarre en HTTP | 2 × 1 = **2 faible** (résiduel : certificat auto-signé en démonstration, le navigateur avertit ; 4 moyen si le serveur est lancé sans certificat) | = |
 | S23 Position des clients (RGPD) | Trajets et lieux de vie des clients reconstitués à partir de la base | 3 × 3 = **9 élevé** | Minimisation : aucune position pendant une location, effacée par le serveur avant stockage même si un boîtier l'envoie ; conservation limitée (mesures et alertes 30 jours, journal des refus 6 mois) ; lecture réservée aux comptes (S20) | 1 × 2 = **2 faible** (reste : début, fin et kilomètres des locations, gardés 30 jours) | = |
+| S24 Rebond bureautique → atelier | Passerelles ou courtier pris en main depuis un poste de bureau | 3 × 3 = **9 élevé** | Zones et conduits (IEC 62443) : pare-feu « tout refusé » entre les zones, la bureautique ne voit que la page de supervision en HTTPS ; refus comptés par sens | 3 × 1 = **3 faible** | sans objet |
+| S25 Faux client MQTT | Fausses trames publiées, ou tout le trafic lu | 3 × 3 = **9 élevé** | Courtier en TLS seulement (pas de port 1883), certificat client **obligatoire** signé par l'AC de l'usine, aucune connexion anonyme | 3 × 1 = **3 faible** | sans objet |
+| S26 Passerelle volée | Fausses données acceptées sous une identité valide | 3 × 2 = **6 moyen** | Droits par sujet (ACL) : une passerelle n'écrit que sous son numéro ; le serveur vérifie que le lot correspond au sujet, puis liste blanche, vraisemblance (0-13 bar) et anti-rejeu ; certificat de la passerelle à révoquer | 3 × 1 = **3 faible** (résiduel : valeurs plausibles pour les capteurs à sa portée tant que le certificat n'est pas révoqué, § 6.15) | sans objet |
+| S27 Écoute ou modification du trafic | Lots lus ou modifiés, faux courtier | 2 × 3 = **6 moyen** | TLS 1.2 minimum entre passerelles et courtier, authentification mutuelle (le courtier prouve aussi son identité) ; HTTPS pour la supervision | 2 × 1 = **2 faible** | sans objet |
+| S28 Rejeu, heure faussée | Ancien état réécrit, mesures mal datées | 2 × 2 = **4 moyen** | Annonces datées par la passerelle réglée sur le NTP de l'usine ; serveur : refus au-delà de +60 s dans le futur et de 2 h dans le passé ; dédoublonnage à 3 s ; écart NTP de chaque passerelle affiché | 2 × 1 = **2 faible** (résiduel : NTP non authentifié, § 6.15) | sans objet |
+| S29 Panne ou coupure | Surveillance interrompue sans que personne ne le sache | 2 × 3 = **6 moyen** | Testament MQTT (« hors ligne » publié par le courtier), état « capteur perdu » après 10 min, stocker puis transmettre (1 h de lots gardés par la passerelle, QoS 1), journal central syslog, redémarrage automatique des services | 1 × 3 = **3 faible** (la panne arrive, mais elle se voit, et jusqu'à 1 h aucune mesure n'est perdue) | sans objet |
+| S30 Fuite des secrets par la supervision | Clé privée du courtier ou de l'AC, base, journaux téléchargés | 3 × 3 = **9 élevé** (constaté sur la maquette) | Dossiers `entrepot/certificats`, `donnees`, `journaux` et fichiers `.cle`, `.key`, `.db`… jamais servis, comparaison en minuscules ; port de la maquette publié sur 127.0.0.1 seulement | 3 × 1 = **3 faible** | sans objet |
+| S31 Inondation du courtier | Supervision indisponible | 2 × 2 = **4 moyen** | ACL (seulement les sujets de la passerelle) ; serveur : au plus 2 000 annonces par lot, une mesure par pneu et par minute en base, lots vérifiés avant traitement | 2 × 2 = **4 moyen** (résiduel : pas de limite de débit par client MQTT dans la maquette, § 6.15) | sans objet |
 
 Pour S3 et S4, la vraisemblance « après » porte sur une attaque **réussie sans être signalée** : la tentative reste facile, mais elle déclenche l'état « SIGNAL SUSPECT » (voir § 5.2, et le § 6.4 pour une fausse valeur proche de la vraie, affichée quelques secondes avant la détection). Avec les capteurs v2, la note ne baisse pas parce que l'échelle s'arrête à 1 ; la différence est que la fausse trame est refusée dès la première, avec une preuve (la signature), au lieu d'être repérée par son comportement.
 
@@ -239,11 +290,13 @@ Pour S3 et S4, la vraisemblance « après » porte sur une attaque **réussie sa
 | Gravité ↓ / Vraisemblance → | 1 – Peu vraisemblable | 2 – Vraisemblable | 3 – Très vraisemblable | 4 – Quasi certain |
 |---|---|---|---|---|
 | **4 – Critique** | – | – | – | – |
-| **3 – Grave** | S3, S4, S6, S7, S8, S13, S16, S18 (3, faible) | – | **S12 (9, élevé)** | *S21 (12, élevé, démonstration)* |
-| **2 – Significative** | S2, S9, S17, S20, S22 (2, faible) | S19 (4, moyen) | S1, S11 (6, moyen) | – |
-| **1 – Mineure** | S10, S15 (1, faible) | S5, S23 (2, faible) | S14 (3, faible) | – |
+| **3 – Grave** | S3, S4, S6, S7, S8, S13, S16, S18, S24, S25, S26, S30 (3, faible) | – | **S12 (9, élevé)** | *S21 (12, élevé, démonstration)* |
+| **2 – Significative** | S2, S9, S17, S20, S22, S27, S28 (2, faible) | S19, S31 (4, moyen) | S1, S11 (6, moyen) | – |
+| **1 – Mineure** | S10, S15 (1, faible) | S5, S23 (2, faible) | S14, S29 (3, faible) | – |
 
 Le scénario en italique ne concerne que la **démonstration** du serveur de flotte (§ 6.14) : il disparaît en production, avec une clé secrète par boîtier et des mots de passe connus de leurs seuls titulaires. Dans la première version du serveur, S20 (8, élevé), S22 (4, moyen) et S23 (9, élevé) restaient à leur niveau « avant » : lecture sans compte, HTTP seulement, position des clients gardée sans limite. Les mesures du 23/10/2026 (§ 5.6) les font passer en « faible ».
+
+Pour la version industrielle (S24 à S31), aucun risque élevé ne reste : le découpage en zones, le TLS mutuel et les contrôles du serveur se complètent (§ 5.7). Les deux risques moyens restants, S19 et S31, sont des dénis de service, qu'une maquette sur un seul PC ne peut pas traiter complètement.
 
 Pour le kit vendu au particulier, le seul risque élevé restant est le **pistage (S12)**. Il ne vient pas d'une erreur de conception du boîtier mais des capteurs du commerce, qui émettent une adresse fixe en clair ; aucune mesure côté boîtier ou application ne peut le réduire (§ 6.9). C'est ce qui justifie la proposition de capteurs v2 (§ 5.5).
 
@@ -389,9 +442,40 @@ Pourquoi effacer la position côté serveur alors que le boîtier ne l'envoie pa
 - Essai réel avec `serveur/flotte-vers-serveur.js` : 14 jours de flotte simulés en 31 s, **1 120 lots acceptés sur 1 120** (40 356 mesures). Lot rejoué : refusé (401 rejeu) ; lot modifié : refusé (401 signature) ; lot signé avec la clé d'un autre vélo : refusé.
 - L'identifiant `V01'; DROP TABLE…` est refusé et sans effet sur la base.
 - Sans serveur (GitHub Pages), la page `flotte/` tourne en mode démo et propose un **banc d'essai de sécurité**, qui applique les mêmes règles avec le HMAC de `logique/sha256.js` : lot valide → 201 ; rejeu → 401 ; pression modifiée → 401 ; mauvaise clé → 401 ; lot vieux de 2 min → 401 ; pression à 12 bar → 400.
-- 668 tests JavaScript, dont 133 pour le serveur (`serveur/serveur.tests.js`) : 67 tests d'origine (signature, rejeu, injection, débit, simulation de la flotte), 50 ajoutés le 23/10/2026 pour les comptes, les rôles, l'empreinte des jetons, la minimisation de la position (base, API, historique, registre du mode démo), la purge, la migration d'une ancienne base et HTTPS (avec un certificat temporaire fabriqué par le test), et 16 ajoutés le 24/10/2026 pour la connexion par mot de passe et les sessions (expiration en « avançant l'horloge » du test, déconnexion, limite de 3 sessions, blocage d'IP après des mots de passe faux, connexion à travers TLS).
+- 717 tests JavaScript (le 24/10/2026, avec la version industrielle), dont 135 pour le serveur (`serveur/serveur.tests.js`) ; à la date des sessions, 133 pour le serveur : 67 tests d'origine (signature, rejeu, injection, débit, simulation de la flotte), 50 ajoutés le 23/10/2026 pour les comptes, les rôles, l'empreinte des jetons, la minimisation de la position (base, API, historique, registre du mode démo), la purge, la migration d'une ancienne base et HTTPS (avec un certificat temporaire fabriqué par le test), et 16 ajoutés le 24/10/2026 pour la connexion par mot de passe et les sessions (expiration en « avançant l'horloge » du test, déconnexion, limite de 3 sessions, blocage d'IP après des mots de passe faux, connexion à travers TLS).
 
 Les limites qui restent (sessions en mémoire, jeton lisible par un script de la page, pas de second facteur, secrets de démonstration publics, certificat auto-signé, limitation de débit en mémoire, liaison supposée) sont au § 6.14.
+
+### 5.7 Version industrielle : sécurité du réseau de l'entrepôt
+
+**Contexte.** Les pneus de 8 chariots élévateurs portent des capteurs TPMS ; 3 passerelles au plafond écoutent leurs annonces et les publient en MQTT jusqu'au serveur de supervision, à travers un réseau découpé en zones (conception : `orientation-industrielle.md` ; maquette : `entrepot/README.md`). Le principe est la **défense en profondeur** : chaque couche suppose que la précédente peut tomber.
+
+| Couche | Mesure | Contre | Implémentation | Paramètres |
+|---|---|---|---|---|
+| Réseau | **Zones et conduits** (IEC 62443) : un pare-feu est le seul passage entre l'atelier (OT), les serveurs, la bureautique et la DMZ | S24, S25 (en partie) | `entrepot/pare-feu/regles.nft` (nftables) ; dans la maquette, chaque conteneur n'a qu'une route « 10.10.0.0/16 via le pare-feu » | Politique « tout refusé » ; 5 conduits numérotés (passerelles → courtier 8883/TCP, → NTP 123/UDP, → syslog 514/UDP ; bureautique → supervision 8443/TCP ; DMZ → supervision, prévu) ; refus comptés par sens (`nft list ruleset`) |
+| Courtier | **TLS mutuel** : le courtier et chaque client prouvent leur identité par un certificat signé par l'AC de l'usine | S25, S27 | `entrepot/courtier/mosquitto.conf`, `entrepot/generer-certificats.js` (clés ECDSA P-256), `entrepot/mqtt.js` côté passerelles | Port 8883 seulement, TLS 1.2 minimum, `require_certificate true`, `allow_anonymous false` ; un certificat par passerelle |
+| Courtier | **Droits par sujet** (ACL) : l'identité du certificat décide de ce qu'on peut publier ou lire | S26, S31 | `entrepot/courtier/acl`, `use_identity_as_username true` | `passerelle-N` n'écrit que sous `entrepot/+/passerelle/N/#` ; la supervision ne fait que lire |
+| Serveur | **Contrôle des lots** : sujet = contenu, champs, types, tailles, dates | S26, S28, S31 | `TPMS.creerReceptionLots` (`entrepot/reception.js`), utilisée par `serveur/chariots.js` | ≤ 2 000 annonces par lot ; trame = 36 caractères hexadécimaux ; RSSI entre −120 et 0 dBm ; date au plus 60 s dans le futur et 2 h dans le passé |
+| Serveur | **Liste blanche et vraisemblance**, les mêmes que sur le boîtier du vélo | S26 | `logique/trame.js`, `logique/securite.js` ; registre `serveur/capteurs-chariots.json` | Capteur absent du registre : ignoré, refus noté (un par minute et par passerelle) ; plage 0-13 bar ; saut brusque à confirmer par 3 trames |
+| Heure | **NTP** de l'usine : les passerelles datent les annonces à la réception | S28 | `entrepot/ntp/` (chrony), client SNTP dans `entrepot/reseau.js` | Réglage au démarrage puis toutes les 10 min ; écart affiché dans la supervision ; alerte au journal au-delà de 2 s |
+| Continuité | **Testament** MQTT, **stocker puis transmettre**, QoS 1 | S29 | `entrepot/passerelle.js` | « hors ligne » retenu publié par le courtier si la passerelle disparaît ; 1 h de lots gardés ; reconnexion 1, 2, 4… 30 s |
+| Traçabilité | **Journal central** syslog | S24 à S31 | `entrepot/syslog/`, `entrepot/reseau.js` | Format RFC 5424 ; démarrages, heure NTP, connexions, pertes de connexion, lots rattrapés |
+| Serveur web | **Fichiers interdits** | S30 | `cheminInterdit` (`serveur/serveur.js`) | `serveur/`, fichiers cachés, `entrepot/certificats`, `donnees`, `journaux`, extensions `.cle .key .db .sqlite .srl .csr` ; comparaison en minuscules |
+
+**Résultats mesurés sur la maquette** (`node entrepot/demonstration.js`, 24/10/2026) : **13 essais sur 13 conformes**.
+
+| Essai | Résultat |
+|---|---|
+| Balayage `nmap` d'une passerelle depuis un poste de bureau (S24) | 4 ports « filtered », +4 au compteur « REFUS bureautique vers OT » |
+| Le poste vise le courtier ; l'intrus de l'atelier vise la supervision (S24) | bloqués par le pare-feu, compteurs « REFUS bureautique vers courtier » et « REFUS OT vers supervision » |
+| Le poste réclame la clé privée du courtier à la supervision (S30) | 403, même en changeant les majuscules |
+| Connexion au courtier sans certificat, puis avec un certificat d'une AC pirate (S25) | refusées : alertes TLS 116 « certificat exigé » et 48 « AC inconnue » |
+| Certificat volé de la passerelle 1, publié sur le sujet de la 2 (S26) | jeté par le courtier : la supervision, à l'écoute, ne reçoit rien |
+| Certificat volé : lot « de la passerelle 2 » sur le sujet de la 1, capteur inconnu, pneu à 20 bar, annonces vieilles de 3 h (S26, S28) | rejetés par le serveur ; la pression affichée reste la vraie (8,41 bar) |
+| Passerelle 2 arrêtée net (S29) | « hors ligne » sur la supervision en moins d'une seconde |
+| Courtier arrêté 30 s (S29) | les 3 passerelles annoncent « 2 à 3 lot(s) à rattraper » et les envoient : aucune mesure perdue |
+
+Les essais avec le certificat volé montrent pourquoi le serveur refait des contrôles alors que le courtier authentifie déjà les passerelles : une identité valide ne prouve pas que le contenu est vrai. C'est la même idée que sur le boîtier du vélo (§ 5.2), qui ne fait pas confiance aux trames qu'il reçoit.
 
 ---
 
@@ -605,7 +689,22 @@ Le serveur de flotte est une démonstration. Trois limites de la première versi
 | **Limitation de débit en mémoire** (S19) | Remise à zéro à chaque redémarrage ; ne vaut que pour un seul serveur ; n'arrête pas une attaque venant de milliers d'adresses | Limitation partagée entre serveurs, protection anti-DDoS de l'hébergeur |
 | **Liaison boîtier → serveur supposée** | Le boîtier réel n'a pas de modem | Passerelle dans chaque station ou module LTE-M ; le format des lots ne dépend pas de ce choix |
 
-### 6.15 Hors périmètre
+### 6.15 Version industrielle : limites de la maquette réseau (S24 à S31)
+
+**Défaut trouvé et corrigé : la clé privée du courtier était téléchargeable (S30).** Le serveur de supervision sert les fichiers du dépôt (la page et ses scripts). Dans la maquette, le dépôt est monté en entier dans le conteneur, certificats compris : `https://localhost:8443/entrepot/certificats/courtier.cle` répondait 200. Le défaut a été vu en préparant la page des chariots, puis confirmé par une requête. Correction (commit 1d64634) : dossiers de secrets, de données et de journaux interdits, ainsi que toute extension de clé ou de base ; comparaison en **minuscules**, car le dossier monté vient du disque Windows, qui ne distingue pas la casse (`/Entrepot/journaux/central.log` passait aussi, et `/Serveur/cles-demo.json` sur un serveur lancé sous Windows). Deux tests et un essai de la démonstration le vérifient. Le port n'étant publié que sur 127.0.0.1, la clé n'a pas quitté le PC. **Leçon** : en production, le serveur web ne doit voir que les fichiers publics (un dossier à part), jamais le dépôt entier ; et les secrets doivent vivre ailleurs (coffre à secrets, droits du système).
+
+| Limite | Risque | En production |
+|---|---|---|
+| **Pas de révocation des certificats** (S26) | Une passerelle volée garde un certificat valable un an : avec lui, l'intrus peut publier des valeurs **plausibles** pour les capteurs à portée de cette passerelle (les ACL et les contrôles ne voient rien d'anormal), jusqu'à ce qu'on remplace l'AC | Liste de révocation (CRL) ou OCSP sur le courtier ; certificats courts renouvelés automatiquement ; clé privée dans un composant sécurisé de la passerelle (TPM, élément sécurisé) ; boîtier de passerelle avec contact d'ouverture ; le serveur pourrait aussi comparer les passerelles entre elles (une annonce entendue par une seule passerelle alors que deux devraient l'entendre) |
+| **Clé de l'AC sur le PC** | Qui la lit fabrique des certificats acceptés partout | AC hors ligne, clé dans un module matériel (HSM) ou un coffre ; AC intermédiaire pour signer les passerelles |
+| **NTP non authentifié** (S28) | Un intrus sur le réseau qui répond à la place du serveur NTP peut décaler l'heure des passerelles | NTS (NTP sécurisé, RFC 8915), que chrony sait faire ; et le serveur compare l'heure des lots à la sienne (déjà fait : ±60 s / 2 h) |
+| **Pas de limite de débit par client MQTT** (S31) | Une passerelle compromise peut saturer le courtier | Réglages de Mosquitto (`max_inflight_messages`, `message_size_limit`, `max_queued_messages`), alerte quand une passerelle publie beaucoup plus que d'habitude |
+| **MQTT 3.1.1 ne signale pas un refus de publication** | Un refus des ACL est silencieux : seul le contrôle par abonnement le prouve (essai 7), et une passerelle mal configurée ne le saurait pas | MQTT 5 renvoie un code de refus dans l'accusé de réception |
+| **Toutes les zones sur un seul PC** | La maquette reproduit le découpage et le filtrage, pas l'isolation physique : une faille de Docker ou du noyau traverserait toutes les zones | Vrais VLAN sur un commutateur administrable, pare-feu matériel ; plan refait dans Packet Tracer pour le montrer |
+| **Brouillage radio dans l'entrepôt** (S5, S29) | Un brouilleur 2,4 GHz rend les capteurs muets | Inévitable (c'est physique) ; il se voit : « capteur perdu » après 10 min, sur tous les chariots d'une zone à la fois |
+| **La zone d'un chariot est approchée** | La zone vient de la passerelle qui l'entend le mieux : si une passerelle est coupée, ses chariots sont attribués à la zone voisine | Une passerelle de plus par zone, ou des balises fixes ; la page l'indique quand une passerelle est hors ligne |
+
+### 6.16 Hors périmètre
 
 - **Accès physique au boîtier** : lecture de la mémoire du microcontrôleur pour en extraire les clés d'appairage. Non traité. Cet accès est facile : le boîtier s'enlève **sans outil** de son collier de cintre (glissière à cran, `boitier-3d/README.md`), comme un compteur GPS, pour être rechargé ; un voleur peut donc l'emporter en quelques secondes (seul le collier reste vissé sur le vélo). La notice conseillera de retirer le boîtier quand le vélo est garé dans un lieu public. Un boîtier perdu ou volé doit être supprimé des appareils appairés du téléphone.
 - **Téléphone compromis** : hors de notre contrôle. Il ne peut cependant plus couper une protection ni changer de capteur sans un appui long sur le bouton 2 du boîtier (§ 6.13).

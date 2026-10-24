@@ -6,7 +6,7 @@
 |---|---|
 | **Diplôme** | BTS Cybersécurité, Informatique et réseaux, Électronique (CIEL), option IR (Informatique et Réseaux) |
 | **Épreuve** | E6 « Valorisation de la donnée et cybersécurité » |
-| **Projet** | Kit de surveillance de la pression des pneus de vélo (capteurs TPMS BLE, boîtier de guidon à écran e-paper, application Web Bluetooth) et son logiciel de simulation complète |
+| **Projet** | Surveillance de la pression des pneus par capteurs TPMS BLE : flotte de chariots élévateurs d'un entrepôt (passerelles BLE → MQTT, réseau d'usine segmenté, supervision), avec un kit vélo comme démonstrateur (boîtier de guidon à écran e-paper, application Web Bluetooth) et un logiciel de simulation complète |
 | **Candidat** | Thibault MORRETTON – projet réalisé seul |
 | **Établissement** | [Établissement] |
 | **Professeur référent** | [Professeur référent] |
@@ -15,6 +15,7 @@
 | **Dépôt du projet** | github.com/titilyonnais/tpms-velo |
 | **Simulateur en ligne** | https://titilyonnais.github.io/tpms-velo/simulateur/ |
 | **Application en ligne** | https://titilyonnais.github.io/tpms-velo/app/ |
+| **Supervision de l'entrepôt (démo)** | https://titilyonnais.github.io/tpms-velo/flotte/chariots.html |
 | **Supervision de flotte (démo)** | https://titilyonnais.github.io/tpms-velo/flotte/ |
 
 <br>
@@ -45,7 +46,10 @@
 8. [Tests et validation](#8-tests-et-validation)
    - [8.1 Les tests automatiques et l'intégration continue](#81-les-tests-automatiques)
 9. [Gestion de projet](#9-gestion-de-projet)
-10. [Bilan et perspectives](#10-bilan-et-perspectives)
+10. [Version industrielle : l'entrepôt et son réseau](#10-version-industrielle--lentrepôt-et-son-réseau)
+   - [10.6 La démonstration de sécurité du réseau](#106-la-démonstration-de-sécurité-du-réseau)
+   - [10.7 Une faille trouvée dans ma propre maquette](#107-une-faille-trouvée-dans-ma-propre-maquette)
+11. [Bilan et perspectives](#11-bilan-et-perspectives)
 - [Annexe A – Glossaire](#annexe-a--glossaire)
 - [Annexe B – Documents du dépôt et liens](#annexe-b--documents-du-dépôt-et-liens)
 - [Annexe C – Commandes utiles](#annexe-c--commandes-utiles)
@@ -107,7 +111,14 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
 | Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture par mot de passe et sessions qui expirent, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
 | Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Version 2 : modèle paramétré de 10 pièces, avec un évent à membrane pour le baromètre, rendu, contrôlé (aucune interférence aux cotes nominales), STL prêts ; pas encore imprimé |
-| Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique |
+| Version industrielle : passerelles BLE → MQTT, réception par le serveur, maquette réseau Docker, supervision de l'entrepôt | `entrepot/`, `flotte/chariots.html` | Terminée le 24/10/2026, testée (47 tests) ; maquette lancée sur mon PC, 13 essais de sécurité sur 13 conformes ; supervision en ligne en mode démo |
+| Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique, orientation industrielle |
+
+### 1.7 L'adaptation industrielle
+
+En présentant le projet, un de mes professeurs l'a jugé **pas assez industriel** et trop pauvre en **réseau** : le seul réseau était la liaison Bluetooth entre les capteurs et le boîtier. J'ai gardé tout ce qui existait et je lui ai donné un contexte industriel : la **surveillance des pneus gonflables d'une flotte de chariots élévateurs** dans un entrepôt. Un pneu de chariot sous-gonflé rend la machine instable, surtout charge levée : c'est d'abord une question de **sécurité au travail**.
+
+Le système devient une vraie chaîne de collecte industrielle : capteurs TPMS sur les pneus, **passerelles** au plafond qui écoutent les capteurs en Bluetooth et publient leurs trames en **MQTT sur TLS**, **réseau d'usine découpé en zones** par un pare-feu (atelier, serveurs, bureautique, DMZ), serveurs **NTP** et **syslog**, et **supervision** de la flotte. Le kit vélo devient le **démonstrateur** à petite échelle : mêmes capteurs, même logique, même cybersécurité. Le chapitre 10 décrit cette version ; la conception est dans `docs/orientation-industrielle.md`.
 
 ---
 
@@ -1012,6 +1023,8 @@ Hypothèse réaliste : l'attaquant dispose d'une carte ESP32 ou nRF52 à quelque
 | S14 | Inondation d'annonces | Des centaines d'annonces par seconde à adresses aléatoires, pour occuper la radio |
 | S15 | Effacement des traces | Modifier ou supprimer les lignes du journal qui décrivent une attaque |
 
+Les scénarios S16 à S23 visent le serveur de flotte (§ 6.13), et S24 à S31 le réseau de l'entrepôt (chapitre 10, § 10.6).
+
 ### 6.5 Évaluation : matrice gravité × vraisemblance
 
 Échelles à 4 niveaux. **Gravité** : 1 mineure, 2 significative (information fausse ou absente mais **signalée**), 3 grave (information fausse **non signalée**, ou réglages modifiés par un tiers), 4 critique (atteinte directe à la sécurité physique). **Vraisemblance** : 1 peu vraisemblable, 2 vraisemblable, 3 très vraisemblable (matériel à quelques euros et tutoriels publics), 4 quasi certain. Niveau = G × V : faible de 1 à 3, moyen de 4 à 6, élevé de 8 à 16.
@@ -1410,7 +1423,7 @@ Les valeurs mesurées remplaceront les hypothèses de `logique/energie.js` ; le 
 
 ### 8.1 Les tests automatiques
 
-Le dépôt contient **668 tests JavaScript en 7 suites** et **136 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
+Le dépôt contient **717 tests JavaScript en 8 suites** et **136 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte, puis 49 tests JavaScript pour la version industrielle). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
 
 | Suite | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|---|
@@ -1420,8 +1433,9 @@ Le dépôt contient **668 tests JavaScript en 7 suites** et **136 tests C++**, t
 | Radio | `radio.tests.js` | 62 | Affaiblissement et portée, masquage par la jante, paquets sur les canaux 37/38/39, fenêtre d'écoute, collisions |
 | Électronique | `electronique.tests.js` | 86 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près ; boutons sur D5 (SW2 à ≈ 0,48 V à travers R12), coupure de la recharge par U4 et Q3, relâchée d'elle-même carte éteinte (R11) |
 | Monde complet | `moteur.tests.js` | 45 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 ; baromètre avec évent, sans évent et absent ; recharge par grand froid dehors, puis à la maison |
-| Serveur de flotte | `serveur/serveur.tests.js` | 133 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; connexion par mot de passe (compte inconnu traité comme un mot de passe faux), sessions qui expirent (15 min d'inactivité, 8 h au plus, 3 par compte), vraie déconnexion, rôles ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) |
-| **Total JavaScript** | | **668** | |
+| Serveur de flotte | `serveur/serveur.tests.js` | 135 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; connexion par mot de passe (compte inconnu traité comme un mot de passe faux), sessions qui expirent (15 min d'inactivité, 8 h au plus, 3 par compte), vraie déconnexion, rôles ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) ; certificats, clés et journaux de l'entrepôt jamais servis, même en majuscules |
+| Version industrielle | `entrepot/entrepot.tests.js` | 47 | Client MQTT octet par octet (longueur restante, CONNECT, PUBLISH, SUBSCRIBE, testament) et contre un faux courtier ; SNTP et syslog ; entrepôt simulé (zones, fuites, regonflage du matin, nuit aux quais, portée radio) ; réception des lots : zone de la meilleure réception, dédoublonnage, une mesure par minute, lots piégés (sujet ≠ contenu, futur, rejeu, injection), liste blanche, vraisemblance, crevaison, testament ; logique de réception seule (comme dans le navigateur) ; API des chariots réservée aux sessions |
+| **Total JavaScript** | | **717** | |
 
 **Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **136 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
 
@@ -1504,7 +1518,7 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
 | ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7), évent à membrane compris ; non vérifiables avant l'impression et l'essai |
-| ENF-08 à ENF-11 (logiciel) | Vérifiées (668 tests JavaScript, 136 tests C++, lancés à chaque envoi de code ; aucune installation) |
+| ENF-08 à ENF-11 (logiciel) | Vérifiées (717 tests JavaScript, 136 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
 | ENF-31 (confirmation par bouton) | Vérifiée par 20 tests JavaScript et 11 tests C++ ; à essayer avec la vraie radio et Bluefy |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
@@ -1585,6 +1599,7 @@ Le dépôt est public sur GitHub (`titilyonnais/tpms-velo`). **GitHub Pages** pu
 - simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
 - application : https://titilyonnais.github.io/tpms-velo/app/
 - supervision de flotte (mode démo) : https://titilyonnais.github.io/tpms-velo/flotte/
+- supervision de l'entrepôt (mode démo) : https://titilyonnais.github.io/tpms-velo/flotte/chariots.html
 
 J'ai désactivé le traitement Jekyll de GitHub Pages pour que les fichiers soient servis tels quels. Depuis le 23/10/2026, **GitHub Actions** lance tous les tests à chaque envoi de code (§ 8.1) : chaque commit porte la preuve que les tests passaient à ce moment-là.
 
@@ -1618,8 +1633,14 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 24/10, 02:07 | `25897c9` | Confirmation par bouton des changements sensibles (couper une protection, changer de capteur) ; bit 3 de MESURES |
 | 03:00 | `f15b7e5` | Baromètre BMP280 : correction d'altitude, recharge coupée par grand froid, écran sans fil BUSY, deux boutons sur une broche, évent du boîtier 3D, schéma en révision C |
 | 03:09 | `46158e7` | Mode flotte : connexion par mot de passe et sessions qui expirent ; 668 tests JavaScript et 136 tests C++ |
+| 13:11 | `571e248` | Page d'accueil du site GitHub Pages (l'adresse racine donnait 404) |
+| 13:15 | `5a136bc` | **Orientation industrielle** : flotte de chariots élévateurs et infrastructure réseau (document de conception) |
+| 13:24 – 13:29 | `b33a16a`, `70003a5` | Client MQTT écrit à la main, entrepôt simulé, passerelles BLE → MQTT ; réception des trames par le serveur |
+| 14:33 | `23f17fe` | Maquette Docker du réseau : pare-feu nftables, courtier TLS mutuel, NTP, syslog |
+| 14:39 – 14:44 | `0d70b19`, `1d64634` | Démonstration des essais de sécurité ; faille trouvée et corrigée (clé privée du courtier servie par la supervision) |
+| 14:51 | `e7074be` | Supervision de l'entrepôt (`flotte/chariots.html`) et logique de réception partagée ; 717 tests JavaScript |
 
-À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 668 aujourd'hui, auxquels s'ajoutent 136 tests C++.
+À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 717 aujourd'hui, auxquels s'ajoutent 136 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1657,23 +1678,154 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 
 ---
 
-## 10. Bilan et perspectives
+## 10. Version industrielle : l'entrepôt et son réseau
 
-### 10.1 Bilan
+### 10.1 Pourquoi cette version
+
+Le chapitre 1.7 explique la remarque de mon professeur. Je n'ai pas changé de projet : la logique, la cybersécurité et le simulateur restent les mêmes. J'ai ajouté ce qui manquait pour un système **industriel** : plusieurs véhicules, une collecte automatique des données, un **réseau d'entreprise** avec ses zones, ses serveurs et ses règles de filtrage, et une supervision.
+
+| Existant (vélo) | Dans la version industrielle |
+|---|---|
+| Capteurs TPMS BLE de vélo | Capteurs « poids lourd » (0 à 13 bar) sur les pneus des chariots, même principe et même trame ; ceux du vélo pour le démonstrateur |
+| Boîtier de guidon | Afficheur embarqué du cariste (pressions, alertes) |
+| Logique (trame, vraisemblance, alertes, fuite) | **Réutilisée telle quelle** par le serveur et la page de supervision |
+| Serveur de flotte (vélos de location) | Le même serveur reçoit aussi les chariots, par MQTT |
+| Simulateur | Un entrepôt simulé : 8 chariots, 32 pneus, 3 zones |
+
+### 10.2 L'architecture
+
+```
+ Capteurs TPMS (4 par chariot)
+        │ annonces Bluetooth (BLE), en clair
+        ▼
+ Passerelles 1, 2, 3 (plafond, une par zone)        VLAN 10 · OT atelier
+        │ MQTT sur TLS 8883, un certificat par passerelle
+        ▼
+ ┌──────────────── Pare-feu (nftables, « tout refusé ») ────────────────┐
+        ▼
+ Courtier MQTT · supervision · NTP · syslog          VLAN 20 · serveurs
+        ▲
+        │ HTTPS 8443, avec un compte
+ Poste du responsable de maintenance                VLAN 30 · bureautique
+ (accès distant prévu)                              VLAN 40 · DMZ
+```
+
+Chaque passerelle écoute les annonces des capteurs des chariots qui passent à sa portée (environ 24 m dans un entrepôt plein de racks métalliques, hypothèse à mesurer), en fait un **lot toutes les 10 s** et le publie au **courtier MQTT**. Le serveur de supervision est abonné au courtier : il décode les trames, applique les contrôles et range les mesures. La passerelle qui entend le mieux un chariot donne **la zone où il se trouve** (quais, allées de stockage, cour).
+
+**Plan d'adressage** : VLAN 10 OT 10.10.10.0/24 (passerelles .11 à .13), VLAN 20 serveurs 10.10.20.0/24 (courtier .10, supervision .20, NTP .30, syslog .40), VLAN 30 bureautique 10.10.30.0/24 (poste .50), VLAN 40 DMZ 10.10.40.0/24 ; le pare-feu est en .254 dans chaque réseau.
+
+**Matrice des flux** (tout le reste est refusé) :
+
+| # | Source | Destination | Port | Pourquoi |
+|---|---|---|---|---|
+| 1 | Passerelles | Courtier | 8883/TCP (MQTT sur TLS) | Remontée des trames |
+| 2 | Passerelles | NTP | 123/UDP | Heure exacte : horodatage, anti-rejeu, validité des certificats |
+| 3 | Passerelles | Syslog | 514/UDP | Journal centralisé |
+| 4 | Bureautique | Supervision | 8443/TCP (HTTPS) | Page de supervision, avec un compte |
+| 5 | DMZ | Supervision | 8443/TCP | Maintenance à distance (prévu) |
+
+Ce découpage suit la logique de la norme **IEC 62443** (cybersécurité des systèmes industriels) : on regroupe les équipements de même niveau de confiance dans des **zones** et on n'ouvre entre elles que des **conduits** explicites. La zone bureautique, où arrivent les courriels piégés, ne doit jamais pouvoir joindre l'atelier.
+
+### 10.3 MQTT, écrit à la main
+
+MQTT est le protocole de messagerie le plus utilisé dans l'IoT industriel : les passerelles **publient** sur des sujets (`entrepot/lyon/passerelle/2/trames`), le serveur s'**abonne** (`entrepot/#`) et le **courtier** fait le lien. J'ai écrit le client MQTT 3.1.1 **sans bibliothèque** (`entrepot/mqtt.js`, environ 290 lignes) pour pouvoir l'expliquer octet par octet : en-tête fixe, « longueur restante » codée sur 1 à 4 octets, paquets CONNECT, PUBLISH, PUBACK, SUBSCRIBE. Les tests comparent mes paquets aux exemples de la norme.
+
+Trois mécanismes de MQTT servent directement la fiabilité :
+
+- **QoS 1** : le courtier accuse réception de chaque lot (PUBACK) ; tant qu'il ne l'a pas fait, la passerelle garde le lot ;
+- **stocker puis transmettre** (dans ma passerelle) : si le courtier est injoignable, la passerelle garde jusqu'à **1 h de lots** et les envoie au retour ;
+- **testament** (*last will*) : à la connexion, la passerelle confie au courtier un message « hors ligne » ; si elle disparaît sans prévenir (panne, câble arraché), le courtier le publie à sa place. La supervision sait donc qu'elle ne reçoit plus rien, au lieu d'afficher de vieilles valeurs comme si tout allait bien.
+
+Les passerelles règlent leur heure sur le serveur **NTP** de l'usine (client SNTP de `entrepot/reseau.js`), datent les annonces à la réception, et racontent ce qu'elles font au **journal central** (syslog, format RFC 5424).
+
+### 10.4 Le serveur reçoit les trames : la même logique, une quatrième fois
+
+La réception des lots est une **logique pure** (`entrepot/reception.js`), sans base de données, comme le reste de `logique/`. Pour chaque lot, elle vérifie que le contenu correspond au sujet MQTT (la passerelle 1 ne peut pas parler au nom de la 2), contrôle les champs, les tailles et les dates, puis décode chaque trame avec **`logique/trame.js`** et applique la **liste blanche** et le **contrôle de vraisemblance** de **`logique/securite.js`**, exactement comme le boîtier du vélo. Une annonce entendue par deux passerelles n'est comptée qu'une fois ; une seule mesure par pneu et par minute est gardée en base.
+
+La même logique sert donc maintenant à **quatre** endroits : le boîtier (traduite en C++), l'application, le serveur (`serveur/chariots.js` enregistre en SQLite ce qu'elle signale) et la page de supervision en mode démo, qui simule l'entrepôt dans le navigateur et fait passer ses lots par la même réception.
+
+### 10.5 La maquette : tout le réseau sur un PC
+
+Je n'ai ni commutateur administrable ni pare-feu matériel. J'ai donc reproduit l'infrastructure avec **Docker** : un réseau Docker par VLAN et un conteneur par machine (`entrepot/docker-compose.yml`). Une seule commande lance tout :
+
+| Conteneur | Rôle |
+|---|---|
+| `pare-feu` | Alpine Linux + **nftables**, relié aux 4 réseaux ; politique « tout refusé », les 5 conduits, un **compteur** sur chaque règle |
+| `courtier` | **Mosquitto** : port 8883 en TLS seulement, certificat client obligatoire, droits par sujet (ACL) |
+| `supervision` | Mon serveur Node.js, abonné au courtier, page en HTTPS |
+| `ntp`, `syslog` | chrony et rsyslog |
+| `passerelle-1` à `-3` | Mes passerelles (`entrepot/passerelle.js`) |
+| `poste` | Un poste de bureau avec `curl`, `nmap`, `openssl` |
+| `monde` | La simulation de l'entrepôt, qui « émet » les annonces Bluetooth sur un réseau à part (la radio) |
+| `intrus` | Une machine pirate branchée sur l'atelier, pour la démonstration |
+
+Les certificats (une autorité de certification de l'usine, un certificat par passerelle, plus une « AC pirate » pour les essais) sont fabriqués par `entrepot/generer-certificats.js` avec openssl ; les clés privées ne vont jamais dans Git.
+
+La maquette m'a appris plusieurs choses sur le fonctionnement réel des réseaux, que je n'aurais pas vues en théorie (détails dans `entrepot/README.md`) :
+
+- un réseau Docker « interne » jette tout paquet destiné à un autre réseau, même confié à un routeur : j'ai utilisé des réseaux ordinaires et supprimé la route par défaut de chaque conteneur ;
+- Docker **masque** l'adresse source des paquets qui quittent un réseau : un paquet routé par mon pare-feu arrivait à la supervision avec l'adresse de l'hôte, et la réponse se perdait. Je l'ai trouvé avec `tcpdump` et la trace de nftables (`nft monitor trace`), puis désactivé le masquage ;
+- pour que mon PC joigne la supervision, le pare-feu fait une **traduction d'adresse** (DNAT, puis masquage de la source pour que la réponse revienne par lui).
+
+### 10.6 La démonstration de sécurité du réseau
+
+`node entrepot/demonstration.js` enchaîne **13 essais** commentés sur la maquette. Chaque essai dit ce qui est tenté, ce qu'on attend et d'où vient la preuve (compteurs du pare-feu, réponse du courtier, compteurs du serveur, journal central). Résultat du 24/10/2026 : **13 sur 13 conformes**.
+
+| Couche | Essai | Résultat |
+|---|---|---|
+| Pare-feu | Balayage `nmap` d'une passerelle depuis un poste de bureau | 4 ports « filtered », +4 au compteur « REFUS bureautique vers OT » |
+| Pare-feu | Le poste vise le courtier ; l'intrus de l'atelier vise la supervision | Bloqués, comptés |
+| Serveur web | Le poste réclame la clé privée du courtier | 403 (voir § 10.7) |
+| Courtier | Connexion sans certificat ; certificat d'une AC pirate | Refusées (alertes TLS 116 et 48) |
+| Courtier | Certificat **volé** de la passerelle 1, publié au nom de la 2 | Jeté par les droits ACL : la supervision n'a rien reçu |
+| Serveur | Certificat volé : lot incohérent, capteur inconnu, pneu à 20 bar, annonces vieilles de 3 h | Tous rejetés ; la pression affichée reste la vraie (8,41 bar) |
+| Continuité | La passerelle 2 s'arrête net | « Hors ligne » sur la supervision en moins d'une seconde (testament) |
+| Continuité | Le courtier est arrêté 30 s | Les passerelles gardent leurs lots et les rattrapent : aucune mesure perdue |
+
+Les essais avec le **certificat volé** sont les plus importants : ils montrent la **défense en profondeur**. Une identité valide ne prouve pas que le contenu est vrai ; le serveur refait donc les contrôles du boîtier, comme le boîtier du vélo ne fait pas confiance aux trames qu'il reçoit (§ 6.6). L'analyse de risques ajoute 8 scénarios pour le réseau (S24 à S31) : aucun ne reste élevé après les mesures, deux restent moyens (dénis de service).
+
+### 10.7 Une faille trouvée dans ma propre maquette
+
+En préparant la page de supervision des chariots, j'ai remarqué que mon serveur sert les fichiers du dépôt (la page et ses scripts), et que dans la maquette le dépôt est monté **en entier** dans le conteneur, certificats compris. J'ai essayé : `https://localhost:8443/entrepot/certificats/courtier.cle` répondait **200** et donnait la **clé privée du courtier**. Avec elle, un attaquant pourrait se faire passer pour le courtier auprès des passerelles.
+
+J'ai corrigé : le serveur refuse les dossiers de certificats, de données et de journaux, et toute extension de clé ou de base. En vérifiant, j'ai trouvé un second défaut : le dossier monté vient du disque Windows, qui ne distingue pas les majuscules, et `/Entrepot/journaux/central.log` passait encore. La comparaison se fait maintenant en minuscules. Deux tests et un essai de la démonstration le vérifient. Le port de la maquette n'étant ouvert que sur mon PC (127.0.0.1), la clé n'en est pas sortie.
+
+La leçon : **les secrets ne doivent jamais être rangés là où un serveur web peut les lire**. En production, le serveur ne verrait qu'un dossier de fichiers publics, et les clés seraient dans un coffre à secrets.
+
+### 10.8 La supervision de l'entrepôt
+
+La page `flotte/chariots.html` montre le plan de l'entrepôt (zones, passerelles et leur portée, chariots rangés dans leur zone), les pressions des 32 pneus, les courbes d'un chariot, l'état des passerelles (en ligne, écart d'horloge NTP, lots reçus), les alertes, le schéma des zones et conduits, et ce que le serveur a rejeté. Elle a deux modes, comme la page des vélos :
+
+- **avec le serveur** (la maquette) : connexion par compte, données réelles reçues par MQTT, journal des refus pour le gestionnaire ;
+- **sans serveur** (GitHub Pages) : l'entrepôt est simulé dans le navigateur ; un **banc d'essai** envoie des lots piégés à la même logique de réception, et un bouton coupe la passerelle 2 pour voir son testament.
+
+### 10.9 Limites
+
+- La maquette reproduit le **découpage** et le **filtrage**, mais toutes les zones tournent sur le même PC : elle ne remplace ni un vrai commutateur ni un vrai pare-feu. Le même plan peut être refait dans Packet Tracer.
+- Une passerelle volée garde un certificat valable tant qu'on ne le révoque pas : il faudrait une liste de révocation et une clé protégée dans la passerelle.
+- Le NTP n'est pas authentifié (NTS le permettrait) ; le courtier n'a pas de limite de débit par client.
+- Les capteurs « poids lourd », le format de leurs trames, la portée Bluetooth réelle dans un entrepôt et les pressions des chariots sont des **hypothèses**.
+
+---
+
+## 11. Bilan et perspectives
+
+### 11.1 Bilan
 
 | Objectif | Résultat |
 |---|---|
 | Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique (révision C, avec baromètre et coupure de la recharge), firmware, application et boîtier 3D écrits |
-| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 668 tests JavaScript et 136 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 717 tests JavaScript et 136 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Donner au projet une dimension industrielle et réseau | Flotte de chariots élévateurs : passerelles BLE → MQTT (client écrit sans bibliothèque), réseau d'usine en 4 zones derrière un pare-feu nftables, courtier en TLS mutuel avec droits par sujet, NTP, syslog ; maquette Docker de 10 conteneurs lancée en une commande ; supervision de l'entrepôt ; 13 essais de sécurité sur 13 conformes |
 | Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; correction d'altitude par le baromètre, avec la pression « manomètre » pour l'écran et les alertes et la pression du capteur pour l'historique ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
-| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; changements sensibles confirmés par un bouton du boîtier ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes par mot de passe et sessions qui expirent, HTTPS en option ; risques résiduels identifiés et justifiés |
+| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur, 8 pour le réseau de l'entrepôt) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; changements sensibles confirmés par un bouton du boîtier ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes par mot de passe et sessions qui expirent, HTTPS en option ; risques résiduels identifiés et justifiés |
 | Protéger la batterie | Recharge coupée hors de 2 à 43 °C, toujours possible carte éteinte ; vérifiée dans le simulateur |
 | Respecter le RGPD | Kit : données gardées sur le téléphone. Flotte : aucune position gardée pendant une location, mesures et alertes effacées après 30 jours, journal des refus après 6 mois |
 | Autonomie ≥ 1 semaine | 63,7 jours selon le modèle, concordance à 15 % près avec la semaine simulée |
 
-Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu et contrôlé mais pas imprimé. Les pièces ajoutées le 24/10/2026 (baromètre, coupure de la recharge, pastille de l'évent) ne sont ni commandées ni chiffrées. Le serveur de flotte garde des limites de démonstration (sessions en mémoire, pas de second facteur, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
+Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu et contrôlé mais pas imprimé. Les pièces ajoutées le 24/10/2026 (baromètre, coupure de la recharge, pastille de l'évent) ne sont ni commandées ni chiffrées. Le serveur de flotte garde des limites de démonstration (sessions en mémoire, pas de second facteur, certificat auto-signé, secrets de démonstration publics). La maquette réseau tourne sur un seul PC, sans révocation des certificats ni NTP authentifié ; les capteurs « poids lourd » des chariots ne sont pas choisis. Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
 
-### 10.2 Ce que j'ai appris
+### 11.2 Ce que j'ai appris
 
 - **Séparer la logique des sources de données** permet de tester sans matériel, d'accélérer le temps et de partager le même code entre trois programmes.
 - **La sécurité d'un objet connecté dépend de ses composants les plus faibles.** Je ne peux pas rendre les capteurs sûrs ; je peux seulement détecter les comportements anormaux et signaler le doute à l'utilisateur.
@@ -1687,8 +1839,10 @@ Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel ré
 - **Une même mesure peut donner deux grandeurs** : la pression « manomètre » répond à « suis-je assez gonflé ? », la pression du capteur à « est-ce que je perds de l'air ? ». Choisir la mauvaise aurait créé une fausse fuite à chaque descente de col.
 - **Une fonction de plus coûte des broches, et les broches coûtent des compromis** : pour ajouter le baromètre et la coupure de la recharge, j'ai supprimé un fil de l'écran (au prix d'hypothèses à mesurer au froid) et mis deux boutons sur une broche (au prix d'un geste changé pour l'utilisateur).
 - **Une protection d'accès ne vaut que si elle ne peut pas être contournée par une autre commande** : la commande ACQUITTER de l'application aurait pu confirmer à la place du bouton ; c'est un test qui le garantit.
+- **Une identité prouvée ne rend pas le contenu vrai** : même avec le certificat volé d'une passerelle, un pirate ne doit pas pouvoir fausser les pressions. Chaque couche (pare-feu, courtier, serveur) suppose que la précédente peut tomber.
+- **Un réseau se comprend en le faisant marcher** : le masquage d'adresse de Docker, la route de retour d'une redirection de port ou un disque insensible à la casse ne se voient qu'avec une vraie maquette, `tcpdump` et les compteurs du pare-feu.
 
-### 10.3 Les étapes à la réception du matériel
+### 11.3 Les étapes à la réception du matériel
 
 L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/README.md) :
 
@@ -1702,11 +1856,12 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 8. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, de la carte GY-BMP280, du TPS22918, de la pastille ePTFE, et d'un joint 53 × 1,8 NBR 70 si le kit commandé n'en contient pas ; quincaillerie du boîtier (inserts M2, vis M2 et M3, écrou M3).
 9. **Boîtier** (déjà rendu et contrôlé dans OpenSCAD, STL prêts) : mesure des composants et nouveau contrôle d'interférences ; impression de `test_jeux` puis de `essai_joint` pour régler les jeux, puis du boîtier et du collier ; essais d'étanchéité à vide avant d'y mettre l'électronique, puis essai de l'évent (§ 4.7).
 
-### 10.4 Évolutions possibles
+### 11.4 Évolutions possibles
 
 - **Capteurs v2** (§ 6.11) : c'est l'évolution la plus importante, la seule qui corrige le pistage. Elle demande de concevoir nos propres capteurs.
 - **Mode flotte en production** : les comptes, HTTPS, la minimisation de la position, la durée de conservation et, depuis le 24/10/2026, la connexion par mot de passe avec des sessions qui expirent sont faits. Il reste : une clé par boîtier gravée à la fabrication et un coffre à secrets, des sessions partagées entre plusieurs serveurs et qui survivent à un redémarrage, le jeton dans un cookie `HttpOnly`, un second facteur ou l'authentification de l'entreprise (OpenID Connect), un certificat Let's Encrypt, une limitation de débit partagée entre serveurs, et la réalisation de la liaison boîtier → serveur.
 - **Une mesure de température sur la cellule elle-même** : le BMP280 ne mesure que l'air du bas du boîtier, une image de la température de la batterie au repos.
+- **Version industrielle en vrai** : mesurer la portée Bluetooth avec le démonstrateur, choisir des capteurs « poids lourd », installer une vraie passerelle (Raspberry Pi ou ESP32), refaire le plan dans Packet Tracer ou sur un commutateur administrable ; côté sécurité : révocation des certificats, clés des passerelles dans un composant sécurisé, NTS, limite de débit sur le courtier, MQTT 5 (refus de publication signalé).
 
 La confirmation par bouton, la mesure de l'altitude par un baromètre et le refus de la charge par grand froid, qui figuraient dans cette liste, ont été réalisés le 24/10/2026 (§ 6.6, § 5.4 et § 7.8).
 
@@ -1716,6 +1871,8 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 
 | Terme | Définition |
 |---|---|
+| **ACL (droits par sujet)** | Liste des droits du courtier MQTT : pour chaque identité, les sujets qu'elle peut publier ou lire ; tout le reste est interdit |
+| **AC (autorité de certification)** | Entité qui signe les certificats ; un certificat n'est accepté que s'il est signé par une AC de confiance (ici l'AC de l'usine) |
 | **Adresse privée (résoluble)** | Adresse BLE qui change régulièrement ; seul l'appareil qui a la clé reconnaît qu'elle appartient à un appareil connu |
 | **AES-CCM** | Algorithme de chiffrement et d'authentification utilisé par BLE une fois l'appairage fait ; son compteur de paquets empêche le rejeu |
 | **API REST** | Interface d'un serveur où chaque ressource a une adresse (`/api/velos`) et où l'on agit par les méthodes HTTP (GET pour lire, POST pour envoyer) ; ici en JSON |
@@ -1723,7 +1880,12 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | **Appairage, bonding** | Échange de clés entre deux appareils BLE pour chiffrer la liaison ; le *bonding* mémorise ces clés pour les connexions suivantes |
 | **BLE** | Bluetooth Low Energy : version basse consommation du Bluetooth |
 | **BMP280** | Baromètre numérique de Bosch : il mesure la pression de l'air (300 à 1 100 hPa, ±1 hPa) et la température (±1 °C) ; ici sur le bus SPI du boîtier |
+| **Conduit (IEC 62443)** | Flux autorisé entre deux zones du réseau, décrit précisément (source, destination, port, raison) |
+| **Courtier MQTT** | Serveur qui reçoit les messages publiés et les distribue aux abonnés (ici Mosquitto) |
 | **Caractéristique (GATT)** | Valeur exposée par un appareil BLE, que l'on peut lire, écrire ou recevoir en notification |
+| **DMZ** | Zone tampon du réseau, entre l'extérieur et l'intérieur, pour les accès venus d'ailleurs (ici l'accès distant d'un prestataire, prévu) |
+| **DNAT, traduction d'adresse** | Le pare-feu change l'adresse de destination d'un paquet (ici : le port 8443 du pare-feu est redirigé vers la supervision) |
+| **Docker** | Outil qui fait tourner des programmes dans des « conteneurs » isolés, reliés par des réseaux virtuels ; sert ici à simuler toutes les machines de l'usine sur un PC |
 | **dBm** | Puissance en décibels par rapport à 1 mW (0 dBm = 1 mW, −90 dBm = 1 picowatt) |
 | **E-paper** | Écran à papier électronique : il réfléchit la lumière, se lit au soleil et ne consomme rien pour garder une image |
 | **EBIOS Risk Manager** | Méthode d'analyse de risques de l'ANSSI |
@@ -1737,6 +1899,7 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | **Hystérésis** | Écart minimal à franchir avant de changer d'état (affichage, alerte), pour ne pas réagir au bruit |
 | **Injection SQL** | Attaque qui glisse du code SQL dans une donnée envoyée au serveur ; empêchée par les requêtes paramétrées, où la donnée est transmise à part du texte SQL |
 | **Intégration continue** | Lancement automatique des tests à chaque envoi de code (ici GitHub Actions) |
+| **IEC 62443** | Série de normes de cybersécurité des systèmes industriels (zones, conduits, niveaux de sécurité) |
 | **IPX7** | Indice de protection (IEC 60529) : étanche à une immersion temporaire à 1 m pendant 30 min |
 | **Jeton (Bearer)** | Longue suite de caractères aléatoires qui identifie une session ouverte ; il est envoyé dans l'en-tête `Authorization: Bearer <jeton>` de chaque requête |
 | **Joint torique radial** | Joint écrasé entre le fond d'une gorge et une paroi cylindrique, comme celui d'un piston : son écrasement ne dépend pas du serrage des vis |
@@ -1745,13 +1908,19 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | **Little-endian** | Ordre des octets où l'octet de poids faible est transmis en premier |
 | **LiPo** | Batterie lithium-polymère (3,0 à 4,2 V) |
 | **Liste blanche** | Liste des seuls émetteurs acceptés (ici, les adresses des deux capteurs appairés) |
+| **MQTT** | Protocole léger de messagerie par publication et abonnement, très utilisé dans l'IoT industriel ; version 3.1.1 ici |
 | **Manufacturer data** | Champ libre d'une annonce BLE où le fabricant place ses données |
 | **Minimisation (RGPD)** | Principe de l'article 5 du RGPD : ne collecter et ne garder que les données nécessaires au but poursuivi |
 | **MOSFET canal N** | Transistor utilisé ici comme interrupteur commandé par une broche du microcontrôleur |
 | **MTU** | Taille maximale d'un paquet de données BLE ; 23 octets par défaut, soit 20 octets utiles |
+| **nftables** | Le filtre de paquets du noyau Linux, qui remplace iptables ; ici le pare-feu de la maquette |
+| **NTP, SNTP** | Protocole de réglage de l'heure par le réseau ; SNTP en est la version simple utilisée par les petits équipements |
+| **OT** | *Operational Technology* : l'informatique de la production (machines, capteurs, automates), par opposition à l'informatique de bureau (IT) |
 | **OpenSCAD** | Logiciel de CAO 3D où la pièce est décrite par un programme |
+| **Passerelle (BLE → MQTT)** | Petit équipement fixe qui écoute les capteurs en Bluetooth et remonte leurs trames par le réseau filaire |
 | **PETG** | Plastique d'impression 3D qui supporte environ 75–80 °C, contre 55–60 °C pour le PLA |
 | **PRNG, graine** | Générateur de nombres pseudo-aléatoires : il produit toujours la même suite à partir de la même graine, ce qui rend une simulation reproductible |
+| **QoS 1 (MQTT)** | Qualité de service « au moins une fois » : le message est redonné tant que le destinataire n'en a pas accusé réception |
 | **Quarantaine** | Période de 60 s pendant laquelle le boîtier refuse toutes les trames d'une adresse suspecte |
 | **Reed (ILS)** | Interrupteur à lame souple qui se ferme quand un aimant passe devant |
 | **Régression linéaire** | Calcul de la droite qui passe au plus près d'un nuage de points (méthode des moindres carrés) ; sa pente donne la vitesse de perte de pression |
@@ -1761,14 +1930,19 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | **Pression « manomètre »** | Pression relative à l'air réel du lieu, celle que lit le manomètre d'une pompe ; le capteur TPMS, lui, retire une pression fixe de 1 013,25 hPa |
 | **scrypt** | Fonction de hachage volontairement lente et gourmande en mémoire, faite pour stocker les mots de passe : essayer des milliards de mots de passe devient très coûteux |
 | **Session (et jeton de session)** | Période pendant laquelle un compte connecté peut lire l'API sans redonner son mot de passe ; le jeton de session, tiré au hasard, la représente et cesse de valoir à l'expiration ou à la déconnexion |
+| **Syslog** | Protocole d'envoi des journaux d'événements à un serveur central (format RFC 5424) |
 | **SHA-256, empreinte** | Fonction qui résume n'importe quel message en 32 octets ; changer un seul bit du message change toute l'empreinte |
 | **SQLite** | Base de données SQL contenue dans un simple fichier, sans serveur de base séparé |
 | **Shunt** | Résistance de faible valeur placée en série pour mesurer un courant par la tension à ses bornes |
 | **SOC** | *State of charge* : état de charge de la batterie, en % |
 | **System OFF** | Mode de veille le plus profond du nRF52840 (quelques µA) ; le réveil est un redémarrage |
+| **Testament (MQTT)** | Message confié au courtier à la connexion, qu'il publie si le client disparaît sans prévenir |
+| **TLS mutuel** | TLS où le client prouve aussi son identité par un certificat, pas seulement le serveur |
 | **TPMS** | *Tire Pressure Monitoring System* : système de surveillance de la pression des pneus |
 | **Usurpation d'adresse** | Attaque où le pirate émet avec l'identité d'un capteur légitime |
+| **VLAN** | Réseau local virtuel : un découpage logique du réseau, chaque VLAN ne voyant pas les autres sans passer par un routeur ou un pare-feu |
 | **UUID** | Identifiant unique de 128 bits d'un service ou d'une caractéristique BLE |
+| **Zone (IEC 62443)** | Groupe d'équipements de même niveau de confiance, séparé des autres par un filtrage |
 | **Web Bluetooth** | Interface des navigateurs qui permet à une page web de dialoguer avec un appareil BLE |
 
 ## Annexe B – Documents du dépôt et liens
@@ -1778,18 +1952,21 @@ La confirmation par bouton, la mesure de l'altitude par un baromètre et le refu
 | [cahier-des-charges.md](cahier-des-charges.md) | Besoin, exigences avec critères de validation, contraintes, budget, hypothèses |
 | [architecture.md](architecture.md) | Principe logique / sources de données, rôle de chaque fichier, simulateur, portage |
 | [protocole-ble.md](protocole-ble.md) | Service GATT boîtier ↔ application (octet par octet, exemples), format des trames TPMS |
-| [analyse-de-risques.md](analyse-de-risques.md) | Analyse EBIOS RM simplifiée, scénarios S1 à S23 (S16 à S23 : serveur de flotte), mesures, capteurs v2, récit des défauts corrigés, pistage, risques résiduels |
+| [orientation-industrielle.md](orientation-industrielle.md) | Version industrielle : besoin, architecture, plan d'adressage, matrice des flux, sujets MQTT, maquette |
+| [analyse-de-risques.md](analyse-de-risques.md) | Analyse EBIOS RM simplifiée, scénarios S1 à S31 (S16 à S23 : serveur de flotte ; S24 à S31 : réseau de l'entrepôt), mesures, capteurs v2, récit des défauts corrigés, pistage, risques résiduels |
 | [bilan-energetique.md](bilan-energetique.md) | Consommations, journée type, influence des réglages, piles, protocole de mesure |
 | [schema-electrique.md](schema-electrique.md) | Schéma, liaisons broche par broche, nomenclature, calculs justifiés |
 | [../firmware/README.md](../firmware/README.md) | Organisation du firmware, compilation, câblage (dont baromètre, coupure de la recharge et deux boutons sur une broche), composants à ajouter, mise en service, points à vérifier |
 | [../app/README.md](../app/README.md) | Vues et transports de l'application |
 | [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement (HTTP ou HTTPS), connexion par mot de passe et sessions, RGPD, API, format des envois signés, sécurité, limites |
+| [../entrepot/README.md](../entrepot/README.md) | Maquette réseau de l'entrepôt : lancement, conteneurs, démonstration des 13 essais, pièges rencontrés, limites |
 | [../boitier-3d/README.md](../boitier-3d/README.md) | Boîtier 3D : cotes, joint, évent à membrane et berceau du baromètre, impression, quincaillerie, montage, essais d'étanchéité |
 
 En ligne :
 
 - Simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
 - Application : https://titilyonnais.github.io/tpms-velo/app/
+- Supervision de l'entrepôt (mode démo) : https://titilyonnais.github.io/tpms-velo/flotte/chariots.html
 - Supervision de flotte (mode démo) : https://titilyonnais.github.io/tpms-velo/flotte/
 - Format de trame supposé des capteurs : github.com/schlumpf2009/TPMS
 
@@ -1804,15 +1981,19 @@ Références :
 - CNIL, recommandation relative à la journalisation (2021), pour la durée de conservation des journaux de sécurité.
 - IETF, *RFC 6750* (jetons « Bearer ») et *RFC 6797* (HSTS).
 - WeActStudio, plan de l'écran e-paper 1,54″ (dépôt GitHub du fabricant).
+- OASIS, *MQTT Version 3.1.1* (2014).
+- IEC 62443-3-2 (zones et conduits) ; ANSSI, *La cybersécurité des systèmes industriels* (méthode de classification et mesures principales).
+- IETF, *RFC 4330* (SNTP), *RFC 5424* (syslog), *RFC 8915* (NTS).
 
 ## Annexe C – Commandes utiles
 
 Depuis la racine du dépôt (Node.js requis) :
 
 ```
-node simulateur/tests/tout.js              # les 668 tests JavaScript, 7 suites
+node simulateur/tests/tout.js              # les 717 tests JavaScript, 8 suites
 node simulateur/tests/tests.js             # suite « logique et boîtier » (208 tests)
-node serveur/serveur.tests.js              # suite « serveur de flotte » (133 tests)
+node serveur/serveur.tests.js              # suite « serveur de flotte » (135 tests)
+node entrepot/entrepot.tests.js            # suite « version industrielle » (47 tests)
 node docs/schema/genere-schema.js          # régénère docs/schema/schema-boitier.svg
 node serveur/serveur.js                    # serveur de flotte : http://localhost:8080/flotte/ (compte et mot de passe demandés)
 node serveur/flotte-vers-serveur.js        # 20 vélos, 14 jours simulés et envoyés au serveur
@@ -1824,6 +2005,18 @@ node serveur/flotte-vers-serveur.js --https
 ```
 
 Les mots de passe des comptes de démonstration sont donnés dans `serveur/README.md`.
+
+Maquette réseau de l'entrepôt (Docker Desktop, depuis le dossier `entrepot/`) :
+
+```
+node generer-certificats.js                # AC de l'usine et certificats (une fois)
+docker compose up -d --build               # les 10 conteneurs
+docker compose exec pare-feu nft list ruleset   # règles du pare-feu et compteurs
+node demonstration.js                      # les 13 essais de sécurité (≈ 3 min)
+docker compose down                        # tout arrêter
+```
+
+Supervision de la maquette : https://localhost:8443/flotte/chariots.html.
 
 Tests C++ sur PC (avec g++, comme sur GitHub Actions) :
 

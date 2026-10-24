@@ -95,6 +95,8 @@ Politique par défaut : **tout est refusé et journalisé**. Seuls ces flux pass
 
 Tout le reste est refusé : bureautique vers OT, OT vers bureautique, OT vers Internet, bureautique vers le courtier, etc. Dans la zone serveurs, le serveur de supervision lit le courtier sans passer par le pare-feu (même VLAN).
 
+Dans la maquette seulement, une **règle n° 6** laisse le PC de démonstration (l'hôte Docker) joindre la supervision : il envoie sa requête au port 8443 du pare-feu, qui la redirige (traduction d'adresse). Les règles réelles sont dans `entrepot/pare-feu/regles.nft`.
+
 ### 3.5 MQTT : les messages des passerelles
 
 MQTT est le protocole de messagerie le plus utilisé dans l'IoT industriel : les passerelles **publient** sur des sujets, le serveur s'**abonne**, et le **courtier** fait le lien. Il est léger, il tient les coupures (QoS 1 : le message est redonné tant que le courtier n'en a pas accusé réception) et il prévient quand une passerelle disparaît (« testament » envoyé par le courtier).
@@ -117,19 +119,19 @@ Le serveur décode les trames avec **la même logique** que le boîtier (`logiqu
 
 ## 4. La maquette : tout le réseau sur un PC, avec Docker
 
-La maquette se lance avec une seule commande (`docker compose up`) et reproduit l'infrastructure :
+La maquette se lance avec une seule commande (`docker compose up`) et reproduit l'infrastructure. Mode d'emploi, conteneurs et pièges rencontrés : [`entrepot/README.md`](../entrepot/README.md).
 
-- un **réseau Docker par VLAN**, isolé (« internal ») : les conteneurs ne se voient que par le pare-feu ;
+- un **réseau Docker par VLAN** ; chaque conteneur supprime sa route par défaut et n'a qu'une route « 10.10.0.0/16 via le pare-feu » : pas d'Internet, un seul passage entre les zones ;
 - un conteneur **pare-feu** relié aux quatre réseaux, qui route entre eux avec les règles du § 3.4 (nftables) et compte les paquets refusés ;
 - le **courtier** Mosquitto avec TLS, certificats et ACL ;
-- trois **passerelles simulées** : elles simulent les chariots qui passent dans leur zone et publient les vraies trames de 18 octets ;
+- trois **passerelles** : elles écoutent le réseau « air », qui simule la radio Bluetooth (un conteneur « monde » y diffuse les annonces des chariots simulés), ne gardent que ce qui est à leur portée et publient les vraies trames de 18 octets ;
 - le **serveur de supervision** existant, qui s'abonne au courtier ;
 - un serveur **NTP**, un **syslog** ;
 - un **poste bureautique** d'où l'on montre, en direct, ce qui passe et ce qui est bloqué.
 
 Images téléchargées depuis Docker Hub (officielles) : `node`, `eclipse-mosquitto`, `alpine`.
 
-**Démonstrations prévues devant le jury** : depuis le poste bureautique, un balayage de ports vers les passerelles est bloqué ; un client MQTT sans certificat est refusé ; la passerelle 1 qui publie sous le nom de la passerelle 2 est refusée par les ACL ; une fausse passerelle qui injecte des trames inventées est rejetée par la liste blanche et la vraisemblance ; le serveur s'aperçoit qu'une passerelle s'est arrêtée (testament MQTT).
+**Démonstration devant le jury** : `node entrepot/demonstration.js` enchaîne **13 essais** commentés (13 / 13 conformes le 24/10/2026) : balayage de ports du bureau vers l'atelier bloqué, client MQTT sans certificat ou signé par une AC pirate refusé, certificat volé qui publie au nom d'une autre passerelle jeté par les ACL, lots piégés (capteur inconnu, 20 bar, rejeu) rejetés par le serveur, testament d'une passerelle coupée, courtier arrêté 30 s sans perte de mesures (stocker puis transmettre). La page `flotte/chariots.html` montre le tout côté supervision.
 
 ## 5. Ce qui reste hypothétique
 
@@ -140,8 +142,12 @@ Images téléchargées depuis Docker Hub (officielles) : `node`, `eclipse-mosqui
 
 ## 6. Étapes
 
+Toutes faites le 24/10/2026 :
+
 1. Client MQTT (écrit sans bibliothèque, pour pouvoir l'expliquer) et passerelles simulées, avec leurs tests.
-2. Réception des trames par le serveur (MQTT), chariots, capteurs, zones.
+2. Réception des trames par le serveur (MQTT), chariots, capteurs, zones ; logique de réception partagée avec la page (`entrepot/reception.js`).
 3. Maquette Docker : réseaux, pare-feu, courtier, certificats, NTP, syslog.
-4. Démonstrations d'attaques réseau.
-5. Page de supervision et documentation en version « chariots » (rapport, cahier des charges, analyse de risques, présentation).
+4. Démonstration d'attaques réseau (13 essais).
+5. Page de supervision `flotte/chariots.html` (mode serveur ou démo) et documentation en version « chariots ».
+
+Restent à faire avec le matériel : mesurer la portée Bluetooth réelle (démonstrateur vélo), choisir des capteurs « poids lourd », refaire le plan dans Packet Tracer si le professeur le demande.

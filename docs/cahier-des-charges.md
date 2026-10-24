@@ -4,6 +4,8 @@ Projet BTS CIEL option IR – Thibault MORRETTON (projet individuel) – Épreuv
 
 Le projet est traité comme le développement d'un produit par une entreprise : un kit vendu environ 89 €, comprenant deux capteurs de pression, un boîtier de guidon et une application.
 
+**Adaptation industrielle (24/10/2026).** Le même système est appliqué à une **flotte de chariots élévateurs à pneus gonflables** dans un entrepôt : capteurs « poids lourd », passerelles Bluetooth → MQTT, réseau d'usine découpé en zones, supervision. Le kit vélo devient le **démonstrateur** à petite échelle (mêmes capteurs, même logique). Les exigences propres à cette version sont à la fin du § 3 (EF-25 à EF-29) et au § 4.5 (ENF-33 à ENF-41) ; la conception est dans `orientation-industrielle.md`.
+
 ---
 
 ## 1. Expression du besoin
@@ -98,6 +100,16 @@ Une entreprise de location équipe 20 vélos du kit ; les boîtiers envoient leu
 
 ---
 
+### Version industrielle : supervision des chariots
+
+| N° | Exigence | Critère de validation | Vérification actuelle |
+|---|---|---|---|
+| EF-25 | Les pressions des 4 pneus de chaque chariot remontent à la supervision sans action du cariste. | Passerelles fixes qui écoutent les annonces des capteurs et publient un lot toutes les 10 s ; pression, température et pile de chaque pneu affichées sur `flotte/chariots.html`. | Maquette Docker : 8 chariots, 32 pneus suivis ; tests « réception : lot valable accepté… » (`entrepot/entrepot.tests.js`) |
+| EF-26 | La supervision indique la zone où se trouve chaque chariot. | Zone donnée par la passerelle qui entend le chariot le plus fort (quais, allées, cour) ; une annonce entendue par deux passerelles n'est comptée qu'une fois. | Test « même annonce par deux passerelles → comptée une fois, zone de la meilleure réception » |
+| EF-27 | Les pneus à traiter sont signalés : pression basse ou haute, fuite, crevaison, capteur muet. | Seuils des chariots : bas 7,8 bar, haut 9,5 bar, crevaison sous 4 bar (confirmée par 3 trames), capteur perdu après 10 min ; alertes datées dans la supervision. Seuils à ajuster sur la plaque des chariots (HYPOTHÈSE : 8,5 bar). | Test « crevaison : chute confirmée, état CREVAISON et alerte en base » |
+| EF-28 | La supervision montre l'état du réseau de collecte. | Pour chaque passerelle : en ligne ou hors ligne, écart d'horloge NTP, lots et annonces reçus, dernière nouvelle ; état du courtier MQTT. | Page `flotte/chariots.html` ; essai 12 de la démonstration (passerelle coupée vue « hors ligne ») |
+| EF-29 | La supervision fonctionne aussi sans serveur, pour une démonstration. | Sans serveur (GitHub Pages), la page simule l'entrepôt et fait passer ses lots par la même logique de réception que le serveur (`entrepot/reception.js`) ; banc d'essai de lots piégés. | Mode démo de `flotte/chariots.html` ; 3 tests « réception pure » |
+
 ## 4. Exigences non fonctionnelles
 
 ### 4.1 Énergie, robustesse, ergonomie
@@ -118,7 +130,7 @@ Une entreprise de location équipe 20 vélos du kit ; les boîtiers envoient leu
 | N° | Exigence | Critère de validation | Vérification actuelle |
 |---|---|---|---|
 | ENF-08 | La logique est séparée des sources de données et portable en C++. | Les fichiers de `logique/` n'utilisent ni la page web ni l'horloge ; le temps est passé en paramètre. | Revue du code ; architecture décrite dans `architecture.md` |
-| ENF-09 | La logique est vérifiée par des tests automatiques, lancés à chaque modification du code. | `node simulateur/tests/tout.js` : 668 tests JavaScript en 7 suites, tous réussis (logique et boîtier 208, pneu, météo et capteur 72, vélo et parcours 62, radio 62, électronique 86, monde complet 45, serveur et flotte 133). Traduction C++ de la logique : 136 tests, compilés avec g++ et exécutés sur PC (`firmware/tests_pc`), tous réussis. Les deux séries sont lancées automatiquement par GitHub Actions à chaque envoi de code (push) sur GitHub. | Vérifié ; badge « Tests » en tête du README, résultat visible sur chaque commit (`.github/workflows/tests.yml`) |
+| ENF-09 | La logique est vérifiée par des tests automatiques, lancés à chaque modification du code. | `node simulateur/tests/tout.js` : 717 tests JavaScript en 8 suites, tous réussis (logique et boîtier 208, pneu, météo et capteur 72, vélo et parcours 62, radio 62, électronique 86, monde complet 45, serveur et flotte 135, version industrielle 47). Traduction C++ de la logique : 136 tests, compilés avec g++ et exécutés sur PC (`firmware/tests_pc`), tous réussis. Les deux séries sont lancées automatiquement par GitHub Actions à chaque envoi de code (push) sur GitHub. | Vérifié ; badge « Tests » en tête du README, résultat visible sur chaque commit (`.github/workflows/tests.yml`) |
 | ENF-10 | Le code est commenté en français et explicable par l'étudiant. | Chaque fichier commence par un en-tête qui explique son rôle ; chaque constante est justifiée. | Revue du code |
 | ENF-11 | Le simulateur et l'application ne demandent aucune installation. | Ouverture par double-clic (simulateur) ; navigateur Chrome ou Bluefy (application). | Aucune bibliothèque JavaScript externe ; seules les polices de caractères sont chargées depuis Google Fonts (sans connexion, le navigateur utilise une police de remplacement) |
 
@@ -155,6 +167,23 @@ Le détail est dans `analyse-de-risques.md` (scénarios S16 à S23, § 5.6 et §
 | ENF-29 | Le serveur respecte le RGPD pour les données des clients de la location. | Minimisation : aucune position pendant une location, effacée par le serveur avant stockage même si un boîtier l'envoie. Conservation : mesures et alertes 30 jours, journal des refus (adresses IP) 6 mois, comptés depuis la mesure la plus récente reçue ; statistiques agrégées conservées. | Tests « RGPD base : la position envoyée pendant la location n'est PAS stockée (NULL) », « RGPD API : /api/velos ne donne aucune position pour un vélo en location », « conservation : une mesure récente fait effacer celles de plus de 30 jours », « conservation : refus de plus de 6 mois effacés (adresses IP) » ; mêmes règles dans le mode démo |
 | ENF-30 | En production : clé secrète propre à chaque boîtier, secrets hors du dépôt. | Clé gravée à la fabrication ; coffre à secrets côté serveur ; mots de passe choisis par chaque personne, dont la configuration ne garde que le sel et l'empreinte scrypt. | **Non tenue par la démonstration** (limites assumées) : clés des vélos et mots de passe de démonstration publics dans `serveur/cles-demo.json`, limitation de débit en mémoire |
 | ENF-32 | L'accès à la supervision se fait par mot de passe, avec des sessions qui expirent et une vraie déconnexion (ajout du 24/10/2026). | Connexion `POST /api/connexion` : le serveur ne garde que le sel et l'empreinte scrypt de chaque mot de passe (N = 2¹⁴, environ 50 ms et 16 Mo par essai) ; mot de passe faux et compte inconnu → même réponse 401, dans le même temps (compte fictif). Jeton de session de 256 bits, dont seule l'empreinte SHA-256 est gardée, en mémoire ; session fermée après 15 min sans requête et au plus tard 8 h après la connexion ; au plus 3 sessions par compte. `POST /api/deconnexion` détruit la session : le jeton ne vaut plus rien, même recopié. Session expirée → 401, motif `session-expiree`, non journalisée ; mot de passe faux → journalisé (motif `connexion`, sans le mot de passe) et compté dans le blocage d'IP (30 refus par minute → 5 min). | 16 tests ajoutés à `serveur/serveur.tests.js` (133 au total), dont « connexion : compte inconnu → même réponse (on ne dévoile pas les comptes) », « connexion : bon mot de passe → 200, jeton de session de 256 bits, fin dans 15 min », « session : expirée après 16 min sans requête (401, motif session-expiree) », « session : fermée après 8 h même avec des requêtes régulières », « session : au plus 3 sessions par compte (la plus ancienne est fermée) », « déconnexion : le jeton ne vaut plus rien, même recopié (401) », « journal : ni le jeton ni le mot de passe essayés ne sont recopiés ». Limites : sessions en mémoire (perdues au redémarrage, un seul serveur), jeton dans `sessionStorage` (un cookie `HttpOnly` serait plus sûr), pas de second facteur ; en production : OpenID Connect |
+
+### 4.5 Version industrielle : réseau et infrastructure
+
+Le détail est dans `orientation-industrielle.md` (plan d'adressage, matrice des flux), `analyse-de-risques.md` (scénarios S24 à S31, § 5.7 et § 6.15) et `entrepot/README.md` (maquette).
+
+| N° | Exigence | Critère de validation | Vérification actuelle |
+|---|---|---|---|
+| ENF-33 | Le réseau de l'usine est découpé en zones, et un seul équipement filtre le passage entre elles (IEC 62443 : zones et conduits). | 4 zones : OT atelier (VLAN 10), serveurs (VLAN 20), bureautique (VLAN 30), DMZ (VLAN 40) ; pare-feu avec politique « tout refusé » et 5 conduits numérotés ; refus comptés par sens. | Maquette : `entrepot/pare-feu/regles.nft` ; essais 1 à 3 de `entrepot/demonstration.js` (balayage du bureau vers l'atelier : 4 ports « filtered ») |
+| ENF-34 | Seules les passerelles de l'usine peuvent publier au courtier MQTT. | MQTT sur TLS (port 8883 seulement, TLS 1.2 minimum) ; certificat client obligatoire, signé par l'AC de l'usine ; aucune connexion anonyme. | Essais 5 et 6 : sans certificat → alerte TLS 116 ; AC pirate → alerte TLS 48 |
+| ENF-35 | Une passerelle ne peut publier qu'en son nom. | Droits par sujet (ACL) liés à l'identité du certificat ; le serveur vérifie en plus que le contenu du lot correspond au sujet. | Essais 7 et 8 ; test « lot refusé : la passerelle 2 se fait passer pour la 1 » |
+| ENF-36 | Le serveur ne croit pas aveuglément une passerelle authentifiée. | Mêmes contrôles que le boîtier : liste blanche des capteurs posés, vraisemblance (0-13 bar), anti-rejeu (annonces de plus de 2 h ou de plus de 60 s dans le futur refusées) ; refus journalisés. | Essais 9 à 11 ; tests « lot refusé : annonce datée du futur, ou trop ancienne (rejeu) », « liste blanche : capteur inconnu ignoré » |
+| ENF-37 | Toutes les machines ont la même heure. | Serveur NTP de l'usine ; passerelles réglées au démarrage puis toutes les 10 min ; écart affiché dans la supervision, alerte au journal au-delà de 2 s. | Maquette : écart mesuré de 11 à 21 ms |
+| ENF-38 | Les événements du réseau de collecte sont centralisés. | Journal syslog central (RFC 5424) : démarrages, heure, connexions et pertes de connexion des passerelles, lots rattrapés. | `entrepot/journaux/central.log` |
+| ENF-39 | Une panne se voit, et une coupure courte ne fait perdre aucune mesure. | Testament MQTT : passerelle disparue vue « hors ligne » ; passerelle qui garde 1 h de lots quand le courtier est injoignable et les renvoie au retour (QoS 1). | Essai 12 : « hors ligne » en moins d'une seconde ; essai 13 : courtier arrêté 30 s, lots rattrapés par les 3 passerelles |
+| ENF-40 | Aucun secret n'est accessible par le serveur web. | Certificats, clés privées, base de données et journaux jamais servis, quelle que soit la casse de l'adresse ; clés privées hors de Git. | Essai 4 (403) ; test « certificats, clés privées, base et journaux de l'entrepôt non servis, même en majuscules » |
+| ENF-41 | L'infrastructure se déploie et se rejoue en une commande. | `docker compose up -d --build` après `node generer-certificats.js` ; plan d'adressage fixe ; démonstration rejouable (`node entrepot/demonstration.js`). | Maquette du 24/10/2026 : 10 conteneurs (11 avec l'intrus), 13 essais sur 13 conformes. Limite : toutes les zones sur un seul PC (pas d'isolation physique) |
+
 
 ---
 

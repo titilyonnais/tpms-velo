@@ -124,7 +124,7 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 | `simulateur/sources/pirate.js` | Attaquant : usurpation d'identité (fausse pression) ou rejeu de trames enregistrées |
 | `simulateur/sources/mouchards.js` | Espion de la vie privée : 20 récepteurs BLE posés le long des rues (environ tous les 700 m), qui notent chaque passage d'une adresse (`mouchardsEcouter`) ; reconstitution des trajets, des heures et du départ habituel (`mouchardsAnalyser`) |
 | `simulateur/app.js`, `index.html`, `style.css` | Interface du simulateur : fait avancer le monde au rythme choisi, transmet les actions, affiche le résultat |
-| `simulateur/tests/` | Tests automatiques : 6 suites, plus celle du serveur (`serveur/serveur.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (668 tests) |
+| `simulateur/tests/` | Tests automatiques : 6 suites, plus celles du serveur (`serveur/serveur.tests.js`) et de la version industrielle (`entrepot/entrepot.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (717 tests) |
 
 ### 2.5 Portage vers le firmware et l'application
 
@@ -258,6 +258,8 @@ Accès (depuis le 24/10/2026) : on se **connecte** par `POST /api/connexion` ave
 
 Lancement, API et format des lots signés : `serveur/README.md`. Sécurité du serveur : `analyse-de-risques.md`, § 5.6 et § 6.14.
 
+**Version industrielle (24/10/2026).** Le même principe s'étend à l'entrepôt : `entrepot/chariots.js` (modèle du monde : chariots, pneus, radio), `entrepot/passerelle.js` et `entrepot/mqtt.js` (sources de données : la passerelle écoute la radio et publie en MQTT), `entrepot/reception.js` (logique pure de réception des lots, sans base, utilisée par `serveur/chariots.js` qui enregistre en SQLite et par la page `flotte/chariots.html` en mode démo). Conception : `orientation-industrielle.md` ; maquette Docker : `entrepot/README.md`.
+
 ---
 
 ## 5. Le boîtier imprimé en 3D
@@ -338,7 +340,7 @@ Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/f
 
 ### Tests
 
-Les tests JavaScript sont répartis en 7 suites, 668 au total, tous réussis :
+Les tests JavaScript sont répartis en 8 suites, 717 au total, tous réussis :
 
 | Suite | Fichier | Nombre |
 |---|---|---|
@@ -348,8 +350,9 @@ Les tests JavaScript sont répartis en 7 suites, 668 au total, tous réussis :
 | Radio | `radio.tests.js` | 62 |
 | Électronique (dont deux boutons sur D5 et coupure de la recharge) | `electronique.tests.js` | 86 |
 | Monde complet, de bout en bout | `moteur.tests.js` | 45 |
-| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD, HTTPS) | `serveur/serveur.tests.js` | 133 |
-| **Total** | | **668** |
+| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD, HTTPS, fichiers secrets jamais servis) | `serveur/serveur.tests.js` | 135 |
+| Version industrielle (client MQTT, SNTP et syslog, entrepôt simulé, réception des lots, API des chariots) | `entrepot/entrepot.tests.js` | 47 |
+| **Total** | | **717** |
 
 La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage), baromètre avec et sans évent, recharge par grand froid (dehors et à la maison).
 
@@ -409,7 +412,7 @@ Avant, la traduction C++ était seulement compilée (vérification de syntaxe) ;
 
 | Tâche | Ce qu'elle fait |
 |---|---|
-| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (668 tests, dont ceux du serveur) |
+| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (717 tests, dont ceux du serveur et de l'entrepôt) |
 | « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (136 tests) |
 
 Si un seul test échoue, le commit est marqué d'une croix rouge sur GitHub et le badge « Tests » du README passe au rouge. L'historique des exécutions, visible sur GitHub, montre que chaque version du dépôt a passé les tests.

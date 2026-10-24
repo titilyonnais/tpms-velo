@@ -1,11 +1,13 @@
-# Capteur de pression des pneus de vélo (TPMS)
+# Surveillance de la pression des pneus (TPMS) : entrepôt et vélo
 
 [![Tests](https://github.com/titilyonnais/tpms-velo/actions/workflows/tests.yml/badge.svg)](https://github.com/titilyonnais/tpms-velo/actions/workflows/tests.yml)
 
 Projet de BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité ».
 Auteur : Thibault MORRETTON.
 
-Le projet est un **logiciel de simulation complète** du kit : tout est calculé comme dans la réalité (physique des pneus, vélo et parcours, radio Bluetooth, électronique, batterie), sans matériel.
+**Version industrielle (24/10/2026).** Les pneus gonflables d'une **flotte de chariots élévateurs** portent des capteurs TPMS Bluetooth ; des **passerelles** au plafond de l'entrepôt les écoutent et publient leurs trames en **MQTT sur TLS** jusqu'à une **supervision**, à travers un **réseau d'usine découpé en zones** (atelier, serveurs, bureautique, DMZ) par un pare-feu, avec NTP et syslog. Tout le réseau tourne dans une **maquette Docker** lancée en une commande, avec une démonstration de 13 essais de sécurité : voir [`entrepot/README.md`](entrepot/README.md) et [`docs/orientation-industrielle.md`](docs/orientation-industrielle.md). Le kit vélo ci-dessous sert de **démonstrateur** : mêmes capteurs, même logique.
+
+Le projet est aussi un **logiciel de simulation complète** du kit : tout est calculé comme dans la réalité (physique des pneus, vélo et parcours, radio Bluetooth, électronique, batterie), sans matériel.
 
 Le kit simulé comprend deux capteurs TPMS en Bluetooth Low Energy, vissés sur les valves, un boîtier de guidon avec un écran e-paper, et une application.
 Le boîtier affiche la pression et la température de chaque pneu, ainsi que la vitesse et la distance. Il émet une alerte (bip et LED) en cas de pression anormale, de fuite lente ou de faux capteur.
@@ -15,14 +17,15 @@ Depuis le 24/10/2026, un baromètre BMP280 placé sous un évent corrige l'erreu
 
 - Application : https://titilyonnais.github.io/tpms-velo/app/ (sur iPhone, à ouvrir dans Bluefy)
 - Simulateur : https://titilyonnais.github.io/tpms-velo/simulateur/
-- Supervision de la flotte (mode démo, sans serveur) : https://titilyonnais.github.io/tpms-velo/flotte/
+- Supervision de l'entrepôt (mode démo, sans serveur) : https://titilyonnais.github.io/tpms-velo/flotte/chariots.html
+- Supervision de la flotte de vélos (mode démo, sans serveur) : https://titilyonnais.github.io/tpms-velo/flotte/
 - Présentation : https://titilyonnais.github.io/tpms-velo/presentation/
 
 ## Dossier E6
 
 - Rapport : [`docs/rapport-e6.md`](docs/rapport-e6.md)
 - Présentation pour la soutenance : [`presentation/index.html`](presentation/index.html) (à ouvrir dans un navigateur, ou en ligne, lien ci-dessus)
-- Documentation technique : [`docs/`](docs/README.md) (cahier des charges, architecture, protocole BLE, analyse de risques, schéma électrique, bilan énergétique)
+- Documentation technique : [`docs/`](docs/README.md) (orientation industrielle, cahier des charges, architecture, protocole BLE, analyse de risques, schéma électrique, bilan énergétique)
 
 ## Organisation du dépôt
 
@@ -33,12 +36,25 @@ Depuis le 24/10/2026, un baromètre BMP280 placé sous un évent corrige l'erreu
 | `app/`        | Application Web Bluetooth (pneus, historique, fuite lente, réglages)          |
 | `firmware/`   | Programme du boîtier (Seeed XIAO nRF52840), traduction en C++ de la logique, testée sur PC (`tests_pc/`) |
 | `serveur/`    | Serveur de flotte (Node.js 24 sans dépendance, SQLite), API REST, lots signés HMAC-SHA256, connexion par mot de passe et sessions qui expirent, HTTPS en option, règles RGPD : voir [`serveur/README.md`](serveur/README.md) |
-| `flotte/`     | Simulation de 20 vélos de location et page de supervision (tournée du technicien, fuites lentes sur plusieurs jours) |
+| `flotte/`     | Simulation de 20 vélos de location et page de supervision (tournée du technicien, fuites lentes sur plusieurs jours) ; supervision de l'entrepôt (`chariots.html`) |
+| `entrepot/`   | Version industrielle : entrepôt simulé (8 chariots), passerelles BLE → MQTT, client MQTT écrit à la main, réception des lots, maquette Docker du réseau (pare-feu nftables, courtier Mosquitto en TLS mutuel, NTP, syslog), démonstration de sécurité : voir [`entrepot/README.md`](entrepot/README.md) |
 | `boitier-3d/` | Boîtier de guidon modélisé avec OpenSCAD (étanche IPX7 visé, collier de cintre et glissière à cran) : voir [`boitier-3d/README.md`](boitier-3d/README.md) |
 | `docs/`       | Rapport E6, cahier des charges, analyse de risques, bilan énergétique, protocole, architecture, schéma électrique |
 | `presentation/` | Présentation pour la soutenance (page web)                                 |
 
 Le principe : la logique (`logique/` et `simulateur/boitier/`) ne connaît ni la page web ni la radio. Le simulateur lui fournit des données simulées, l'application et le firmware lui fournissent les vraies.
+
+## Version industrielle : la maquette réseau de l'entrepôt
+
+Prérequis : Docker Desktop et Node.js 24. Depuis le dossier `entrepot/` :
+
+```bash
+node generer-certificats.js      # AC de l'usine et certificats (clés privées hors de Git)
+docker compose up -d --build     # pare-feu, courtier, supervision, NTP, syslog, 3 passerelles, poste, entrepôt simulé
+node demonstration.js            # 13 essais de sécurité commentés (13 / 13 conformes le 24/10/2026)
+```
+
+Supervision : https://localhost:8443/flotte/chariots.html (certificat signé par l'AC de la maquette). Sans Docker, la même page tourne en mode démo dans le navigateur.
 
 ## Mode flotte (entreprise de location)
 
@@ -87,7 +103,7 @@ Le temps peut être accéléré jusqu'à ×3600. Avec la **semaine type** (traje
 node simulateur/tests/tout.js
 ```
 
-7 suites, 668 tests : logique et boîtier (208), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (86), monde complet de bout en bout (45), serveur et flotte (133).
+8 suites, 717 tests : logique et boîtier (208), pneu, météo et capteur (72), vélo et parcours (62), radio (62), électronique (86), monde complet de bout en bout (45), serveur et flotte (135), version industrielle (47 : MQTT, passerelles, réception des lots).
 
 On peut aussi ouvrir `simulateur/tests/tests.html` dans le navigateur.
 

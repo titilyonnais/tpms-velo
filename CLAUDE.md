@@ -1,4 +1,4 @@
-# Projet BTS CIEL – Capteur de pression des pneus de vélo
+# Projet BTS CIEL – Surveillance de la pression des pneus (TPMS) : entrepôt et vélo
 
 Contexte de reprise : ce fichier résume tout ce qui a été décidé dans une conversation précédente avec Claude (20–22/10/2026). Lis-le en entier avant de commencer.
 
@@ -11,6 +11,14 @@ Contexte de reprise : ce fichier résume tout ce qui a été décidé dans une c
 
 ## Direction du projet (décision du 22/10/2026)
 Le projet devient un **logiciel de simulation complète et réaliste** (page web) : tout se passe en simulation, aucun matériel réel n'est requis. Thibault veut que tout soit simulé « comme la réalité » : physique du pneu et du vélo (gaz parfait, température, altitude, fuites, pompe, dynamique, pentes), radio BLE réaliste (distance, RSSI, pertes, collisions, brouillage, plusieurs vélos), électronique simulée (schéma animé, tensions et courants, courbe LiPo, recharge) et sorties complètes (parcours sur carte, météo, plusieurs jours, enregistrement et rejeu, statistiques). Le firmware C++ et l'app Web Bluetooth réelle restent dans le dépôt mais ne sont plus prioritaires.
+
+## Orientation industrielle (décision du 24/10/2026)
+Un professeur a jugé le projet « pas assez industriel » et pauvre en réseau. Choix de Thibault (questions à cocher) : **flotte de chariots élévateurs** à pneus gonflables (8,5 bar, capteurs « poids lourd » 0-13 bar, hypothèse), **maquette Docker complète** du réseau, **vélo gardé comme démonstrateur**. On ne change pas le cœur du projet, on l'adapte. Conception : `docs/orientation-industrielle.md` ; maquette : `entrepot/README.md`.
+- Passerelles BLE → MQTT (`entrepot/passerelle.js`, client MQTT 3.1.1 écrit à la main `entrepot/mqtt.js`) : SNTP, TLS mutuel avec testament, lot toutes les 10 s en QoS 1, 1 h de lots gardés, syslog. Réception des lots en logique pure `entrepot/reception.js` (partagée par `serveur/chariots.js` et le mode démo de `flotte/chariots.html`).
+- Réseau : VLAN 10 OT 10.10.10.0/24, 20 serveurs 10.10.20.0/24 (courtier .10, supervision .20, NTP .30, syslog .40), 30 bureautique 10.10.30.0/24 (poste .50), 40 DMZ 10.10.40.0/24, réseau « air » 10.10.99.0/24 (radio simulée) ; pare-feu nftables en .254 partout, politique « tout refusé », conduits 1 à 5 (+ règle 6 : le PC de démonstration, adresses .1 de l'hôte, redirigé vers la supervision par DNAT + masquerade).
+- Maquette (`entrepot/`) : `node generer-certificats.js` puis `docker compose up -d --build` ; https://localhost:8443/flotte/chariots.html ; `node demonstration.js` = 13 essais (13/13 conformes le 24/10/2026). Pièges : réseaux Docker « internes » inutilisables (routes supprimées à la place), masquage Docker désactivé (`enable_ip_masquerade: false`), Docker choisit le réseau du port publié, `MSYS_NO_PATHCONV=1` pour `docker exec` depuis Git Bash, `curl --ssl-no-revoke` sous Windows, fichiers de PID de chrony et rsyslog effacés au démarrage. Docker Desktop ne redémarre pas seul avec le PC.
+- Faille trouvée et corrigée (commit 1d64634) : la supervision servait `entrepot/certificats/*.cle` ; dossiers et extensions interdits, comparaison en minuscules.
+- Documentation à jour : analyse de risques S24 à S31 (§ 5.7, § 6.15), cahier des charges EF-25 à 29 et ENF-33 à 41, rapport chapitre 10 (bilan en 11), présentation 33 diapositives, fiche de l'oral Q29 à Q38.
 
 ## Le produit (comme si c'était une entreprise)
 Kit vendu environ 89 € : 2 capteurs de pression sur les valves + boîtier de guidon à écran e-paper + application.
@@ -60,7 +68,7 @@ Décision de Thibault : en attendant le matériel, le projet est un **logiciel d
   - **Confirmation par bouton** (commit 25897c9) : couper une protection ou changer de capteur depuis l'app n'est appliqué qu'après un appui long sur le bouton 2 ; l'écran montre ce qui change ; 30 s, autre bouton, veille ou déconnexion annulent ; la commande ACQUITTER de l'app ne peut pas confirmer ; bit 3 de l'octet 17 de MESURES.
   - **Baromètre BMP280** (commit f15b7e5) derrière un **évent ePTFE** sous le fond du boîtier : affichage et alertes corrigés de l'altitude (+0,17 bar à 1 500 m), historique gardé en pression du capteur ; MESURES : séquence sur 1 octet (octet 18), octet 19 = correction (pas de 4 mbar), bit 4 = recharge coupée. **Recharge coupée hors de 2-43 °C** par U4 TPS22918 + Q3 sur D6 (toujours permise carte éteinte), relâchée avant la veille (réveil par le 5 V). Broches libérées : fil BUSY de l'écran supprimé (attente fixe à mesurer avant de couper le fil), D0 = CSB du BMP280, SDO sur D9, deux boutons sur D5 (R12 2,2 kΩ, lecture analogique). Oublier les téléphones : bouton 1 tenu 5 s au démarrage.
   - **Sessions de la flotte** (commit 46158e7) : connexion par mot de passe (sel + scrypt), jeton de session 256 bits fermé après 15 min d'inactivité et 8 h au plus, vraie déconnexion ; `serveur/sessions.js`.
-- Tests : `node simulateur/tests/tout.js` (668 tests JS en 7 suites : 208, 72, 62, 62, 86, 45, 133 pour le serveur) + 136 tests C++ (`firmware/tests_pc`), lancés par GitHub Actions à chaque push. Pas de compilateur C++ sur le PC fixe : on vérifie le C++ en poussant sur une branche de vérification (GitHub Actions), puis on la supprime.
+- Tests : `node simulateur/tests/tout.js` (717 tests JS en 8 suites : 208, 72, 62, 62, 86, 45, 135 pour le serveur, 47 pour l'entrepôt) + 136 tests C++ (`firmware/tests_pc`), lancés par GitHub Actions à chaque push. Pas de compilateur C++ sur le PC fixe : on vérifie le C++ en poussant sur une branche de vérification (GitHub Actions), puis on la supprime.
 - Chiffres à jour et défauts révélés par la simulation : voir `docs/` (analyse de risques, bilan énergétique) et `docs/rapport-e6.md`.
 
 ## Organisation du dépôt
@@ -74,11 +82,13 @@ presentation/ diaporama de soutenance (page web, publiée sur GitHub Pages)
 serveur/      serveur Node.js + SQLite du mode flotte (API REST signée HMAC)
 flotte/       simulation de 20 vélos de location et page de supervision (mode démo sans serveur)
 boitier-3d/   modèle OpenSCAD du boîtier, STL, rendus, outils d'export et de contrôle d'interférences
+entrepot/     version industrielle : entrepôt simulé, passerelles MQTT, réception des lots, maquette Docker du réseau, démonstration
 ```
 Le simulateur est l'outil de travail de Thibault (pas de « mode jury »). Style visuel : tableau de bord sombre, fond noir, cartes arrondies, accent violet #A78BFA, barre latérale.
-En ligne (GitHub Pages, dépôt public titilyonnais/tpms-velo) : https://titilyonnais.github.io/tpms-velo/simulateur/ , /app/ et /presentation/. Commits avec l'adresse noreply 107395514+titilyonnais@users.noreply.github.com.
+En ligne (GitHub Pages, dépôt public titilyonnais/tpms-velo) : https://titilyonnais.github.io/tpms-velo/ (page d'accueil), /simulateur/ , /app/ , /flotte/ , /flotte/chariots.html et /presentation/. Commits avec l'adresse noreply 107395514+titilyonnais@users.noreply.github.com.
 Initialiser git dès le départ : l'historique des commits sert de preuve d'avancement pour le jury.
 
 ## Points encore ouverts
+- Faire valider l'orientation industrielle par le professeur référent.
 - Nom de l'établissement, professeur référent, date de soutenance : laissés en champs à remplir ([Établissement], [Professeur référent], [Date de soutenance]) dans le rapport et la présentation.
 - Plage de pression réelle des capteurs TPMS et format exact des trames. La fiche AliExpress ne donne pas la plage (vérifié le 22/10/2026) ; la simulation suppose 3,5 bar par défaut, réglable dans Configuration.

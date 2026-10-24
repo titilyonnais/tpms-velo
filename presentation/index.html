@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Soutenance E6 · Kit TPMS vélo</title>
-  <meta name="description" content="Diaporama de soutenance E6 (BTS CIEL IR) de Thibault MORRETTON : kit de surveillance de la pression des pneus de vélo, conçu en simulation.">
+  <title>Soutenance E6 · TPMS entrepôt et vélo</title>
+  <meta name="description" content="Diaporama de soutenance E6 (BTS CIEL IR) de Thibault MORRETTON : surveillance de la pression des pneus d'une flotte de chariots élévateurs (passerelles MQTT, réseau d'usine segmenté), avec un kit vélo comme démonstrateur, conçu en simulation.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23000%27/%3E%3Ccircle cx=%278%27 cy=%278%27 r=%274.5%27 fill=%27none%27 stroke=%27%23a78bfa%27 stroke-width=%272%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,13 +25,13 @@
 <main class="scene" id="scene">
 
 <!-- ================================================================ 1 -->
-<section class="diapo" data-notes="Se présenter. Projet seul. Le matériel n'est pas encore arrivé : tout ce que je vais montrer a été conçu, testé et attaqué en simulation. L'écran à droite est dessiné par le code du boîtier.">
+<section class="diapo" data-notes="Se présenter. Projet seul. Le sujet : surveiller la pression des pneus, d'abord sur un vélo, qui sert de démonstrateur, puis sur une flotte de chariots élévateurs dans un entrepôt, avec un vrai réseau d'usine. Le matériel n'est pas encore arrivé : tout ce que je vais montrer a été conçu, testé et attaqué en simulation, et le réseau dans une maquette Docker. L'écran à droite est dessiné par le code du boîtier.">
   <div class="corps grille g-texte-visuel" style="align-items:center; grid-template-columns: 1fr 470px;">
     <div>
       <p class="repere">BTS CIEL option IR · Épreuve E6 · Valorisation de la donnée et cybersécurité</p>
-      <h1 class="titre-principal">Un kit de surveillance de la pression des pneus de vélo, <em>conçu et attaqué en simulation</em> avant d'exister</h1>
+      <h1 class="titre-principal">Surveiller la pression des pneus, du vélo à une flotte de chariots élévateurs : <em>conçu et attaqué en simulation</em> avant d'exister</h1>
       <p class="auteur">Thibault MORRETTON</p>
-      <p class="discret" style="margin:0">Projet individuel · capteurs TPMS BLE, boîtier de guidon e-paper, application Web Bluetooth</p>
+      <p class="discret" style="margin:0">Projet individuel · capteurs TPMS BLE, boîtier e-paper, application Web Bluetooth · passerelles MQTT, réseau d'usine segmenté, supervision</p>
       <div class="champs">
         <span class="champ">[Établissement]</span>
         <span class="champ">[Professeur référent]</span>
@@ -77,6 +77,32 @@
 </section>
 
 <!-- ================================================================ 3 -->
+<section class="diapo" data-notes="Un professeur m'a dit que le projet n'était pas assez industriel et manquait de réseau. Je n'ai pas changé de projet : je lui ai donné un contexte industriel. Une entreprise de logistique a des chariots élévateurs à pneus gonflables ; un pneu sous-gonflé rend le chariot instable, surtout charge levée : c'est de la sécurité au travail. Attention : beaucoup de chariots d'intérieur ont des bandages pleins ; je vise ceux à pneus gonflables, 7 à 10 bar, d'où des capteurs poids lourd 0 à 13 bar. Le vélo devient la maquette à petite échelle : mêmes valves, mêmes capteurs, même logique, et une vraie démonstration possible devant vous.">
+  <p class="repere">Contexte industriel</p>
+  <h2>Le même système surveille une <em>flotte de chariots élévateurs</em> ; le vélo devient le démonstrateur</h2>
+  <div class="corps grille g-large-etroit">
+    <div class="defile">
+      <table class="serre" style="font-size:18px">
+        <thead><tr><th>Existant (vélo)</th><th>Version industrielle (entrepôt)</th></tr></thead>
+        <tbody>
+          <tr><td>2 capteurs TPMS BLE</td><td>4 capteurs « poids lourd » (0 à 13 bar) par chariot, même trame</td></tr>
+          <tr><td>Boîtier de guidon</td><td>Afficheur embarqué du cariste</td></tr>
+          <tr><td>Logique : trame, vraisemblance, alertes, fuite</td><td><b>Réutilisée telle quelle</b> par le serveur et la supervision</td></tr>
+          <tr><td>Liaison radio capteurs → boîtier</td><td><b>Passerelles BLE → MQTT</b> au plafond, une par zone</td></tr>
+          <tr><td>Serveur de flotte (vélos de location)</td><td>Reçoit aussi les chariots, par MQTT sur TLS</td></tr>
+          <tr class="retenu"><td>—</td><td><b>Réseau d'usine</b> en 4 zones, pare-feu, NTP, syslog</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grille" style="gap:16px">
+      <div class="carte carte-accent"><h3>Sécurité au travail</h3><p class="discret petit">Un pneu sous-gonflé rend le chariot instable, surtout charge levée ; il s'use et peut éclater.</p></div>
+      <div class="carte"><h3>Pneus gonflables, 7 à 10 bar</h3><p class="discret petit">Pas les bandages pleins des chariots d'intérieur. Capteurs « poids lourd » : hypothèse à confirmer.</p></div>
+      <div class="carte"><h3>Une vraie infrastructure</h3><p class="discret petit">Zones et conduits (IEC 62443), MQTT, certificats, maquette Docker de 10 conteneurs.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 4 -->
 <section class="diapo" data-notes="Chaque exigence a un critère mesurable. Je les retrouverai plus loin : crevaison en moins de 10 s, autonomie d'au moins une semaine, fuite lente, cybersécurité.">
   <p class="repere">Cahier des charges</p>
   <h2>Six exigences mesurables guident toute la conception</h2>
@@ -90,7 +116,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 4 -->
+<!-- ================================================================ 5 -->
 <section class="diapo" data-notes="Deux liaisons radio de nature opposée. Capteurs vers boîtier : des annonces en clair, que je ne maîtrise pas, c'est là que porte l'analyse de risques. Boîtier vers application : une connexion que je maîtrise, appairée par code et chiffrée. Safari ne gère pas Web Bluetooth, d'où Bluefy sur iPhone.">
   <p class="repere">Architecture</p>
   <h2>Trois éléments reliés par deux liaisons radio : <em>l'une subie, l'autre maîtrisée</em></h2>
@@ -159,7 +185,7 @@
   <p class="note-bas">Safari n'implémente pas Web Bluetooth : sur l'iPhone, la page s'ouvre dans le navigateur Bluefy. Flutter a été écarté, car compiler pour iOS exige un Mac.</p>
 </section>
 
-<!-- ================================================================ 5 -->
+<!-- ================================================================ 6 -->
 <section class="diapo" data-notes="Être honnête : la commande est passée le 20/10, rien n'est arrivé. C'est ce qui a motivé la simulation complète. Le schéma électrique est fait (révision C du 24/10, 34 composants), il manque quelques composants (MOSFET, diode, résistances). Le 24/10, j'ai ajouté un baromètre BMP280 et une coupure de la recharge par grand froid : ces pièces ne sont pas encore chiffrées. Le XIAO n'avait plus de broches : j'ai supprimé le fil BUSY de l'écran (attente fixe, plus longue au froid, à mesurer à l'oscilloscope), branché le baromètre sur le bus SPI de l'écran et mis les deux boutons sur une seule broche lue en analogique. Conséquence : le geste pour oublier les téléphones devient bouton 1 maintenu 5 s au démarrage.">
   <p class="repere">Matériel</p>
   <h2>Le matériel est commandé pour 86,61 € TTC, <em>mais pas encore reçu</em></h2>
@@ -187,7 +213,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 6 -->
+<!-- ================================================================ 7 -->
 <section class="diapo" data-notes="Version 2 du boîtier : la première était trop carrée. Forme de compteur GPS, PETG, aucune pièce n'a besoin de support. Les cotes sont calculées à partir des composants, chacune marquée fiche, mesurée au plan, hypothèse ou choix. Joint radial plutôt que plat : son écrasement ne dépend que des dimensions, pas du serrage ; une façade de 2,4 mm fléchirait entre deux vis distantes de 57 mm. Fixation : collier fendu et bride serrés par une vis M3, cales pour 4 diamètres de cintre ; le boîtier glisse en queue d'aronde et se verrouille par un cran, la butée reprend les appuis sur les boutons. Imprimante inconnue : les jeux sont des paramètres, réglés avec la pièce test_jeux. Contrôle d'interférences : chaque pièce contre chaque composant et contre les autres pièces, intersections vides, parois d'au moins 2 mm ; 7 défauts trouvés et corrigés, par exemple la gorge où le joint écrasé débordait de 95 mm³ dans la façade. Le 24/10 : un évent de 3 mm sous le fond, fermé par une pastille ePTFE qui laisse passer l'air mais pas l'eau, pour que le baromètre voie l'altitude ; la carte du BMP280 est posée juste au-dessus, sous les boutons. Contrôle refait : 36 calculs en 80 s, aucune collision. Reste à imprimer.">
   <p class="repere">Boîtier mécanique · OpenSCAD</p>
   <h2>Un boîtier de 46 × 64 × 28 mm, <em>dimensionné à partir des composants</em></h2>
@@ -217,7 +243,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 7 -->
+<!-- ================================================================ 8 -->
 <section class="diapo" data-notes="Principe central : la logique est écrite une seule fois, sous forme de fonctions pures. Le temps est un paramètre, ce qui permet de simuler une semaine en quelques secondes. La même fonction existe en JS et en C++ : exemple de la compensation en température.">
   <p class="repere">Méthode</p>
   <h2>Sans matériel, le projet est devenu un jumeau numérique : <em>la même logique tourne partout</em></h2>
@@ -266,7 +292,7 @@
   <p class="note-bas">Le temps est toujours un paramètre : <code>maintenantMs</code> dans le simulateur, <code>millis()</code> dans le firmware. Une semaine se rejoue en quelques secondes.</p>
 </section>
 
-<!-- ================================================================ 8 -->
+<!-- ================================================================ 9 -->
 <section class="diapo" data-notes="Autour du boîtier simulé, un monde physique : pneu, météo, vélo, radio, électronique. Pas fixes de 50 ms : même graine et mêmes actions donnent exactement le même résultat, ce qui permet de rejouer une sortie.">
   <p class="repere">Le monde simulé</p>
   <h2>Autour du boîtier, la simulation reproduit <em>la physique, la radio et l'électricité</em></h2>
@@ -280,7 +306,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 9 -->
+<!-- ================================================================ 10 -->
 <section class="diapo" data-notes="La donnée de départ : 18 octets diffusés en clair. Expliquer le little-endian sur la pression. Point important pour la cybersécurité : l'adresse est fixe et il n'y a ni compteur ni signature. Format supposé, à vérifier à la réception des capteurs.">
   <p class="repere">La donnée brute</p>
   <h2>Chaque capteur diffuse 18 octets <em>en clair</em>, décodés octet par octet</h2>
@@ -330,7 +356,7 @@
   <p class="note-bas">Octets recalculés à l'ouverture par <code>TPMS.encoderTrame</code> (logique/trame.js). Format supposé, d'après github.com/schlumpf2009/TPMS : à confirmer à la réception des capteurs.</p>
 </section>
 
-<!-- ================================================================ 10 -->
+<!-- ================================================================ 11 -->
 <section class="diapo" data-notes="Valorisation de la donnée : la trame brute devient une information fiable. Trois contrôles avant d'accepter. L'historique est compensé en température : sans cela, un pneu qui refroidit simulait une fuite. La pente est une régression linéaire. Les mêmes données alimentent écran, alertes et application. L'écran et les alertes utilisent la pression corrigée de l'altitude ; l'historique garde la pression du capteur : c'est la diapositive suivante.">
   <p class="repere">Chaîne de la donnée</p>
   <h2>De la trame à l'alerte, la donnée est <em>filtrée, compensée, puis interprétée</em></h2>
@@ -355,7 +381,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 11 -->
+<!-- ================================================================ 12 -->
 <section class="diapo" data-notes="Ajout du 24/10. Les capteurs retirent une pression fixe de 1 013,25 hPa : à 1 500 m, ils annoncent 0,17 bar de moins que le manomètre de la pompe. Un baromètre BMP280, derrière un évent à membrane, mesure l'air réel et corrige. Le point important pour la valorisation : la même trame donne deux pressions. L'écran et les alertes utilisent la pression manomètre, celle avec laquelle le cycliste regonfle et règle ses seuils. L'historique de la fuite lente et la prévision gardent la pression du capteur, qui suit la quantité d'air : sinon, une descente de col ressemblerait à une fuite, environ −0,55 bar/h d'après l'atmosphère standard du simulateur, plus de trois fois le seuil. L'application fait pareil : elle retire la correction, transmise dans l'octet 19 de MESURES. Le même BMP280 donne la température : la recharge est coupée hors de 2 à 43 °C.">
   <p class="repere">Valorisation de la donnée · baromètre</p>
   <h2>Une seule trame, deux pressions : <em>l'une pour l'écran, l'autre pour l'historique</em></h2>
@@ -383,7 +409,7 @@
   <p class="note-bas">Le même BMP280 donne la température : recharge coupée hors de 2 à 43 °C (hystérésis 3 °C). Simulateur : à −5,7 °C dehors, coupée 90 min ; reprise ≈ 11 min après le retour à la maison.</p>
 </section>
 
-<!-- ================================================================ 12 -->
+<!-- ================================================================ 13 -->
 <section class="diapo" data-notes="Ces trois écrans ne sont pas des images : ils sont dessinés à l'ouverture de la page par ecran.js, epaper.js et la police 5x7, le code qui sera recopié dans le firmware. En alerte, la colonne passe en négatif, visible d'un coup d'œil.">
   <p class="repere">Écran du boîtier</p>
   <h2>Ces écrans sont dessinés par <em>le code destiné au boîtier</em>, au pixel près</h2>
@@ -416,7 +442,7 @@
   <p class="note-bas">200 × 200 pixels noir et blanc, soit 5 000 octets d'image · police 5×7 identique en JavaScript et en C++ · chiffres de 28 pixels de haut (≈ 3,9 mm) · valeurs d'exemple.</p>
 </section>
 
-<!-- ================================================================ 13 -->
+<!-- ================================================================ 14 -->
 <section class="diapo" data-notes="Valorisation sur plusieurs jours : un relevé compensé en température par sortie, une régression linéaire, et on divise la marge restante par la perte par jour. Au 3e jour, 16 jours annoncés ; le seuil est atteint vers le 18e ; l'erreur finit à 1 ou 2 jours. Pas de prévision avant 4 relevés sur 2 jours. Les statistiques par jour et par semaine viennent du même enregistrement.">
   <p class="repere">Valorisation de la donnée</p>
   <h2>Le boîtier prévoit le regonflage : <em>16 jours annoncés au 3e jour, seuil atteint vers le 18e</em></h2>
@@ -471,10 +497,10 @@
   </div>
 </section>
 
-<!-- ================================================================ 14 -->
+<!-- ================================================================ 15 -->
 <section class="diapo" data-notes="EBIOS Risk Manager simplifiée, 15 scénarios, gravité fois vraisemblance. Usurpation et rejeu passent d'élevé à faible. Le seul risque élevé restant est le pistage S12 : il vient des capteurs du commerce (adresse fixe en clair), le boîtier n'y peut rien. Avec la proposition de capteurs v2, il tomberait à 3.">
   <p class="repere">Analyse de risques · EBIOS RM simplifiée</p>
-  <h2>15 scénarios : un seul reste élevé, <em>le pistage</em>, hors de portée du boîtier</h2>
+  <h2>15 scénarios pour le kit : un seul reste élevé, <em>le pistage</em>, hors de portée du boîtier</h2>
   <div class="corps matrices">
     <div class="matrice-bloc">
       <h3>Avant les mesures</h3>
@@ -524,7 +550,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 15 -->
+<!-- ================================================================ 16 -->
 <section class="diapo" data-notes="L'attaque est réaliste : une carte ESP32 sait écouter et émettre des annonces BLE. Les études sur les TPMS automobiles (Rouf et al., USENIX 2010) ont montré le même défaut. Sans protection, le boîtier affiche une fausse crevaison et le cycliste s'arrête.">
   <p class="repere">Démonstration de l'attaque</p>
   <h2>Une carte à environ 5 € suffit pour <em>se faire passer pour un capteur</em></h2>
@@ -549,7 +575,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 16 -->
+<!-- ================================================================ 17 -->
 <section class="diapo" data-notes="On ne peut pas prouver qu'une trame vient du vrai capteur : on ne peut que trier. C'est l'empilement qui arrête le pirate. Le rythme ignore les trames rapprochées quand la pression baisse (vraie crevaison) ; un pirate mêlé au vrai capteur fait forcément remonter la valeur. Résultat : 0 fausse valeur sur 300 décalages.">
   <p class="repere">Les parades</p>
   <h2>Trois filtres empilés : la fausse crevaison du pirate <em>n'est jamais acceptée</em> (0 sur 300 décalages)</h2>
@@ -584,7 +610,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 17 -->
+<!-- ================================================================ 18 -->
 <section class="diapo" data-notes="Quatre menaces ajoutées. Pirate synchronisé : le délai aléatoire de la norme BLE l'empêche de se superposer, le rythme le repère, mais une vraie crevaison peut être masquée par moments. Inondation : on la détecte, on ne peut pas l'empêcher ; sans liste blanche elle suffirait. Homme du milieu : c'est le code à 6 chiffres sur l'e-paper qui le bloque. Le 24/10 : le téléphone déjà appairé, volé, ou une page piégée dans Bluefy. Couper une protection ou changer de capteur ne s'applique qu'après un appui long sur le bouton 2 du boîtier ; l'écran affiche CONFIRMER et la liste exacte ; tout autre bouton, 30 s, la veille ou la déconnexion annulent. Piège évité : la commande ACQUITTER de l'application fait la même chose qu'un appui long, mais elle ne peut pas confirmer ; un test le vérifie.">
   <p class="repere">Nouvelles attaques</p>
   <h2>Quatre menaces de plus : chacune est détectée ou bloquée, <em>avec sa limite</em></h2>
@@ -618,7 +644,7 @@
   <p class="note-bas">Avec les capteurs v2 proposés : trames du pirate synchronisé ignorées, crevaison signalée en 4 s ; 163 à 173 trames rejouées refusées en 4 min.</p>
 </section>
 
-<!-- ================================================================ 18 -->
+<!-- ================================================================ 19 -->
 <section class="diapo" data-notes="Le risque le plus réaliste n'est pas le pirate mais l'espion : aucune compétence, des récepteurs à 40 euros. Avec les capteurs du commerce, il relie tous les trajets et trouve l'heure et le lieu de départ. C'est une donnée personnelle au sens du RGPD. Le boîtier ne peut rien y faire : l'adresse fixe est émise par le capteur.">
   <p class="repere">Vie privée</p>
   <h2>Avec 20 récepteurs à 40 €, un espion relie <em>10 trajets en 5 jours</em> au même vélo</h2>
@@ -645,7 +671,7 @@
   <p class="note-bas">Récepteurs simulés le long des parcours en ville, avec le bilan de liaison du modèle radio (<code>simulateur/sources/mouchards.js</code>, page Vie privée).</p>
 </section>
 
-<!-- ================================================================ 19 -->
+<!-- ================================================================ 20 -->
 <section class="diapo" data-notes="Proposition pour une version 2, simulée mais pas réalisée : elle demande des capteurs dont on écrit le programme. Une clé par capteur, partagée à l'appairage. L'adresse change tous les quarts d'heure, seul le boîtier sait la reconnaître. Le compteur arrête le rejeu, la signature arrête l'imitation.">
   <p class="repere">Proposition · capteurs version 2</p>
   <h2>Des capteurs v2 qui <em>changent d'adresse et signent chaque trame</em></h2>
@@ -677,7 +703,7 @@
   <p class="note-bas">Proposition simulée (<code>logique/trame2.js</code>, traduite en C++), non réalisée : les capteurs commandés restent en version 1.</p>
 </section>
 
-<!-- ================================================================ 20 -->
+<!-- ================================================================ 21 -->
 <section class="diapo" data-notes="Chaque ligne contient l'empreinte de la précédente : modifier une ligne casse la chaîne à cet endroit. Limite honnête : quelqu'un qui réécrit tout le journal en recalculant les empreintes passe la vérification ; d'où la copie de la dernière empreinte sur le téléphone. SHA-256 écrit à la main en JS et en C++, vérifié avec les vecteurs officiels.">
   <p class="repere">Traçabilité</p>
   <h2>Le journal de sécurité est chaîné par SHA-256 : <em>une ligne modifiée casse la chaîne</em></h2>
@@ -717,7 +743,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 21 -->
+<!-- ================================================================ 22 -->
 <section class="diapo" data-notes="Cas entreprise : une société de location équipe 20 vélos. Les boîtiers envoient leurs mesures à un serveur ; la liaison (passerelle en station ou LTE-M) est une hypothèse. Le serveur repère les fuites trop lentes pour le boîtier, sur plusieurs jours, et trie la tournée du technicien. Ouvrir la démonstration : elle tourne aussi sans serveur, dans le navigateur.">
   <p class="repere">Mode flotte · cas entreprise</p>
   <h2>En location, les mesures de 20 vélos deviennent <em>une tournée de maintenance triée par priorité</em></h2>
@@ -769,7 +795,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 22 -->
+<!-- ================================================================ 23 -->
 <section class="diapo" data-notes="Chaque vélo a sa clé. Un lot n'est accepté que s'il est signé, récent et jamais vu : le numéro de séquence est gardé en base, donc l'anti-rejeu tient après un redémarrage. Toutes les requêtes SQL sont paramétrées. Le banc d'essai de la page de démonstration rejoue ces six cas. Pour la lecture, depuis le 24/10 : connexion par mot de passe, dont le serveur ne garde que le sel et l'empreinte scrypt, une fonction volontairement lente faite pour les mots de passe ; un compte inconnu reçoit la même réponse dans le même temps. Puis un jeton de session de 256 bits, dont seule l'empreinte SHA-256 est gardée ; la session se ferme après 15 min sans requête et au plus tard après 8 h, 3 sessions au plus par compte, et la déconnexion la détruit côté serveur. Rôles technicien ou gestionnaire. HTTPS dès qu'un certificat est présent : le script fait confiance à ce certificat précis au lieu de couper la vérification. RGPD : aucune position pendant une location, effacée par le serveur même si un boîtier l'envoie ; mesures gardées 30 jours, journal des IP 6 mois. Limites : sessions en mémoire, pas de second facteur, certificat auto-signé, secrets de démo publics.">
   <p class="repere">Mode flotte · sécurité de l'API</p>
   <h2>Le serveur n'accepte que des lots <em>signés, récents et jamais vus</em>, et ne répond qu'aux <em>comptes autorisés</em></h2>
@@ -806,7 +832,123 @@
   <p class="note-bas"><b class="orange">Limites :</b> sessions en mémoire, pas de second facteur, certificat auto-signé, secrets de démo publics, débit limité en mémoire. 133 tests du serveur.</p>
 </section>
 
-<!-- ================================================================ 23 -->
+<!-- ================================================================ 24 -->
+<section class="diapo" data-notes="L'architecture de l'entrepôt. Les capteurs émettent en Bluetooth ; trois passerelles au plafond, une par zone, les écoutent et publient un lot toutes les 10 s au courtier MQTT, en TLS, avec un certificat chacune. Le réseau est découpé en 4 zones, selon IEC 62443 : l'atelier (OT), les serveurs, la bureautique, la DMZ. Un seul passage entre elles, le pare-feu, qui refuse tout sauf 5 conduits numérotés. La bureautique, où arrivent les courriels piégés, ne peut jamais joindre l'atelier ; elle ne voit que la page de supervision, en HTTPS, avec un compte. Plan d'adressage : 10.10.VLAN.0/24, pare-feu en .254 partout.">
+  <p class="repere">Version industrielle · réseau</p>
+  <h2>Un réseau d'usine en <em>4 zones</em>, reliées par un seul pare-feu qui refuse tout sauf <em>5 conduits</em></h2>
+  <div class="corps grille" style="grid-template-columns: 1fr 470px; gap: 40px; align-items:start;">
+    <div class="defile defile-schema"><svg class="schema" viewBox="0 0 900 520" role="img" aria-label="Zones du réseau de l'entrepôt, pare-feu et conduits autorisés">
+      <defs>
+        <marker id="fl-vert-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+      </defs>
+      <!-- Zones -->
+      <rect x="0" y="0" width="330" height="200" rx="18" fill="#0e0e11" stroke="#fbbf24" stroke-opacity=".6"/>
+      <text x="22" y="38" font-size="22" font-weight="600">VLAN 10 · atelier (OT)</text>
+      <text x="22" y="70" font-size="17" fill="#a1a1aa" class="mono">10.10.10.0/24</text>
+      <text x="22" y="110" font-size="18" fill="#d4d4d8">3 passerelles BLE → MQTT</text>
+      <text x="22" y="140" font-size="18" fill="#d4d4d8">au plafond, une par zone</text>
+      <text x="22" y="178" font-size="16" fill="#a1a1aa">capteurs des chariots (Bluetooth)</text>
+      <rect x="570" y="0" width="330" height="230" rx="18" fill="#110f18" stroke="#a78bfa" stroke-opacity=".7"/>
+      <text x="592" y="38" font-size="22" font-weight="600">VLAN 20 · serveurs</text>
+      <text x="592" y="70" font-size="17" fill="#a1a1aa" class="mono">10.10.20.0/24</text>
+      <text x="592" y="110" font-size="18" fill="#d4d4d8">courtier MQTT · .10 · 8883</text>
+      <text x="592" y="140" font-size="18" fill="#d4d4d8">supervision · .20 · 8443</text>
+      <text x="592" y="170" font-size="18" fill="#d4d4d8">NTP · .30 · syslog · .40</text>
+      <text x="592" y="208" font-size="16" fill="#a1a1aa">Node.js, SQLite, Mosquitto</text>
+      <rect x="0" y="320" width="330" height="200" rx="18" fill="#0e0e11" stroke="#60a5fa" stroke-opacity=".6"/>
+      <text x="22" y="358" font-size="22" font-weight="600">VLAN 30 · bureautique</text>
+      <text x="22" y="390" font-size="17" fill="#a1a1aa" class="mono">10.10.30.0/24</text>
+      <text x="22" y="430" font-size="18" fill="#d4d4d8">poste du responsable</text>
+      <text x="22" y="460" font-size="18" fill="#d4d4d8">de maintenance</text>
+      <text x="22" y="498" font-size="16" fill="#a1a1aa">courriels, clés USB : zone exposée</text>
+      <rect x="570" y="320" width="330" height="200" rx="18" fill="#0e0e11" stroke="#33333d" stroke-dasharray="7 6"/>
+      <text x="592" y="358" font-size="22" font-weight="600">VLAN 40 · DMZ</text>
+      <text x="592" y="390" font-size="17" fill="#a1a1aa" class="mono">10.10.40.0/24</text>
+      <text x="592" y="430" font-size="18" fill="#d4d4d8">accès distant d'un</text>
+      <text x="592" y="460" font-size="18" fill="#d4d4d8">prestataire (prévu)</text>
+      <!-- Pare-feu -->
+      <rect x="360" y="225" width="180" height="70" rx="14" fill="rgba(167,139,250,.14)" stroke="#a78bfa"/>
+      <text x="450" y="256" font-size="21" font-weight="600" text-anchor="middle">Pare-feu</text>
+      <text x="450" y="281" font-size="15" fill="#a1a1aa" text-anchor="middle">nftables · tout refusé</text>
+      <!-- Conduits -->
+      <path d="M330,120 C400,120 410,200 420,222" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <path d="M480,222 C490,150 520,120 566,120" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <text x="450" y="70" font-size="16" fill="#34d399" text-anchor="middle" font-weight="600">① MQTT TLS 8883</text>
+      <text x="450" y="94" font-size="16" fill="#34d399" text-anchor="middle" font-weight="600">② NTP 123 · ③ syslog 514</text>
+      <path d="M330,420 C400,420 410,330 420,298" fill="none" stroke="#34d399" stroke-width="2.5" marker-end="url(#fl-vert-r)"/>
+      <text x="345" y="315" font-size="16" fill="#34d399" font-weight="600">④ HTTPS 8443</text>
+      <path d="M570,420 C500,420 490,330 482,298" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#fl-vert-r)"/>
+      <text x="500" y="460" font-size="16" fill="#34d399" font-weight="600">⑤ prévu</text>
+      <line x1="165" y1="205" x2="165" y2="315" stroke="#f87171" stroke-width="2.5" stroke-dasharray="7 6"/>
+      <text x="178" y="265" font-size="17" fill="#f87171" font-weight="600">✕ jamais</text>
+    </svg></div>
+    <div class="filtres">
+      <div class="filtre"><b>Zones et conduits</b>norme IEC 62443 : on regroupe par niveau de confiance, on n'ouvre que le nécessaire</div>
+      <div class="filtre"><b>Politique « tout refusé »</b>5 conduits numérotés, chacun avec un compteur ; refus comptés par sens</div>
+      <div class="filtre"><b>Plan d'adressage</b>10.10.<i>VLAN</i>.0/24, pare-feu en .254 dans chaque zone</div>
+      <div class="filtre"><b>L'heure et les journaux</b>NTP de l'usine pour dater les mesures ; syslog central pour tracer</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 25 -->
+<section class="diapo" data-notes="Les passerelles parlent MQTT, le protocole de l'IoT industriel : elles publient, le serveur s'abonne, le courtier Mosquitto fait le lien. J'ai écrit le client MQTT sans bibliothèque pour pouvoir l'expliquer octet par octet ; les tests comparent mes paquets à la norme. Trois mécanismes font la fiabilité : QoS 1, le courtier accuse réception ; stocker puis transmettre, la passerelle garde 1 h de lots ; le testament, si une passerelle disparaît, le courtier publie hors ligne à sa place. Le serveur applique les mêmes contrôles que le boîtier : la logique sert maintenant à quatre endroits. Je n'ai pas de commutateur ni de pare-feu : tout le réseau tourne dans une maquette Docker, une commande, 10 conteneurs. Ouvrir la supervision de l'entrepôt : en ligne, elle simule l'entrepôt dans le navigateur.">
+  <p class="repere">Version industrielle · collecte</p>
+  <h2>Des passerelles <em>BLE → MQTT</em>, et tout le réseau de l'usine dans une <em>maquette Docker</em></h2>
+  <div class="corps grille" style="grid-template-columns: 1fr 1fr; gap: 48px; align-items:start;">
+    <div class="filtres">
+      <div class="filtre"><b>Client MQTT 3.1.1 écrit à la main</b>290 lignes, sans bibliothèque : CONNECT, PUBLISH, SUBSCRIBE, vérifiés octet par octet</div>
+      <div class="filtre"><b>QoS 1</b>le courtier accuse réception de chaque lot, toutes les 10 s</div>
+      <div class="filtre"><b>Stocker puis transmettre</b>courtier injoignable : la passerelle garde 1 h de lots et les renvoie</div>
+      <div class="filtre"><b>Testament</b>passerelle disparue : le courtier publie « hors ligne » à sa place</div>
+      <div class="filtre"><b>La même logique, à 4 endroits</b>boîtier, application, serveur et supervision : trame, liste blanche, vraisemblance</div>
+    </div>
+    <div>
+      <div class="grille g2" style="gap:16px">
+        <div class="carte"><div class="chiffre">10<small>conteneurs</small></div><p class="discret petit">pare-feu, courtier, supervision, NTP, syslog, 3 passerelles, poste, entrepôt simulé</p></div>
+        <div class="carte"><div class="chiffre">1<small>commande</small></div><p class="discret petit"><span class="mono">docker compose up</span></p></div>
+        <div class="carte"><div class="chiffre">8<small>chariots</small></div><p class="discret petit">32 pneus, 3 zones : quais, allées, cour</p></div>
+        <div class="carte"><div class="chiffre">11 à 21<small>ms</small></div><p class="discret petit">d'écart d'horloge NTP mesuré sur les passerelles</p></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:24px; margin-top:24px; flex-wrap:wrap">
+        <a class="bouton-lien" href="../flotte/chariots.html" target="_blank" rel="noopener">Supervision de l'entrepôt <span aria-hidden="true">→</span></a>
+        <span class="mono discret petit">…/flotte/chariots.html</span>
+      </div>
+    </div>
+  </div>
+  <p class="note-bas">Pièges trouvés en faisant marcher la maquette : Docker masquait l'adresse des paquets routés (réponses perdues, vu avec tcpdump), et choisissait lui-même le réseau du port publié.</p>
+</section>
+
+<!-- ================================================================ 26 -->
+<section class="diapo" data-notes="La démonstration : node entrepot/demonstration.js, 13 essais, chacun avec sa preuve. Le pare-feu bloque le bureau vers l'atelier, les compteurs le prouvent. Le courtier refuse un client sans certificat ou signé par une AC pirate. Le plus important : même avec le certificat volé d'une passerelle, l'intrus ne peut ni parler au nom d'une autre, les ACL jettent le message, ni fausser une pression, le serveur refait les contrôles du boîtier. Une identité prouvée ne rend pas le contenu vrai. Enfin la continuité : passerelle coupée vue hors ligne en moins d'une seconde, courtier arrêté 30 s sans perte. Et une faille trouvée dans ma propre maquette : le serveur web donnait la clé privée du courtier, parce que le dépôt était monté en entier. Corrigée, testée, ajoutée à la démonstration.">
+  <p class="repere">Version industrielle · démonstration</p>
+  <h2><em>13 essais sur 13</em> : chaque couche suppose que la précédente peut tomber</h2>
+  <div class="corps grille" style="grid-template-columns: 1.35fr 1fr; gap: 40px; align-items:start;">
+    <div class="defile">
+      <table class="serre" style="font-size:16.5px">
+        <thead><tr><th style="width:110px">Couche</th><th>Essai</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr><td class="violet">Pare-feu</td><td>nmap d'une passerelle depuis le bureau</td><td>4 ports filtrés, compteur +4</td></tr>
+          <tr><td class="violet">Pare-feu</td><td>Bureau → courtier ; atelier → supervision</td><td>bloqués, comptés</td></tr>
+          <tr><td class="violet">Courtier</td><td>Sans certificat ; certificat d'une AC pirate</td><td>refusés (alertes TLS 116 et 48)</td></tr>
+          <tr><td class="violet">Courtier</td><td>Certificat <b>volé</b> de la passerelle 1, au nom de la 2</td><td>jeté par les ACL, rien reçu</td></tr>
+          <tr><td class="violet">Serveur</td><td>Certificat volé : capteur inconnu, 20 bar, rejeu de 3 h, lot incohérent</td><td>rejetés ; pression affichée inchangée</td></tr>
+          <tr><td class="violet">Continuité</td><td>Passerelle 2 coupée net</td><td>« hors ligne » en &lt; 1 s</td></tr>
+          <tr><td class="violet">Continuité</td><td>Courtier arrêté 30 s</td><td>lots rattrapés, 0 perte</td></tr>
+          <tr><td class="violet">Serveur web</td><td>Clé privée du courtier demandée</td><td>403</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grille" style="gap:16px">
+      <div class="carte carte-accent"><span class="etiquette rouge">Faille trouvée et corrigée</span><p class="discret petit" style="margin-top:10px">Le serveur sert les fichiers du dépôt, monté en entier dans la maquette : <span class="mono">…/certificats/courtier.cle</span> répondait <b>200</b>. Puis <span class="mono">/Entrepot/…</span> passait encore (disque Windows insensible à la casse). Corrigé, 2 tests, essai n° 4.</p></div>
+      <div class="carte"><h3>8 scénarios réseau</h3><p class="discret petit">S24 à S31 dans l'analyse de risques : aucun ne reste élevé ; deux dénis de service restent moyens.</p></div>
+      <pre class="code">node entrepot/demonstration.js</pre>
+    </div>
+  </div>
+  <p class="note-bas"><b class="orange">Limites :</b> toutes les zones sur un seul PC ; pas de révocation des certificats ; NTP non authentifié ; pas de limite de débit par client MQTT.</p>
+</section>
+
+<!-- ================================================================ 27 -->
 <section class="diapo" data-notes="Principal apport de la simulation : des défauts qu'on n'aurait trouvés qu'en roulant, voire jamais. Les trois derniers sont nouveaux : la fausse intrusion pendant une vraie crevaison, la fausse perte en montée lente sur la Croix-Rousse, et l'alerte qui se rallumait en boucle, corrigée par une hystérésis.">
   <p class="repere">Ce que la simulation a appris</p>
   <h2>La simulation a révélé <em>11 défauts</em>, corrigés avant de recevoir le matériel</h2>
@@ -830,7 +972,7 @@
   </div>
 </section>
 
-<!-- ================================================================ 24 -->
+<!-- ================================================================ 28 -->
 <section class="diapo" data-notes="Le vrai compromis du projet : écouter plus longtemps coûte de l'énergie mais réduit la latence. La fenêtre de 3 s couvre au moins une période d'émission du capteur ; avec l'écoute renforcée, le pire cas passe de 34 à 9 s. Ça coûte 12 jours d'autonomie sur 76, il en reste 63,7, très au-dessus de l'exigence de 7 jours.">
   <p class="repere">Compromis énergie / latence</p>
   <h2>Fenêtre d'écoute de 3&nbsp;s : pire délai d'alerte ramené <em>de 34&nbsp;s à 9&nbsp;s</em>, pour 63,7&nbsp;jours d'autonomie</h2>
@@ -875,7 +1017,7 @@
   <p class="note-bas">Crevaison : état CREVAISON 0,7 s à 6,7 s après le passage sous 0,5 bar (médiane 1,7 s), EF-09 tenue. Cas défavorable (2 h de roulage, 2 h d'éclairage, écoute continue) : 13,7 jours, ENF-01 tenue.</p>
 </section>
 
-<!-- ================================================================ 25 -->
+<!-- ================================================================ 29 -->
 <section class="diapo" data-notes="Planning semaine type : trajets domicile-travail en semaine, sorties le week-end, recharge le dimanche soir. Une semaine se calcule en environ 41 s. Le boîtier dort 95 % du temps ; la batterie ne descend qu'à 92,6 %. Aucune fausse alerte sur la semaine.">
   <p class="repere">Une semaine simulée</p>
   <h2>Une semaine entière : 12 sorties, <em>0 minute d'alerte</em>, batterie à 92,6 % avant la recharge</h2>
@@ -908,18 +1050,19 @@
   </div>
 </section>
 
-<!-- ================================================================ 26 -->
-<section class="diapo" data-notes="668 tests JavaScript en 7 suites et 136 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur. Le serveur en a 133, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
+<!-- ================================================================ 30 -->
+<section class="diapo" data-notes="717 tests JavaScript en 8 suites et 136 tests C++. Le 24/10, 79 tests JavaScript et 27 tests C++ de plus : confirmation par bouton, baromètre et recharge par grand froid, deux boutons sur une broche, sessions du serveur ; puis 49 pour la version industrielle : client MQTT octet par octet, passerelles, réception des lots piégés, et les fichiers secrets jamais servis. Le serveur en a 135, dont les tests de HTTPS avec un certificat temporaire fabriqué par le test, et 16 nouveaux pour la connexion par mot de passe et les sessions qui expirent. GitHub Actions les relance à chaque push : une tâche Node pour le JavaScript, une tâche qui compile la logique C++ avec g++ et l'exécute. C'est la première fois que le code C++ tourne vraiment sur un processeur. SHA-256 vérifié avec les vecteurs officiels.">
   <p class="repere">Vérification</p>
-  <h2><em>668 tests JavaScript et 136 tests C++</em>, relancés par GitHub à chaque push</h2>
+  <h2><em>717 tests JavaScript et 136 tests C++</em>, relancés par GitHub à chaque push</h2>
   <div class="corps grille" style="grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:start;">
     <div class="barres tests-barres" style="gap:16px">
       <div class="barre-ligne"><span class="nom">Logique et boîtier</span><div class="piste"><div class="barre" style="width:100%"></div></div><span class="total">208</span></div>
-      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:63.9%"></div></div><span class="total">133</span></div>
+      <div class="barre-ligne"><span class="nom">Serveur de flotte</span><div class="piste"><div class="barre" style="width:64.9%"></div></div><span class="total">135</span></div>
       <div class="barre-ligne"><span class="nom">Électronique</span><div class="piste"><div class="barre" style="width:41.3%"></div></div><span class="total">86</span></div>
       <div class="barre-ligne"><span class="nom">Pneu, météo, capteur</span><div class="piste"><div class="barre" style="width:34.6%"></div></div><span class="total">72</span></div>
       <div class="barre-ligne"><span class="nom">Vélo et parcours</span><div class="piste"><div class="barre" style="width:29.8%"></div></div><span class="total">62</span></div>
       <div class="barre-ligne"><span class="nom">Radio</span><div class="piste"><div class="barre" style="width:29.8%"></div></div><span class="total">62</span></div>
+      <div class="barre-ligne"><span class="nom">Version industrielle (MQTT, passerelles)</span><div class="piste"><div class="barre" style="width:22.6%"></div></div><span class="total">47</span></div>
       <div class="barre-ligne"><span class="nom">Monde complet, de bout en bout</span><div class="piste"><div class="barre" style="width:21.6%"></div></div><span class="total">45</span></div>
       <div class="barre-ligne cpp"><span class="nom">Logique C++ du firmware</span><div class="piste"><div class="barre" style="width:65.4%"></div></div><span class="total">136</span></div>
       <pre class="code" style="margin-top:6px">node simulateur/tests/tout.js</pre>
@@ -927,36 +1070,37 @@
     <div class="grille" style="gap:16px">
       <div class="carte carte-accent"><h3>GitHub Actions, à chaque push</h3><p class="discret petit">Une tâche JavaScript (Node 24) et une tâche C++ : la logique du firmware est compilée avec g++ puis exécutée.</p></div>
       <div class="carte"><h3>Vecteurs officiels</h3><p class="discret petit">SHA-256 (FIPS 180-4) et HMAC (RFC 4231), en JavaScript et en C++.</p></div>
-      <div class="carte"><h3>De bout en bout</h3><p class="discret petit">Crevaison, pirate, semaine type, pistage v1 / v2, baromètre avec et sans évent, recharge par grand froid, flotte envoyée au serveur, lot signé en HTTPS, session qui expire ; rejeu identique d'un scénario.</p></div>
+      <div class="carte"><h3>De bout en bout</h3><p class="discret petit">Crevaison, pirate, semaine type, pistage v1 / v2, baromètre avec et sans évent, recharge par grand froid, flotte envoyée au serveur, lot signé en HTTPS, session qui expire, client MQTT contre un faux courtier ; rejeu identique d'un scénario. Plus les 13 essais sur la maquette réseau.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ================================================================ 27 -->
-<section class="diapo" data-notes="Ouvrir le simulateur dans un nouvel onglet. Scénario conseillé : sortie normale, puis crevaison arrière, puis pirate sans protection et avec protections, enfin avance rapide d'une semaine. Si le temps le permet : page Vie privée, puis supervision de flotte. Revenir ensuite au diaporama, diapositive 28.">
+<!-- ================================================================ 31 -->
+<section class="diapo" data-notes="Ouvrir le simulateur dans un nouvel onglet. Scénario conseillé : sortie normale, puis crevaison arrière, puis pirate sans protection et avec protections, enfin avance rapide d'une semaine. Puis la supervision de l'entrepôt : banc d'essai des lots piégés, et couper la passerelle 2 pour voir son testament. Si la maquette Docker tourne sur le PC : node entrepot/demonstration.js. Si le temps le permet : page Vie privée, puis flotte de vélos. Revenir ensuite au diaporama, diapositive 32.">
   <p class="repere">Démonstration</p>
-  <h2>Démonstration en direct : <em>quatre scénarios</em> dans le simulateur</h2>
+  <h2>Démonstration en direct : <em>quatre scénarios</em> dans le simulateur, puis <em>l'entrepôt</em></h2>
   <div class="corps grille" style="grid-template-columns: 1fr 520px; gap: 56px; align-items:start;">
     <ol class="etapes">
       <li>Sortie normale<span>Vue d'ensemble : écran du boîtier, vitesse, distance, trames reçues.</span></li>
       <li>Crevaison arrière<span>Pneus : chute de pression, état CREVAISON, bip et LED.</span></li>
       <li>Attaque pirate<span>Radio et sécurité : protections coupées, fausse crevaison ; protections actives, SIGNAL SUSPECT.</span></li>
       <li>Semaine type<span>Avance rapide jusqu'au dimanche : batterie, veille, export CSV.</span></li>
+      <li>Entrepôt<span>Supervision des chariots : lots piégés rejetés, passerelle coupée vue « hors ligne » ; sur la maquette, les 13 essais.</span></li>
     </ol>
     <div>
       <a class="bouton-lien" href="../simulateur/index.html" target="_blank" rel="noopener">Ouvrir le simulateur <span aria-hidden="true">→</span></a>
       <p class="mono discret petit" style="margin:16px 0 34px">titilyonnais.github.io/tpms-velo/simulateur/</p>
       <a class="bouton-lien secondaire" href="../app/index.html" target="_blank" rel="noopener">Ouvrir l'application</a>
       <p class="mono discret petit" style="margin:16px 0 26px">titilyonnais.github.io/tpms-velo/app/</p>
-      <a class="bouton-lien secondaire" href="../flotte/index.html" target="_blank" rel="noopener">Ouvrir la supervision de flotte</a>
-      <p class="mono discret petit" style="margin:16px 0 0">titilyonnais.github.io/tpms-velo/flotte/</p>
+      <a class="bouton-lien secondaire" href="../flotte/chariots.html" target="_blank" rel="noopener">Ouvrir la supervision de l'entrepôt</a>
+      <p class="mono discret petit" style="margin:16px 0 0">titilyonnais.github.io/tpms-velo/flotte/chariots.html</p>
       <p class="discret petit" style="margin:26px 0 0">Rien à installer : des pages web, qui tournent aussi sans serveur.</p>
     </div>
   </div>
 </section>
 
-<!-- ================================================================ 28 -->
-<section class="diapo" data-notes="Être clair sur les limites : la simulation repose sur des hypothèses. Les plus importantes : format des trames, intervalle d'annonce et seuil de rotation du capteur, consommations, étanchéité du boîtier. Pour la consommation, pas de PPK2 : résistance shunt et oscilloscope. Depuis le 24/10 : la durée de BUSY au froid, à mesurer avant de couper le fil ; la tension de D5 avec le bouton 2 ; la membrane de l'évent ; la pression du baromètre comparée à une station météo ; l'absence de courant de charge au froid. Les capteurs v2 et la liaison vers le serveur restent des propositions.">
+<!-- ================================================================ 32 -->
+<section class="diapo" data-notes="Être clair sur les limites : la simulation repose sur des hypothèses. Les plus importantes : format des trames, intervalle d'annonce et seuil de rotation du capteur, consommations, étanchéité du boîtier. Pour la consommation, pas de PPK2 : résistance shunt et oscilloscope. Depuis le 24/10 : la durée de BUSY au froid, à mesurer avant de couper le fil ; la tension de D5 avec le bouton 2 ; la membrane de l'évent ; la pression du baromètre comparée à une station météo ; l'absence de courant de charge au froid. Les capteurs v2 et la liaison vers le serveur restent des propositions. Pour l'entrepôt : les capteurs poids lourd et leur trame, la portée réelle du Bluetooth au milieu des racks, et le fait que la maquette tourne sur un seul PC.">
   <p class="repere">Limites</p>
   <h2>Ce qui reste à valider, <em>surtout avec le matériel</em></h2>
   <div class="corps defile">
@@ -974,23 +1118,24 @@
         <tr><td>Seuil d'inondation</td><td>50 annonces inconnues par seconde</td><td>Compter les annonces BLE dans une rue fréquentée</td></tr>
         <tr><td>Capteurs v2</td><td>proposition simulée</td><td>Demande des capteurs dont on écrit le programme</td></tr>
         <tr><td>Mode flotte</td><td>liaison supposée ; certificat auto-signé ; sessions en mémoire</td><td>Passerelle ou LTE-M ; Let's Encrypt, OpenID Connect en production</td></tr>
+        <tr><td>Entrepôt</td><td>capteurs « poids lourd » 0-13 bar, 8,5 bar ; portée BLE ≈ 24 m ; toutes les zones sur un PC</td><td>Choix des capteurs, plaque des chariots ; portée mesurée avec le démonstrateur ; vrais VLAN ou Packet Tracer ; révocation des certificats</td></tr>
       </tbody>
     </table>
   </div>
 </section>
 
-<!-- ================================================================ 29 -->
-<section class="diapo" data-notes="Conclure sur la démarche : concevoir, tester et attaquer avant d'avoir le matériel. La donnée sert du cycliste jusqu'à la flotte d'entreprise, et la même trame donne deux pressions selon la question posée ; la sécurité est mesurée, limites comprises, y compris le pistage que seul un capteur v2 corrigerait. Trois évolutions du 24/10 : confirmation par bouton, baromètre avec recharge coupée par grand froid, sessions de la flotte. Prochaine étape : réception du matériel et commande des pièces ajoutées. Remercier le jury.">
+<!-- ================================================================ 33 -->
+<section class="diapo" data-notes="Conclure sur la démarche : concevoir, tester et attaquer avant d'avoir le matériel. Le projet est devenu industriel sans changer de cœur : la même logique sert du vélo jusqu'à l'entrepôt, à travers un réseau segmenté que j'ai attaqué moi-même. La donnée sert du cycliste jusqu'à la flotte d'entreprise, et la même trame donne deux pressions selon la question posée ; la sécurité est mesurée, limites comprises, y compris le pistage que seul un capteur v2 corrigerait. Trois évolutions du 24/10 : confirmation par bouton, baromètre avec recharge coupée par grand froid, sessions de la flotte. Prochaine étape : réception du matériel et commande des pièces ajoutées. Remercier le jury.">
   <p class="repere">Conclusion</p>
-  <h2>Un produit conçu, testé et attaqué <em>avant d'avoir reçu une seule pièce</em></h2>
+  <h2>Un système conçu, testé et attaqué <em>avant d'avoir reçu une seule pièce</em>, du vélo à l'entrepôt</h2>
   <div class="grille g3" style="gap:22px">
-    <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression corrigée de l'altitude et compensée en température, une prévision de regonflage, des statistiques, et la tournée d'une flotte de 20 vélos.</p></div>
-    <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">15 scénarios</div><p class="discret">analysés ; 0 fausse crevaison acceptée sur 300 ; changements sensibles confirmés sur le boîtier ; seul le pistage reste élevé, d'où la proposition de capteurs v2.</p></div>
-    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés ; 668 tests JS et 136 tests C++ relancés à chaque push.</p></div>
+    <div class="carte"><span class="etiquette">Donnée</span><div class="chiffre">18 octets</div><p class="discret">deviennent une pression corrigée et compensée, une prévision de regonflage, la tournée de 20 vélos, et la supervision de 32 pneus de chariots remontés par MQTT.</p></div>
+    <div class="carte"><span class="etiquette rouge">Cybersécurité</span><div class="chiffre">31 scénarios</div><p class="discret">analysés (kit, serveur, réseau) ; 0 fausse crevaison acceptée sur 300 ; 13 essais réseau sur 13 ; seul le pistage du cycliste reste élevé, d'où la proposition de capteurs v2.</p></div>
+    <div class="carte"><span class="etiquette vert">Méthode</span><div class="chiffre">11 défauts</div><p class="discret">trouvés en simulation et corrigés, plus une faille de la maquette ; 717 tests JS et 136 tests C++ relancés à chaque push.</p></div>
   </div>
   <div class="carte" style="margin-top:22px">
     <h3>Prochaines étapes</h3>
-    <p class="discret">Réception du matériel et commande des pièces ajoutées (BMP280, TPS22918, pastille ePTFE) → capture des vraies trames → mesure de BUSY au froid et des consommations → réglage des jeux et essai du joint et de l'évent → impression du boîtier → essais sur le vélo.</p>
+    <p class="discret">Réception du matériel et commande des pièces ajoutées (BMP280, TPS22918, pastille ePTFE) → capture des vraies trames → mesure de BUSY au froid et des consommations → impression du boîtier → essais sur le vélo → mesure de la portée Bluetooth pour dimensionner les passerelles de l'entrepôt.</p>
   </div>
   <p class="note-bas" style="font-size:34px; color:var(--texte); font-weight:600">Merci. Questions ?</p>
 </section>
@@ -1000,7 +1145,7 @@
 <!-- Commandes discrètes (masquées à l'impression et sur téléphone) -->
 <nav class="commandes" aria-label="Navigation du diaporama">
   <button type="button" id="btnPrec" aria-label="Diapositive précédente">←</button>
-  <span id="compteur">1 / 29</span>
+  <span id="compteur">1 / 33</span>
   <button type="button" id="btnSuiv" aria-label="Diapositive suivante">→</button>
 </nav>
 <div class="notes" id="notes" hidden></div>

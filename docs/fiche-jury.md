@@ -11,7 +11,7 @@ Cette fiche sert à **s'entraîner**, pas à être lue devant le jury. Pour chaq
 ## 1. Le projet et la démarche
 
 **Q1. En une phrase, qu'avez-vous fait ?**
-Un kit de surveillance de la pression des pneus de vélo (deux capteurs TPMS du commerce, un boîtier de guidon à écran e-paper, une application), et surtout un **simulateur complet** qui m'a permis de tout concevoir et tester avant d'avoir le matériel : 668 tests JavaScript et 136 tests C++, relancés à chaque envoi de code sur GitHub.
+Un système de surveillance de la pression des pneus par capteurs TPMS Bluetooth, appliqué à une **flotte de chariots élévateurs** (passerelles BLE → MQTT, réseau d'usine découpé en zones, supervision), avec un **kit vélo** comme démonstrateur (boîtier à écran e-paper, application) ; et surtout un **simulateur complet** et une **maquette réseau Docker** qui m'ont permis de tout concevoir, tester et attaquer avant d'avoir le matériel : 717 tests JavaScript et 136 tests C++, relancés à chaque envoi de code sur GitHub.
 → rapport § 1.6 et § 3.
 
 **Q2. Pourquoi un simulateur plutôt qu'attendre le matériel ?**
@@ -138,15 +138,59 @@ Je commencerais par le simulateur dès le premier jour, comme je l'ai fait, mais
 
 ---
 
-## 6. Les démonstrations à avoir prêtes
+## 6. La version industrielle et le réseau
+
+**Q29. Pourquoi des chariots élévateurs ? Ce n'est plus le même projet ?**
+C'est le même cœur (capteurs, logique, cybersécurité), avec un vrai contexte industriel : un pneu de chariot sous-gonflé rend la machine instable charge levée, c'est de la **sécurité au travail**. Je vise les chariots à **pneus gonflables** (7 à 10 bar), pas ceux à bandages pleins. Le vélo reste le démonstrateur : mêmes valves, mêmes capteurs, démonstration réelle possible.
+→ `docs/orientation-industrielle.md` § 1 et 2.
+
+**Q30. Expliquez votre découpage du réseau.**
+Quatre zones (VLAN) : l'**atelier OT** avec les passerelles, les **serveurs** (courtier MQTT, supervision, NTP, syslog), la **bureautique**, la **DMZ** pour un accès distant prévu. Un seul passage, le **pare-feu**, en politique « tout refusé » avec **5 conduits** numérotés. C'est la logique **zones et conduits** de la norme IEC 62443. Adressage 10.10.*VLAN*.0/24, pare-feu en .254.
+→ rapport § 10.2, `entrepot/pare-feu/regles.nft`.
+
+**Q31. Pourquoi la bureautique ne peut-elle pas joindre l'atelier ?**
+Parce que c'est là qu'arrivent les courriels piégés et les clés USB : un poste infecté ne doit pas pouvoir rebondir vers la production (scénario S24). La bureautique ne voit que la page de supervision, en HTTPS, avec un compte. Preuve : un `nmap` depuis le poste voit tous les ports « filtered », et le compteur du pare-feu augmente.
+→ essai 1 de `entrepot/demonstration.js`.
+
+**Q32. Pourquoi MQTT, et comment ça marche ?**
+C'est le protocole de l'IoT industriel : léger, par **publication et abonnement**. Les passerelles publient sur `entrepot/lyon/passerelle/N/trames`, le serveur s'abonne à `entrepot/#`, le **courtier** (Mosquitto) fait le lien. J'ai écrit le client à la main, sans bibliothèque, pour pouvoir l'expliquer octet par octet : un PUBLISH commence par 0x30 (ou 0x32 en QoS 1), puis la longueur restante sur 1 à 4 octets, puis le sujet.
+→ rapport § 10.3, `entrepot/mqtt.js`.
+
+**Q33. Que se passe-t-il si une passerelle tombe, ou si le courtier tombe ?**
+Passerelle : à la connexion elle a confié un **testament** au courtier, qui publie « hors ligne » à sa place ; la supervision le voit en moins d'une seconde. Courtier : chaque passerelle **garde ses lots** (jusqu'à 1 h) et les renvoie au retour, en **QoS 1** (accusé de réception). Essai : courtier arrêté 30 s, aucune mesure perdue.
+→ essais 12 et 13.
+
+**Q34. Comment empêchez-vous une fausse passerelle ?**
+**TLS mutuel** : le courtier n'accepte que les clients qui présentent un certificat signé par l'AC de l'usine (pas de port 1883 en clair, pas d'anonyme). Sans certificat : alerte TLS 116 ; certificat d'une AC pirate : alerte 48. Et les **ACL** : la passerelle 1 ne peut publier que sous son numéro.
+→ essais 5 à 7, `entrepot/courtier/`.
+
+**Q35. Et si on vole une passerelle avec son certificat ?**
+C'est l'essai le plus important : avec le certificat volé, l'intrus passe le courtier, mais il ne peut ni parler au nom d'une autre passerelle (ACL), ni fausser les pressions : le **serveur refait les contrôles du boîtier** (sujet = contenu, liste blanche, 0-13 bar, anti-rejeu). **Une identité prouvée ne rend pas le contenu vrai.** Limite honnête : il peut envoyer des valeurs plausibles pour les capteurs à sa portée tant qu'on ne **révoque** pas le certificat ; il faudrait une liste de révocation et une clé protégée dans la passerelle.
+→ essais 8 à 11, analyse de risques S26 et § 6.15.
+
+**Q36. Pourquoi un serveur NTP ?**
+Les passerelles datent les annonces : sans heure commune, impossible de détecter un rejeu (le serveur refuse au-delà de 60 s dans le futur et de 2 h dans le passé), de comparer deux passerelles, ou de vérifier la validité d'un certificat. Écart mesuré : 11 à 21 ms. Limite : NTP n'est pas authentifié ; NTS le serait.
+
+**Q37. Votre maquette, c'est un vrai réseau ?**
+Elle reproduit le **découpage** et le **filtrage** (10 conteneurs, un réseau Docker par VLAN, un vrai pare-feu nftables avec ses compteurs), mais tout tourne sur un PC : pas d'isolation physique. Le même plan se referait dans Packet Tracer ou sur un vrai commutateur. Elle m'a appris des choses concrètes : Docker masquait l'adresse des paquets routés (vu avec `tcpdump`), et il faut une traduction d'adresse avec retour par le pare-feu pour publier un service.
+→ `entrepot/README.md` § 5.
+
+**Q38. Vous avez trouvé une faille dans votre propre projet ?**
+Oui : le serveur sert les fichiers du dépôt, et dans la maquette le dépôt est monté en entier : l'adresse `/entrepot/certificats/courtier.cle` donnait la **clé privée du courtier**. Puis, après correction, `/Entrepot/...` en majuscules passait encore, car le disque Windows ne distingue pas la casse. Corrigé, deux tests, et un essai de la démonstration. Leçon : un serveur web ne doit voir que ses fichiers publics.
+→ rapport § 10.7, analyse de risques S30.
+
+## 7. Les démonstrations à avoir prêtes
 
 1. **Simulateur** (https://titilyonnais.github.io/tpms-velo/simulateur/) : une crevaison (alerte en quelques secondes), puis l'attaque d'un pirate (« SIGNAL SUSPECT »).
 2. **Confirmation par bouton** : page Application → décocher une protection → « CONFIRMER ? » sur l'écran du boîtier → appui long sur le bouton 2.
 3. **Altitude** : parcours du col de la Luère, page Électronique → baromètre et correction ; Configuration → « BMP280 sans évent » pour montrer la différence.
 4. **Grand froid** : Configuration → météo « Hiver, gel », départ à 6 h et « Recharge du boîtier : dehors », puis brancher le chargeur → « FROID » près de la batterie, et la page Électronique montre la recharge coupée.
 5. **Flotte** : serveur local, connexion par mot de passe, puis « Se déconnecter » ; attaques de rejeu et de signature avec `flotte-vers-serveur.js`.
+6. **Entrepôt, sans Docker** (https://titilyonnais.github.io/tpms-velo/flotte/chariots.html) : banc d'essai des lots piégés (tous rejetés), puis « Couper la passerelle 2 » → « hors ligne ».
+7. **Entrepôt, maquette Docker** (lancer `docker compose up -d` dans `entrepot/` **avant** l'oral, Docker Desktop démarré) : `node entrepot/demonstration.js` (13 essais, environ 3 min, ou un seul : `node entrepot/demonstration.js 7`) ; `docker compose exec pare-feu nft list ruleset` pour montrer les compteurs ; `journaux/central.log` pour le journal central.
 
-## 7. À compléter avant le jour J
+## 8. À compléter avant le jour J
 
 - Champs [Établissement], [Professeur référent], [Session] et [Date de soutenance] dans le rapport et la présentation.
+- Faire valider l'orientation industrielle par le professeur référent (`docs/orientation-industrielle.md`).
 - Si le matériel arrive : remplacer les hypothèses mesurées (format des trames, plage des capteurs, consommations) et le dire en ouverture de soutenance.
