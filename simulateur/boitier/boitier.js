@@ -317,7 +317,26 @@ TPMS.boitierTopRoue = function (b, maintenantMs) {
 //   bouton 1 court : changer de page    | long : remise à zéro du trajet
 //   bouton 2 court : éclairage on/off   | long : acquitter les alertes
 // En veille, un appui ne fait que réveiller le boîtier.
+// Pendant qu'un changement sensible attend (liaison.js), les boutons
+// servent à répondre : appui long sur le bouton 2 = confirmer, tout
+// autre appui = annuler.
+// Seul un VRAI appui passe par ici ; l'app passe par boitierAction.
 TPMS.boitierBouton = function (b, numero, appuiLong, maintenantMs) {
+  if (!b.veille && b.liaison.enAttente !== null) {
+    b.dernierMouvementMs = maintenantMs;
+    b.ecranUrgent = true;
+    if (numero === 2 && appuiLong) {
+      TPMS.liaisonConfirmer(b, maintenantMs);
+    } else {
+      TPMS.liaisonAnnulerAttente(b, maintenantMs, "refusé sur le boîtier");
+    }
+    return;
+  }
+  TPMS.boitierAction(b, numero, appuiLong, maintenantMs);
+};
+
+// L'effet ordinaire d'un bouton (appui réel, ou commande de l'app).
+TPMS.boitierAction = function (b, numero, appuiLong, maintenantMs) {
   b.dernierMouvementMs = maintenantMs;
   b.ecranUrgent = true;
   if (b.veille) {
@@ -354,6 +373,7 @@ TPMS.boitierVue = function (b, maintenantMs) {
     batterieBoitierPct: b.batteriePct,
     appConnectee: b.liaison.connecte,
     codeAppairage: b.liaison.code,
+    confirmation: b.liaison.enAttente !== null ? b.liaison.masqueAttente : 0,   // 0 = rien à confirmer
     radioSaturee: b.radioSaturee,
     roues: { AV: TPMS.vueRoue(b.roues.AV, b.reglages.seuils.AV.basBar),
              AR: TPMS.vueRoue(b.roues.AR, b.reglages.seuils.AR.basBar) },
@@ -389,12 +409,17 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
   if (!b.veille && maintenantMs - b.dernierMouvementMs > b.reglages.delaiVeilleMs) {
     b.veille = true;
     b.ecranUrgent = true;
+    TPMS.liaisonAnnulerAttente(b, maintenantMs, "mise en veille");
     TPMS.boitierJournal(b, maintenantMs, "Mise en veille (vélo immobile)");
   }
   // Le code d'appairage disparaît au bout d'une minute.
   if (b.liaison.code !== null && maintenantMs > b.liaison.codeJusquaMs) {
     b.liaison.code = null;
     b.ecranUrgent = true;
+  }
+  // Sans réponse sur le boîtier en 30 s, le changement sensible est abandonné.
+  if (b.liaison.enAttente !== null && maintenantMs > b.liaison.attenteJusquaMs) {
+    TPMS.liaisonAnnulerAttente(b, maintenantMs, "pas de confirmation en 30 s");
   }
 
   // 2. État de chaque pneu (pas en veille : la radio est coupée).

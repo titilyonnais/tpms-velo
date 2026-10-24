@@ -7,6 +7,7 @@
 #include "protocole.h"
 #include "outils.h"
 #include "trame.h"
+#include <string.h>
 
 // ---------------------------------------------------------------------
 // Outils
@@ -89,7 +90,8 @@ void encoderMesures(const MesuresApp* m, uint8_t* o) {
   ecrireUint16LE(o, 10, (uint32_t)arrondi(m->vitesseKmh * 10.0f));
   ecrireInt32LE(o, 12, arrondi(m->distanceKm * 1000.0f));
   o[16] = (uint8_t)arrondi(m->batterieBoitierPct);
-  o[17] = (m->veille ? 1 : 0) | (m->enCharge ? 2 : 0) | (m->eclairage ? 4 : 0);
+  o[17] = (m->veille ? 1 : 0) | (m->enCharge ? 2 : 0) | (m->eclairage ? 4 : 0) |
+          (m->attenteConfirmation ? 8 : 0);
   ecrireUint16LE(o, 18, m->sequence);
 }
 
@@ -143,4 +145,25 @@ const char* verifierReglages(const Reglages* r) {
     return "délai de veille hors plage (10 s à 1 h)";
   }
   return "";
+}
+
+// ---------------------------------------------------------------------
+// Changements sensibles
+// ---------------------------------------------------------------------
+const char* const TEXTES_SENSIBLES[NB_RAISONS_SENSIBLES] = {
+  "COUPER LISTE BLANCHE",   // SENSIBLE_SANS_LISTE_BLANCHE
+  "COUPER VRAISEMBLANCE",   // SENSIBLE_SANS_VRAISEMBLANCE
+  "COUPER RYTHME",          // SENSIBLE_SANS_RYTHME
+  "NOUVEAU CAPTEUR AV",     // SENSIBLE_CAPTEUR_AV
+  "NOUVEAU CAPTEUR AR"      // SENSIBLE_CAPTEUR_AR
+};
+
+uint8_t changementSensible(const Reglages* ancien, const Reglages* nouveau) {
+  uint8_t masque = 0;
+  if (ancien->protections.listeBlanche && !nouveau->protections.listeBlanche) masque |= SENSIBLE_SANS_LISTE_BLANCHE;
+  if (ancien->protections.vraisemblance && !nouveau->protections.vraisemblance) masque |= SENSIBLE_SANS_VRAISEMBLANCE;
+  if (ancien->protections.rythme && !nouveau->protections.rythme) masque |= SENSIBLE_SANS_RYTHME;
+  if (memcmp(ancien->appairage.adresse[POS_AV], nouveau->appairage.adresse[POS_AV], TAILLE_ADRESSE) != 0) masque |= SENSIBLE_CAPTEUR_AV;
+  if (memcmp(ancien->appairage.adresse[POS_AR], nouveau->appairage.adresse[POS_AR], TAILLE_ADRESSE) != 0) masque |= SENSIBLE_CAPTEUR_AR;
+  return masque;
 }

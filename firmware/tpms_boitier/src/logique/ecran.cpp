@@ -11,6 +11,7 @@
 // équivalent de toFixed, voir outils.h).
 // =====================================================================
 #include "ecran.h"
+#include "protocole.h"
 #include "alertes.h"
 #include "fuite.h"
 #include "outils.h"
@@ -50,6 +51,24 @@ void dessinerEcran(Ecran* e, const Vue* vue) {
 
   // ---- Code d'appairage, par-dessus tout le reste ----
   if (vue->codeAppairage[0] != '\0') dessinerCodeAppairage(e, vue->codeAppairage);
+
+  // ---- Changement sensible demandé par l'app, à confirmer ----
+  if (vue->confirmation != 0) dessinerConfirmation(e, vue->confirmation);
+}
+
+void dessinerConfirmation(Ecran* e, uint8_t masque) {
+  ecranRectPlein(e, 10, 40, 180, 120, BLANC);
+  ecranCadre(e, 10, 40, 180, 120, NOIR);
+  ecranCadre(e, 12, 42, 176, 116, NOIR);
+  ecranTexteCentre(e, 100, 50, "CONFIRMER ?", 2, NOIR);
+  int ligne = 0;
+  for (int i = 0; i < NB_RAISONS_SENSIBLES; i++) {
+    if ((masque & (1 << i)) == 0) continue;
+    ecranTexteCentre(e, 100, 72 + 10 * ligne, TEXTES_SENSIBLES[i], 1, NOIR);
+    ligne++;
+  }
+  ecranTexteCentre(e, 100, 130, "APPUI LONG BOUTON 2 : OUI", 1, NOIR);
+  ecranTexteCentre(e, 100, 142, "AUTRE BOUTON : NON", 1, NOIR);
 }
 
 void dessinerCodeAppairage(Ecran* e, const char* code) {

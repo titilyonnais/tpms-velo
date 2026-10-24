@@ -103,7 +103,7 @@ Attaque combinée : le pirate empêche le boîtier de recevoir le vrai capteur, 
 
 ### S7 – Appairage malveillant avec le boîtier, homme du milieu
 
-Le pirate tente de se connecter au boîtier pour **modifier les réglages** (désactiver les protections, remplacer les adresses des capteurs appairés par celles de ses propres émetteurs), ou de s'intercaler entre le téléphone et le boîtier pendant l'appairage (homme du milieu) pour lire ou modifier les échanges. L'homme du milieu est simulé par `TPMS.liaisonAttaqueHommeDuMilieu` (`simulateur/boitier/liaison.js`, page Application), avec et sans code d'appairage (résultats au § 5.4).
+Le pirate tente de se connecter au boîtier pour **modifier les réglages** (désactiver les protections, remplacer les adresses des capteurs appairés par celles de ses propres émetteurs), directement, avec un téléphone appairé volé, ou de s'intercaler entre le téléphone et le boîtier pendant l'appairage (homme du milieu) pour lire ou modifier les échanges. L'homme du milieu est simulé par `TPMS.liaisonAttaqueHommeDuMilieu` (`simulateur/boitier/liaison.js`, page Application), avec et sans code d'appairage (résultats au § 5.4).
 
 ### S8 – Recherche du code d'appairage par essais successifs (brute-force)
 
@@ -211,7 +211,7 @@ La colonne « Après » correspond au produit actuel, avec les capteurs du comme
 | S4 Rejeu | Ancienne pression acceptée sans alerte | 3 × 3 = **9 élevé** | Rythme et quarantaine ; vraisemblance si la valeur rejouée diffère beaucoup | 3 × 1 = **3 faible** | 3 × 1 = **3 faible**, trame refusée (compteur déjà vu) |
 | S5 Brouillage | Plus aucune mesure | 2 × 2 = **4 moyen** | État « CAPTEUR PERDU » après 60 s sans trame au-dessus de 10 km/h (600 s en dessous ou à l'arrêt), avec bip et LED | 1 × 2 = **2 faible** | = |
 | S6 Brouillage + imitation du rythme | Fausse pression acceptée sans alerte | 3 × 1 = **3 faible** | Seule la vraisemblance limite les variations brusques | 3 × 1 = **3 faible** (résiduel assumé) | 1 × 2 = **2 faible** : le pirate ne peut plus signer de fausse trame, il ne reste que le brouillage (S5), signalé |
-| S7 Appairage malveillant, homme du milieu | Un tiers modifie les réglages | 3 × 2 = **6 moyen** | BLE Secure Connections, code affiché sur l'e-paper ; réglages refusés sans appairage | 3 × 1 = **3 faible** | = |
+| S7 Appairage malveillant, homme du milieu | Un tiers modifie les réglages | 3 × 2 = **6 moyen** | BLE Secure Connections, code affiché sur l'e-paper ; réglages refusés sans appairage ; changements sensibles confirmés par un bouton du boîtier | 3 × 1 = **3 faible** | = |
 | S8 Brute-force du code | Un tiers s'appaire | 3 × 2 = **6 moyen** | Code aléatoire valable 60 s ; blocage 60 s après 3 codes faux | 3 × 1 = **3 faible** | = |
 | S9 Réglages absurdes | Boîtier inutilisable ou alertes faussées | 2 × 2 = **4 moyen** | Vérification des réglages par le boîtier | 2 × 1 = **2 faible** | = |
 | S10 Vol des données | Habitudes du cycliste exposées | 1 × 2 = **2 faible** | Liaison chiffrée ; données locales, sans serveur ni compte | 1 × 1 = **1 faible** | = |
@@ -259,6 +259,7 @@ Pour le kit vendu au particulier, le seul risque élevé restant est le **pistag
 | **Capteur perdu** | S5 | `TPMS.evaluerRoue` (`logique/alertes.js`), appelée par `TPMS.boitierMiseAJour` (`boitier.js`) | 60 s sans trame au-dessus de 10 km/h (`delaiPerteMs`, `TPMS.VITESSE_ROULAGE_SURE_KMH`), 600 s en dessous et à l'arrêt (`delaiPerteArretMs`), car un capteur à l'arrêt, ou qui ne sent pas la rotation, n'annonce plus qu'une fois par minute (§ 6.7). Le silence est compté depuis le plus récent de ces instants : dernière trame acceptée, réveil du boîtier, fin de la quarantaine « SIGNAL SUSPECT » (pendant la quarantaine, même le vrai capteur est refusé) | « capteur perdu », « pas perdu juste après un réveil », « arrêt : aucune fausse alerte « capteur perdu » », « fin d'attaque : pas de fausse alerte « capteur perdu » » |
 | **BLE Secure Connections**, code à 6 chiffres affiché sur l'e-paper | S7 | Firmware : pile BLE du nRF52840. Simulé par `TPMS.liaisonConnexion` et `TPMS.liaisonSaisirCode` (`simulateur/boitier/liaison.js`), affichage par `TPMS.dessinerCodeAppairage` (`ecran.js`) ; attaque simulée par `TPMS.liaisonAttaqueHommeDuMilieu` | Code tiré au hasard, affiché 60 s ; un code encore valide n'est pas remplacé par une nouvelle demande (sinon n'importe qui à portée pourrait changer le code sous les yeux du cycliste et l'empêcher de s'appairer) | « premier contact → code requis », « code affiché à l'écran », « bon code », « mauvais code », « homme du milieu sans code : réussi, seuils changés », « homme du milieu avec code : échec après 3 essais, appairage bloqué » |
 | **Réglages et commandes réservés** au téléphone appairé | S7 | `TPMS.liaisonEcrireReglages`, `TPMS.liaisonLireReglages`, `TPMS.liaisonCommande` | Refus si le lien n'est pas appairé | « réglages refusés sans appairage » |
+| **Confirmation par bouton** des changements sensibles (ajoutée le 24/10/2026) | S7 (téléphone appairé volé ou piégé) | `TPMS.changementSensible` (`logique/protocole.js`), `TPMS.liaisonEcrireReglages`, `TPMS.liaisonConfirmer`, `TPMS.liaisonAnnulerAttente` (`liaison.js`), `TPMS.boitierBouton` (`boitier.js`), `TPMS.dessinerConfirmation` (`ecran.js`) ; traduits en C++ | Couper une protection ou remplacer l'adresse d'un capteur : rien n'est appliqué avant un **appui long sur le bouton 2** du boîtier ; l'écran montre ce qui va changer ; tout autre bouton, 30 s sans réponse, la veille ou la déconnexion annulent ; la commande ACQUITTER de l'application ne peut pas confirmer ; bit 3 de l'octet 17 de MESURES pour prévenir l'application | 11 tests « sensible » et « confirmation », dont « la commande ACQUITTER de l'app ne confirme pas » |
 | **Blocage après 3 codes faux** | S8 | `TPMS.liaisonSaisirCode` | `CODE_ESSAIS_MAX` = 3, `CODE_BLOCAGE_MS` = 60 s | « 3 codes faux → bloqué », « toujours bloqué 30 s après » |
 | **Vérification des réglages** par le boîtier | S9 | `TPMS.verifierReglages` (`logique/protocole.js`), appelée par `TPMS.liaisonEcrireReglages` | Circonférence 1 000 à 3 000 mm ; seuils 0,5 à 6 bar, bas < haut ; veille 10 s à 1 h | « seuil bas > seuil haut refusé » |
 | **MESURES chiffrée et appairée** | S10 | En-tête de `logique/protocole.js` ; dans le simulateur, `TPMS.liaisonMesures` n'envoie rien à un téléphone non connecté | Vitesse, distance et horaires de sortie renseignent sur les habitudes du cycliste | « mesures disponibles » (après appairage) |
@@ -569,9 +570,19 @@ Une inondation est un phénomène physique : aucune protection logicielle ne peu
 
 Un pirate peut maintenir le boîtier en « SIGNAL SUSPECT » ou le priver de mesures par brouillage. Ce risque est accepté : l'information est perdue mais le cycliste **le sait** (alerte affichée), ce qui est préférable à une fausse valeur présentée comme vraie.
 
-### 6.13 Un téléphone appairé peut désactiver les protections
+### 6.13 Un téléphone appairé ne peut plus affaiblir le boîtier seul
 
-L'octet 12 de la caractéristique REGLAGES permet d'activer ou de désactiver chaque protection, pour la démonstration devant le jury. `TPMS.verifierReglages` ne contrôle ni ce champ ni les adresses des capteurs : c'est un choix assumé, le propriétaire appairé reste maître de ses réglages. En contrepartie, un téléphone appairé, volé et déverrouillé, pourrait affaiblir le boîtier ; par exemple, sans liste blanche, une inondation fait accepter de fausses trames (§ 6.11). Dans un produit commercial, on pourrait imposer les protections, ou demander une confirmation par appui sur un bouton du boîtier pour ce type de changement.
+L'octet 12 de la caractéristique REGLAGES permet d'activer ou de désactiver chaque protection, pour la démonstration devant le jury, et les octets 13 à 22 changent les capteurs appairés. Jusqu'au 23/10/2026, un téléphone appairé, volé et déverrouillé (ou une page web piégée ouverte dans Bluefy) pouvait donc affaiblir le boîtier sans que le cycliste le voie ; par exemple, sans liste blanche, une inondation fait accepter de fausses trames (§ 6.11), et une adresse remplacée fait accepter l'émetteur du pirate.
+
+**Depuis le 24/10/2026, ces changements demandent une confirmation physique.** `TPMS.changementSensible` repère ce qui affaiblit la sécurité : une protection qui passe de active à inactive, ou une adresse de capteur qui change. Le boîtier garde alors les nouveaux réglages **en attente** et affiche « CONFIRMER ? » avec la liste exacte des changements (« COUPER LISTE BLANCHE », « NOUVEAU CAPTEUR AR »…). Seul un **appui long sur le bouton 2** les applique ; tout autre appui, 30 s sans réponse, la mise en veille ou la déconnexion du téléphone les annulent. Les autres changements (seuils, circonférence, veille, protection réactivée) restent immédiats : ils n'ouvrent pas de faille.
+
+Trois détails comptent :
+
+- **Ce que l'on confirme est affiché.** Un simple « Confirmer ? » laisserait un pirate demander autre chose que ce que le cycliste croit accepter.
+- **L'application ne peut pas se confirmer elle-même.** La commande ACQUITTER équivaut à un appui long sur le bouton 2 ; elle passe désormais par `TPMS.boitierAction`, et seul `TPMS.boitierBouton` (un vrai appui) peut confirmer. Un test le vérifie.
+- **L'application est prévenue** par le bit 3 de l'octet 17 de MESURES ; quand il retombe, elle relit REGLAGES pour savoir si le changement a été confirmé ou annulé (avec la vraie radio, l'écriture BLE réussit toujours : c'est le seul moyen de connaître la suite).
+
+Limite : quelqu'un qui tient le vélo **et** le téléphone déverrouillé peut toujours tout changer. C'est voulu : c'est la situation du propriétaire.
 
 ### 6.14 Limites du serveur de flotte de démonstration (S19 à S23)
 
@@ -589,7 +600,7 @@ Le serveur de flotte est une démonstration. Trois limites de la première versi
 ### 6.15 Hors périmètre
 
 - **Accès physique au boîtier** : lecture de la mémoire du microcontrôleur pour en extraire les clés d'appairage. Non traité. Cet accès est facile : le boîtier s'enlève **sans outil** de son collier de cintre (glissière à cran, `boitier-3d/README.md`), comme un compteur GPS, pour être rechargé ; un voleur peut donc l'emporter en quelques secondes (seul le collier reste vissé sur le vélo). La notice conseillera de retirer le boîtier quand le vélo est garé dans un lieu public. Un boîtier perdu ou volé doit être supprimé des appareils appairés du téléphone.
-- **Téléphone compromis** : hors de notre contrôle.
+- **Téléphone compromis** : hors de notre contrôle. Il ne peut cependant plus couper une protection ni changer de capteur sans un appui long sur le bouton 2 du boîtier (§ 6.13).
 - **Hébergement de l'application** : Web Bluetooth impose une page servie en HTTPS ; une page modifiée chez l'hébergeur ne pourrait cependant pas s'appairer sans le code affiché sur le boîtier.
 - **Mise à jour du firmware par radio** : recommandation pour le firmware, ne pas exposer de service de mise à jour BLE ; la mise à jour se fera par USB, ce qui demande un accès physique et l'ouverture du boîtier (la prise USB-C de la XIAO est à l'intérieur, sous la façade vissée).
 

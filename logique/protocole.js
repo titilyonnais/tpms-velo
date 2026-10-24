@@ -88,7 +88,8 @@ function depuisInt8(octet) {
 //   10-11 vitesse en 0,1 km/h
 //   12-15 distance du trajet en mètres
 //   16    batterie du boîtier en %
-//   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage
+//   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage,
+//         bit 3 changement sensible en attente de confirmation sur le boîtier
 //   18-19 numéro de séquence (détecte les notifications perdues)
 // ---------------------------------------------------------------------
 TPMS.encoderMesures = function (m) {
@@ -105,7 +106,8 @@ TPMS.encoderMesures = function (m) {
   TPMS.ecrireUint16LE(o, 10, Math.round(m.vitesseKmh * 10));
   TPMS.ecrireInt32LE(o, 12, Math.round(m.distanceKm * 1000));
   o[16] = Math.round(m.batterieBoitierPct);
-  o[17] = (m.veille ? 1 : 0) | (m.enCharge ? 2 : 0) | (m.eclairage ? 4 : 0);
+  o[17] = (m.veille ? 1 : 0) | (m.enCharge ? 2 : 0) | (m.eclairage ? 4 : 0) |
+          (m.attenteConfirmation ? 8 : 0);
   TPMS.ecrireUint16LE(o, 18, m.sequence & 0xFFFF);
   return o;
 };
@@ -130,6 +132,7 @@ TPMS.decoderMesures = function (o) {
     veille: (o[17] & 1) !== 0,
     enCharge: (o[17] & 2) !== 0,
     eclairage: (o[17] & 4) !== 0,
+    attenteConfirmation: (o[17] & 8) !== 0,
     sequence: TPMS.lireUint16LE(o, 18)
   };
 };
@@ -198,4 +201,46 @@ TPMS.verifierReglages = function (r) {
   }
   if (r.delaiVeilleMs < 10000 || r.delaiVeilleMs > 3600000) return "délai de veille hors plage (10 s à 1 h)";
   return "";
+};
+
+// ---------------------------------------------------------------------
+// Changements SENSIBLES : ceux qui affaiblissent la sécurité
+// ---------------------------------------------------------------------
+// Couper une protection, ou remplacer l'adresse d'un capteur appairé
+// (un pirate y mettrait celle de son propre émetteur). Un téléphone
+// appairé, volé et déverrouillé, pourrait le faire sans que le cycliste
+// le voie : le boîtier demande donc une confirmation PHYSIQUE (appui long
+// sur son bouton 2), que seul quelqu'un qui tient le vélo peut donner.
+// Les autres changements (seuils, circonférence, veille, protection
+// réactivée) restent immédiats.
+//
+// Retourne un « masque » : un bit par raison, 0 = rien de sensible.
+TPMS.SENSIBLE = {
+  SANS_LISTE_BLANCHE:  1,
+  SANS_VRAISEMBLANCE:  2,
+  SANS_RYTHME:         4,
+  CAPTEUR_AV:          8,
+  CAPTEUR_AR:         16
+};
+
+TPMS.changementSensible = function (ancien, nouveau) {
+  var masque = 0;
+  if (ancien.protections.listeBlanche && !nouveau.protections.listeBlanche) masque |= TPMS.SENSIBLE.SANS_LISTE_BLANCHE;
+  if (ancien.protections.vraisemblance && !nouveau.protections.vraisemblance) masque |= TPMS.SENSIBLE.SANS_VRAISEMBLANCE;
+  if (ancien.protections.rythme && !nouveau.protections.rythme) masque |= TPMS.SENSIBLE.SANS_RYTHME;
+  if (ancien.appairage.AV !== nouveau.appairage.AV) masque |= TPMS.SENSIBLE.CAPTEUR_AV;
+  if (ancien.appairage.AR !== nouveau.appairage.AR) masque |= TPMS.SENSIBLE.CAPTEUR_AR;
+  return masque;
+};
+
+// Les lignes montrées sur l'écran du boîtier (police sans accents) :
+// le cycliste voit CE QU'IL confirme, pas seulement « confirmer ? ».
+TPMS.lignesSensibles = function (masque) {
+  var lignes = [];
+  if (masque & TPMS.SENSIBLE.SANS_LISTE_BLANCHE) lignes.push("COUPER LISTE BLANCHE");
+  if (masque & TPMS.SENSIBLE.SANS_VRAISEMBLANCE) lignes.push("COUPER VRAISEMBLANCE");
+  if (masque & TPMS.SENSIBLE.SANS_RYTHME) lignes.push("COUPER RYTHME");
+  if (masque & TPMS.SENSIBLE.CAPTEUR_AV) lignes.push("NOUVEAU CAPTEUR AV");
+  if (masque & TPMS.SENSIBLE.CAPTEUR_AR) lignes.push("NOUVEAU CAPTEUR AR");
+  return lignes;
 };

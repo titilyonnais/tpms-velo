@@ -171,7 +171,14 @@ bool boitierTopRoue(Boitier* b, int32_t maintenantMs);
 //   bouton 1 court : changer de page    | long : remise à zéro du trajet
 //   bouton 2 court : éclairage on/off   | long : acquitter les alertes
 // En veille, un appui ne fait que réveiller le boîtier.
+// Pendant qu'un changement sensible attend (liaison.h), les boutons
+// servent à répondre : appui long sur le bouton 2 = confirmer, tout
+// autre appui = annuler.
+// Seul un VRAI appui passe par ici ; l'app passe par boitierAction.
 void boitierBouton(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs);
+
+// L'effet ordinaire d'un bouton (appui réel, ou commande de l'app).
+void boitierAction(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs);
 
 // Les valeurs à afficher, préparées pour ecran.cpp.
 void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue);

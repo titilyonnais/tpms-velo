@@ -466,6 +466,69 @@ static void testsLiaison() {
 }
 
 // ---------------------------------------------------------------------
+// Confirmation par bouton des changements sensibles
+// ---------------------------------------------------------------------
+// Un boîtier appairé, et une demande de l'app qui coupe la liste blanche.
+static const char* demanderSansListeBlanche(int32_t maintenantMs) {
+  uint8_t reglages[TAILLE_REGLAGES];
+  Reglages r = bt.reglages;
+  r.protections.listeBlanche = false;
+  encoderReglages(&r, reglages);
+  return liaisonEcrireReglages(&bt, reglages, TAILLE_REGLAGES, maintenantMs);
+}
+
+static void testsConfirmation() {
+  const char* resultat;
+  Reglages ancien, nouveau;
+  creerBoitier(&bt);
+  ancien = bt.reglages;
+  nouveau = ancien;
+  nouveau.seuils.roue[POS_AV].basBar = 1.5f;
+  verifier("sensible : seuil change -> rien de sensible", changementSensible(&ancien, &nouveau) == 0);
+  nouveau.protections.rythme = false;
+  nouveau.appairage.adresse[POS_AR][4] = 0x55;
+  verifier("sensible : rythme coupe + capteur AR change",
+           changementSensible(&ancien, &nouveau) == (SENSIBLE_SANS_RYTHME | SENSIBLE_CAPTEUR_AR));
+
+  liaisonDemandeCode(&bt, "123456", 0);
+  liaisonSecurisee(&bt, 0);
+  resultat = demanderSansListeBlanche(1000);
+  verifier("confirmation : liste blanche coupee -> attente du bouton",
+           strcmp(resultat, "attente-bouton") == 0 && bt.reglages.protections.listeBlanche);
+  Vue vue;
+  boitierVue(&bt, 1000, &vue);
+  verifier("confirmation : demande affichee a l'ecran", vue.confirmation == SENSIBLE_SANS_LISTE_BLANCHE);
+  uint8_t mesures[TAILLE_MESURES];
+  liaisonMesures(&bt, 1000, mesures);
+  verifier("confirmation : drapeau d'attente dans MESURES", (mesures[17] & 8) != 0);
+  liaisonCommande(&bt, COMMANDE_ACQUITTER, 2000);
+  verifier("confirmation : la commande ACQUITTER de l'app ne confirme pas",
+           bt.reglages.protections.listeBlanche && bt.liaison.enAttente);
+  boitierBouton(&bt, 2, true, 3000);
+  verifier("confirmation : appui long bouton 2 -> applique",
+           !bt.reglages.protections.listeBlanche && !bt.liaison.enAttente && bt.liaison.reglagesChanges);
+
+  creerBoitier(&bt);
+  liaisonDemandeCode(&bt, "123456", 0);
+  liaisonSecurisee(&bt, 0);
+  demanderSansListeBlanche(0);
+  boitierBouton(&bt, 1, false, 1000);
+  verifier("confirmation : autre bouton -> refuse",
+           bt.reglages.protections.listeBlanche && !bt.liaison.enAttente && bt.page == 0);
+
+  demanderSansListeBlanche(2000);
+  boitierMiseAJour(&bt, 31000);
+  verifier("confirmation : toujours en attente a 29 s", bt.liaison.enAttente);
+  boitierMiseAJour(&bt, 33000);
+  verifier("confirmation : abandon apres 30 s",
+           !bt.liaison.enAttente && bt.reglages.protections.listeBlanche);
+
+  demanderSansListeBlanche(40000);
+  liaisonDeconnexion(&bt, 41000);
+  verifier("confirmation : deconnexion -> abandon", !bt.liaison.enAttente);
+}
+
+// ---------------------------------------------------------------------
 static void testsEcran() {
   static Ecran e;
   creerEcran(&e);
@@ -499,6 +562,7 @@ int lancerTestsLogique(void (*afficher)(const char* ligne)) {
   testsSecurite();
   testsProtocole();
   testsLiaison();
+  testsConfirmation();
   testsEcran();
   char bilan[64];
   snprintf(bilan, sizeof(bilan), "%d reussis, %d en echec", reussis, rates);

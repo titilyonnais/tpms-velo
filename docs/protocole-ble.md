@@ -52,7 +52,7 @@ Envoyée par notification toutes les 5 s quand l'application est connectée. Con
 | 10-11 | Vitesse | uint16 | 0,1 km/h |
 | 12-15 | Distance du trajet | uint32 | mètres |
 | 16 | Batterie du boîtier | uint8 | % |
-| 17 | Drapeaux | bits | bit 0 : veille ; bit 1 : en charge ; bit 2 : éclairage allumé |
+| 17 | Drapeaux | bits | bit 0 : veille ; bit 1 : en charge ; bit 2 : éclairage allumé ; bit 3 : changement sensible en attente de confirmation sur le boîtier (§ 1.4) |
 | 18-19 | Numéro de séquence | uint16 | +1 à chaque notification, repart à 0 après 65 535 |
 
 Codes d'état (`TPMS.CODES_ETAT`) :
@@ -131,13 +131,15 @@ Lue par `TPMS.liaisonLireReglages`, écrite par `TPMS.liaisonEcrireReglages` ; f
 | 6-7 | Seuil bas AR | uint16 | mbar | ≥ 500, et < seuil haut AR |
 | 8-9 | Seuil haut AR | uint16 | mbar | ≤ 6 000 |
 | 10-11 | Délai avant veille | uint16 | secondes | 10 à 3 600 |
-| 12 | Protections | bits | bit 0 : liste blanche ; bit 1 : vraisemblance ; bit 2 : rythme | non contrôlé |
-| 13-17 | Adresse du capteur AV | 5 octets | identique aux octets 3-7 de la trame TPMS | non contrôlé |
-| 18-22 | Adresse du capteur AR | 5 octets | idem | non contrôlé |
+| 12 | Protections | bits | bit 0 : liste blanche ; bit 1 : vraisemblance ; bit 2 : rythme | couper une protection : confirmation sur le boîtier |
+| 13-17 | Adresse du capteur AV | 5 octets | identique aux octets 3-7 de la trame TPMS | changement : confirmation sur le boîtier |
+| 18-22 | Adresse du capteur AR | 5 octets | idem | changement : confirmation sur le boîtier |
 
 Le seuil de crevaison (0,5 bar), le seuil de fuite (−0,15 bar/h), le délai de perte (60 s au-dessus de 10 km/h, 600 s en dessous et à l'arrêt), la fenêtre d'écoute et la période d'écran ne font pas partie de cette caractéristique : ils ne sont pas réglables depuis l'application.
 
 **Contrôle à l'écriture.** Le boîtier ne fait pas confiance aveuglément à ce qu'on lui écrit, même sur un lien chiffré : `TPMS.verifierReglages` (`logique/protocole.js`) renvoie la raison du refus si une valeur est hors plage, et rien n'est appliqué. L'application fait le même contrôle avant d'envoyer (`app/app.js`). Si l'adresse d'un capteur change, le boîtier oublie tout ce qu'il savait de l'ancien (`TPMS.creerRoue`).
+
+**Changements sensibles : confirmation sur le boîtier.** Couper une protection (un bit de l'octet 12 qui passe de 1 à 0) ou changer l'adresse d'un capteur affaiblit la sécurité. `TPMS.changementSensible` (`logique/protocole.js`) les repère et renvoie un masque (bit 0 : liste blanche coupée, bit 1 : vraisemblance, bit 2 : rythme, bit 3 : capteur AV changé, bit 4 : capteur AR changé). Le boîtier garde alors les réglages reçus en attente et répond `"attente-bouton"` ; il affiche « CONFIRMER ? » et la liste des changements, et lève le bit 3 de l'octet 17 de MESURES. Un appui long sur le bouton 2 applique les réglages ; tout autre appui, 30 s sans réponse (`TPMS.CONFIRMATION_DUREE_MS`), la veille, la déconnexion ou une nouvelle écriture les annulent. Avec la vraie radio, l'écriture BLE réussit dans tous les cas : l'application suit le bit 3 et, quand il retombe, relit REGLAGES pour savoir si le changement a été appliqué. La commande `02` (acquitter, § 1.5) ne confirme jamais : seul un vrai appui sur le bouton le peut.
 
 #### Exemple 3 – réglages par défaut (`TPMS.creerBoitier`)
 
@@ -255,7 +257,8 @@ Correspondance avec le code du simulateur :
 | Demande de connexion | `TPMS.liaisonConnexion(b, t)` | `"connecte"` (téléphone déjà appairé), `"code-requis"` (nouveau code, ou code déjà affiché et encore valide), `"bloque"` |
 | Saisie du code | `TPMS.liaisonSaisirCode(b, code, t)` | `"ok"`, `"faux"`, `"expire"`, `"bloque"` |
 | Notification | `TPMS.liaisonMesures(b, t)` | 20 octets, ou `null` si non connecté |
-| Écriture des réglages | `TPMS.liaisonEcrireReglages(b, octets, t)` | `"ok"`, `"refuse"`, `"format invalide"` ou la raison du refus |
+| Écriture des réglages | `TPMS.liaisonEcrireReglages(b, octets, t)` | `"ok"`, `"attente-bouton"` (changement sensible), `"refuse"`, `"format invalide"` ou la raison du refus |
+| Réponse sur le boîtier | `TPMS.boitierBouton(b, 2, true, t)` → `TPMS.liaisonConfirmer` ; autre appui → `TPMS.liaisonAnnulerAttente` | réglages appliqués, ou annulés |
 | Commande | `TPMS.liaisonCommande(b, octet, t)` | `"ok"`, `"refuse"`, `"commande inconnue"` |
 | Déconnexion / oubli | `TPMS.liaisonDeconnexion`, `TPMS.liaisonOublier` | – |
 

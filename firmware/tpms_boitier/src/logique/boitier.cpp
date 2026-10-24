@@ -299,6 +299,20 @@ bool boitierTopRoue(Boitier* b, int32_t maintenantMs) {
 }
 
 void boitierBouton(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs) {
+  if (!b->veille && b->liaison.enAttente) {
+    b->dernierMouvementMs = maintenantMs;
+    b->ecranUrgent = true;
+    if (numero == 2 && appuiLong) {
+      liaisonConfirmer(b, maintenantMs);
+    } else {
+      liaisonAnnulerAttente(b, maintenantMs, "refusé sur le boîtier");
+    }
+    return;
+  }
+  boitierAction(b, numero, appuiLong, maintenantMs);
+}
+
+void boitierAction(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs) {
   b->dernierMouvementMs = maintenantMs;
   b->ecranUrgent = true;
   if (b->veille) {
@@ -337,6 +351,7 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->appConnectee = b->liaison.connecte;
   vue->radioSaturee = b->radioSaturee;
   strcpy(vue->codeAppairage, b->liaison.code);
+  vue->confirmation = b->liaison.enAttente ? b->liaison.masqueAttente : 0;
   vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, &vue->roues[POS_AV]);
   vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, &vue->roues[POS_AR]);
   vue->vitesseKmh = b->veille ? 0.0f : compteurVitesseKmh(c, maintenantMs);
@@ -373,12 +388,17 @@ Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
   if (!b->veille && maintenantMs - b->dernierMouvementMs > b->reglages.delaiVeilleMs) {
     b->veille = true;
     b->ecranUrgent = true;
+    liaisonAnnulerAttente(b, maintenantMs, "mise en veille");
     boitierJournal(b, maintenantMs, "Mise en veille (vélo immobile)");
   }
   // Le code d'appairage disparaît au bout d'une minute.
   if (b->liaison.code[0] != '\0' && maintenantMs > b->liaison.codeJusquaMs) {
     b->liaison.code[0] = '\0';
     b->ecranUrgent = true;
+  }
+  // Sans réponse sur le boîtier en 30 s, le changement sensible est abandonné.
+  if (b->liaison.enAttente && maintenantMs > b->liaison.attenteJusquaMs) {
+    liaisonAnnulerAttente(b, maintenantMs, "pas de confirmation en 30 s");
   }
 
   // 2. État de chaque pneu (pas en veille : la radio est coupée).

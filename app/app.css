@@ -146,6 +146,7 @@ figcaption { font-size: 11px; color: var(--texte-2); display: flex; align-items:
 .formulaire input[type=checkbox] { accent-color: var(--accent-fort); width: 20px; height: 20px; margin: 0; }
 .message { font-size: 14px; margin: 12px 0 0; min-height: 1.4em; color: var(--ok); }
 .message.erreur { color: var(--alerte); }
+.message.attention { color: var(--accent); }   /* en attente du bouton du boîtier */
 
 /* ---------- Onglets ---------- */
 .onglets {

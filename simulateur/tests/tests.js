@@ -394,6 +394,98 @@ function proche(a, b, tolerance) {
 })();
 
 // ---------------------------------------------------------------------
+// Confirmation par bouton des changements sensibles
+// ---------------------------------------------------------------------
+(function () {
+  // Un boîtier appairé à un téléphone, prêt à recevoir des réglages.
+  function boitierAppaire() {
+    var b = TPMS.creerBoitier();
+    TPMS.liaisonConnexion(b, 0);
+    TPMS.liaisonSaisirCode(b, b.liaison.code, 0);
+    return b;
+  }
+  function sansListeBlanche(b) {
+    var r = TPMS.decoderReglages(TPMS.encoderReglages(b.reglages));
+    r.protections.listeBlanche = false;
+    return TPMS.encoderReglages(r);
+  }
+  var ref = TPMS.creerBoitier().reglages;
+  var copie = TPMS.decoderReglages(TPMS.encoderReglages(ref));
+
+  verifier("sensible : réglages identiques → rien", TPMS.changementSensible(ref, copie) === 0);
+  copie.seuils.AV.basBar = 1.5;
+  copie.circonferenceMm = 2200;
+  verifier("sensible : seuils et circonférence ne sont pas sensibles", TPMS.changementSensible(ref, copie) === 0);
+  copie.protections.rythme = false;
+  copie.appairage.AR = "11:22:33:44:55";
+  verifier("sensible : rythme coupé + capteur AR changé",
+    TPMS.changementSensible(ref, copie) === (TPMS.SENSIBLE.SANS_RYTHME | TPMS.SENSIBLE.CAPTEUR_AR),
+    TPMS.changementSensible(ref, copie));
+  verifier("sensible : réactiver une protection n'est pas sensible",
+    TPMS.changementSensible(copie, ref) === TPMS.SENSIBLE.CAPTEUR_AR, TPMS.changementSensible(copie, ref));
+  verifier("sensible : lignes de l'écran",
+    TPMS.lignesSensibles(TPMS.SENSIBLE.SANS_RYTHME | TPMS.SENSIBLE.CAPTEUR_AR).join("/") === "COUPER RYTHME/NOUVEAU CAPTEUR AR");
+
+  // 1. Changement ordinaire : appliqué tout de suite, comme avant.
+  var b = boitierAppaire();
+  var r = TPMS.decoderReglages(TPMS.encoderReglages(b.reglages));
+  r.seuils.AV.basBar = 1.6;
+  verifier("confirmation : seuil changé → appliqué sans bouton",
+    TPMS.liaisonEcrireReglages(b, TPMS.encoderReglages(r), 0) === "ok" && b.reglages.seuils.AV.basBar === 1.6);
+
+  // 2. Protection coupée : en attente, rien n'a changé.
+  verifier("confirmation : liste blanche coupée → attente du bouton",
+    TPMS.liaisonEcrireReglages(b, sansListeBlanche(b), 1000) === "attente-bouton");
+  verifier("confirmation : rien n'est appliqué avant le bouton", b.reglages.protections.listeBlanche === true);
+  verifier("confirmation : demande affichée à l'écran",
+    TPMS.boitierVue(b, 1000).confirmation === TPMS.SENSIBLE.SANS_LISTE_BLANCHE);
+  verifier("confirmation : l'app est prévenue (drapeau de MESURES)",
+    TPMS.decoderMesures(TPMS.liaisonMesures(b, 1000)).attenteConfirmation === true);
+
+  // 3. La commande ACQUITTER de l'app (= appui long bouton 2) ne confirme pas.
+  TPMS.liaisonCommande(b, TPMS.COMMANDE.ACQUITTER, 2000);
+  verifier("confirmation : la commande ACQUITTER de l'app ne confirme pas",
+    b.reglages.protections.listeBlanche === true && b.liaison.enAttente !== null);
+
+  // 4. Appui long sur le vrai bouton 2 : appliqué.
+  TPMS.boitierBouton(b, 2, true, 3000);
+  verifier("confirmation : appui long bouton 2 → appliqué",
+    b.reglages.protections.listeBlanche === false && b.liaison.enAttente === null);
+  verifier("confirmation : drapeau retombé",
+    TPMS.decoderMesures(TPMS.liaisonMesures(b, 3000)).attenteConfirmation === false);
+  verifier("confirmation : l'appui de confirmation n'a pas d'autre effet", b.eclairage === false && b.page === 0);
+
+  // 5. Autre bouton : refusé.
+  var b2 = boitierAppaire();
+  TPMS.liaisonEcrireReglages(b2, sansListeBlanche(b2), 0);
+  TPMS.boitierBouton(b2, 1, false, 1000);
+  verifier("confirmation : autre bouton → refusé",
+    b2.reglages.protections.listeBlanche === true && b2.liaison.enAttente === null && b2.page === 0);
+
+  // 6. Pas de réponse : abandon après 30 s.
+  var b3 = boitierAppaire();
+  TPMS.liaisonEcrireReglages(b3, sansListeBlanche(b3), 0);
+  TPMS.boitierMiseAJour(b3, 29000);
+  verifier("confirmation : toujours en attente à 29 s", b3.liaison.enAttente !== null);
+  TPMS.boitierMiseAJour(b3, 31000);
+  verifier("confirmation : abandon après 30 s",
+    b3.liaison.enAttente === null && b3.reglages.protections.listeBlanche === true);
+  TPMS.boitierBouton(b3, 2, true, 32000);
+  verifier("confirmation : un appui tardif ne confirme plus rien", b3.reglages.protections.listeBlanche === true);
+
+  // 7. Déconnexion du téléphone : abandon.
+  var b4 = boitierAppaire();
+  TPMS.liaisonEcrireReglages(b4, sansListeBlanche(b4), 0);
+  TPMS.liaisonDeconnexion(b4, 1000);
+  verifier("confirmation : déconnexion → abandon", b4.liaison.enAttente === null);
+
+  // 8. Le journal chaîné garde la trace de la demande et de la réponse.
+  var textes = b.journal.map(function (l) { return l.texte; }).join(" | ");
+  verifier("confirmation : demande et confirmation au journal",
+    textes.indexOf("App demande : COUPER LISTE BLANCHE (à confirmer)") >= 0 && textes.indexOf("confirmé sur le boîtier") >= 0);
+})();
+
+// ---------------------------------------------------------------------
 // Énergie
 // ---------------------------------------------------------------------
 (function () {

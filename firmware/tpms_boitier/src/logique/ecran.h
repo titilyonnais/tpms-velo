@@ -32,6 +32,10 @@ void dessinerEcran(Ecran* e, const Vue* vue);
 // Fenêtre au centre de l'écran avec le code à taper sur le téléphone.
 void dessinerCodeAppairage(Ecran* e, const char* code);
 
+// Fenêtre au centre de l'écran : ce que l'app veut changer (masque
+// SENSIBLE_..., voir protocole.h) et comment répondre.
+void dessinerConfirmation(Ecran* e, uint8_t masque);
+
 // Pourcentage + petite pile dessinée, en haut à droite.
 void dessinerBatterie(Ecran* e, float pct, bool enCharge);
 

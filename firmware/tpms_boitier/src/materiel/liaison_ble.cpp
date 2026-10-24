@@ -234,6 +234,18 @@ static void deconnecter(uint16_t connexion) {
 
 void liaisonBleTraiter(Boitier* b, int32_t maintenantMs) {
   if (fileEvenements == NULL) return;
+
+  // Un changement sensible vient d'être confirmé par un appui long sur
+  // le bouton 2 (logique/liaison.cpp) : on le sauve en flash et on met
+  // la caractéristique REGLAGES à jour, pour que l'app le relise.
+  if (b->liaison.reglagesChanges) {
+    b->liaison.reglagesChanges = false;
+    stockageSauver(b);
+    uint8_t reglages[TAILLE_REGLAGES];
+    encoderReglages(&b->reglages, reglages);
+    carReglages.write(reglages, TAILLE_REGLAGES);
+  }
+
   EvenementBle ev;
   while (xQueueReceive(fileEvenements, &ev, 0) == pdTRUE) {
     switch (ev.type) {
@@ -286,6 +298,9 @@ void liaisonBleTraiter(Boitier* b, int32_t maintenantMs) {
         if (strcmp(resultat, "ok") == 0) {
           stockageSauver(b);   // les nouveaux réglages survivront à la veille
         }
+        // "attente-bouton" : rien n'est encore changé ; le drapeau de
+        // MESURES prévient l'app, et la sauvegarde se fera à la
+        // confirmation (début de cette fonction).
         // On remet dans la caractéristique les réglages EN VIGUEUR
         // (les nouveaux si acceptés, les anciens sinon).
         uint8_t reglages[TAILLE_REGLAGES];

@@ -1002,6 +1002,7 @@ trame reçue
 | **Appairage BLE Secure Connections** | Échange de clés par courbe elliptique (P-256) ; code à 6 chiffres tiré au hasard, affiché 60 s sur l'e-paper, non remplaçable tant qu'il est valide ; chiffrement AES-CCM | S7, S10 |
 | **Blocage** | 3 codes faux → appairage bloqué 60 s | S8 |
 | **Accès réservé** | MESURES, REGLAGES, COMMANDE refusés sans appairage | S7, S10 |
+| **Confirmation par bouton** | Couper une protection ou changer de capteur depuis l'application ne s'applique qu'après un appui long sur le bouton 2 ; l'écran affiche ce qui va changer ; autre bouton, 30 s sans réponse, veille ou déconnexion annulent (§ 6.14) | S7 (téléphone appairé volé ou piégé) |
 | **Contrôle des réglages** | Circonférence 1 000 à 3 000 mm ; seuils 0,5 à 6 bar avec bas < haut ; veille 10 s à 1 h ; contrôle côté app **et** côté boîtier | S9 |
 | **Données locales** | Kit du particulier : pas de compte, pas de serveur | S10 |
 
@@ -1174,9 +1175,9 @@ Avec ces mesures, les trois scénarios du serveur qui restaient élevés ou moye
 | **S13 : pirate synchronisé** | Toujours repéré, mais une crevaison peut rester masquée par moments ; l'attaque demande de suivre le cycliste à 1 m. |
 | **S11, S14 et S5 : déni de service** | L'information est perdue, mais le cycliste le sait. C'est préférable à une fausse valeur présentée comme vraie. |
 | **Capteur perdu signalé en 10 min sous 10 km/h** | Prix de la correction des fausses pertes en montée lente (défaut n° 10). |
-| **Un téléphone appairé peut désactiver les protections** | Utile pour la démonstration ; mais sans liste blanche, une inondation fait accepter de fausses trames. Dans un produit commercial, il faudrait une confirmation par bouton sur le boîtier. |
+| **Le propriétaire peut désactiver les protections** | Utile pour la démonstration. Depuis le 24/10/2026, il faut pour cela un appui long sur le bouton 2 du boîtier, en plus du téléphone appairé : un téléphone volé ou une page piégée ne suffit plus (`TPMS.changementSensible`, `docs/analyse-de-risques.md` § 6.13). Quelqu'un qui a à la fois le vélo et le téléphone déverrouillé reste maître des réglages, comme le propriétaire. |
 | **Serveur de flotte : jetons sans expiration, certificat auto-signé, secrets de démonstration publics** | Limites d'une démonstration, listées au § 6.13 avec la mesure à prendre en production (sessions à durée limitée, Let's Encrypt, une clé par boîtier). |
-| **Hors périmètre** | Lecture de la mémoire du boîtier par accès physique ; téléphone compromis ; mise à jour du firmware (prévue par USB uniquement, donc avec accès physique). |
+| **Hors périmètre** | Lecture de la mémoire du boîtier par accès physique ; téléphone compromis (il ne peut toutefois plus couper les protections sans le bouton du boîtier) ; mise à jour du firmware (prévue par USB uniquement, donc avec accès physique). |
 
 ---
 
@@ -1567,7 +1568,6 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 - **Capteurs v2** (§ 6.11) : c'est l'évolution la plus importante, la seule qui corrige le pistage. Elle demande de concevoir nos propres capteurs.
 - **Mode flotte en production** : les comptes, HTTPS, la minimisation de la position et la durée de conservation sont faits. Il reste : une clé par boîtier gravée à la fabrication et un coffre à secrets, des sessions à durée limitée (ou OpenID Connect) à la place des jetons fixes, un certificat Let's Encrypt, une limitation de débit partagée entre serveurs, et la réalisation de la liaison boîtier → serveur.
 - **Mesure de l'altitude** par un baromètre dans le boîtier, pour corriger l'erreur des capteurs en montagne (0,17 bar à 1 500 m).
-- **Confirmation par bouton** sur le boîtier avant de désactiver une protection depuis l'application.
 - **Refus de la charge par grand froid** (la charge d'une LiPo sous 0 °C l'abîme), en utilisant la température mesurée.
 
 ---

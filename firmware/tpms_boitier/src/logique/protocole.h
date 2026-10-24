@@ -79,6 +79,7 @@ struct MesuresApp {
   bool veille;
   bool enCharge;
   bool eclairage;
+  bool attenteConfirmation;   // changement sensible en attente du bouton 2
   uint16_t sequence;
 };
 
@@ -110,7 +111,8 @@ bool uuidDepuisTexte(const char* texte, uint8_t* uuid16octets);
 //   10-11 vitesse en 0,1 km/h
 //   12-15 distance du trajet en mètres
 //   16    batterie du boîtier en %
-//   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage
+//   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage,
+//         bit 3 changement sensible en attente de confirmation sur le boîtier
 //   18-19 numéro de séquence (détecte les notifications perdues)
 // ---------------------------------------------------------------------
 void encoderMesures(const MesuresApp* m, uint8_t* o);
@@ -137,5 +139,24 @@ bool decoderReglages(const uint8_t* o, int longueur, Reglages* r);
 // même chiffré : il vérifie que les réglages ont du sens.
 // Retourne "" si tout va bien, sinon la raison du refus.
 const char* verifierReglages(const Reglages* r);
+
+// ---------------------------------------------------------------------
+// Changements SENSIBLES : ceux qui affaiblissent la sécurité
+// ---------------------------------------------------------------------
+// Couper une protection, ou remplacer l'adresse d'un capteur appairé.
+// Le boîtier les garde en attente jusqu'à un appui long sur son bouton 2
+// (voir liaison.h). Retourne un masque : un bit par raison, 0 = rien.
+const uint8_t SENSIBLE_SANS_LISTE_BLANCHE = 1;
+const uint8_t SENSIBLE_SANS_VRAISEMBLANCE = 2;
+const uint8_t SENSIBLE_SANS_RYTHME = 4;
+const uint8_t SENSIBLE_CAPTEUR_AV = 8;
+const uint8_t SENSIBLE_CAPTEUR_AR = 16;
+const int NB_RAISONS_SENSIBLES = 5;
+
+uint8_t changementSensible(const Reglages* ancien, const Reglages* nouveau);
+
+// Texte affiché à l'écran pour le bit numéro i (bit 0 = valeur 1...).
+// En JS : TPMS.lignesSensibles, qui renvoie directement la liste.
+extern const char* const TEXTES_SENSIBLES[NB_RAISONS_SENSIBLES];
 
 #endif

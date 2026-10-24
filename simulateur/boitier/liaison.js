@@ -5,7 +5,9 @@
 // et le chiffrement. Notre code se contente de :
 //   - afficher sur l'écran le code à 6 chiffres que la pile lui donne ;
 //   - refuser les réglages tant que le lien n'est pas appairé et chiffré ;
-//   - vérifier que les réglages reçus ont du sens.
+//   - vérifier que les réglages reçus ont du sens ;
+//   - garder en attente un changement SENSIBLE (protection coupée,
+//     capteur remplacé) jusqu'à un appui long sur le bouton 2.
 // Ici on simule aussi la partie « pile BLE », pour voir le déroulé.
 //
 // Pourquoi un code affiché ? Sans lui, l'appairage « Just Works » ne
@@ -18,6 +20,7 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 TPMS.CODE_DUREE_MS = 60000;      // le code reste affiché 1 min
 TPMS.CODE_ESSAIS_MAX = 3;        // 3 codes faux...
 TPMS.CODE_BLOCAGE_MS = 60000;    // ... et l'appairage est bloqué 1 min
+TPMS.CONFIRMATION_DUREE_MS = 30000;   // 30 s pour confirmer un changement sensible
 
 TPMS.creerLiaison = function () {
   return {
@@ -27,7 +30,10 @@ TPMS.creerLiaison = function () {
     codeJusquaMs: 0,
     essais: 0,
     bloqueJusquaMs: 0,
-    sequence: 0            // numéro de la prochaine notification MESURES
+    sequence: 0,           // numéro de la prochaine notification MESURES
+    enAttente: null,       // réglages sensibles reçus, en attente de l'appui sur le bouton
+    masqueAttente: 0,      // ce qu'ils changent (TPMS.SENSIBLE)
+    attenteJusquaMs: 0
   };
 };
 
@@ -83,6 +89,8 @@ TPMS.liaisonSaisirCode = function (b, code, maintenantMs) {
 };
 
 TPMS.liaisonDeconnexion = function (b, maintenantMs) {
+  // Le téléphone qui a demandé le changement est parti : on l'oublie.
+  TPMS.liaisonAnnulerAttente(b, maintenantMs, "téléphone déconnecté");
   if (!b.liaison.connecte) return;
   b.liaison.connecte = false;
   b.ecranUrgent = true;
@@ -108,6 +116,7 @@ TPMS.liaisonMesures = function (b, maintenantMs) {
     veille: vue.veille,
     enCharge: vue.enCharge,
     eclairage: vue.eclairage,
+    attenteConfirmation: b.liaison.enAttente !== null,
     sequence: b.liaison.sequence
   };
   b.liaison.sequence = (b.liaison.sequence + 1) & 0xFFFF;
@@ -120,9 +129,12 @@ TPMS.liaisonLireReglages = function (b) {
   return TPMS.encoderReglages(b.reglages);
 };
 
-// Écriture des réglages. Retourne "ok", "refuse" ou la raison du rejet.
+// Écriture des réglages. Retourne "ok", "attente-bouton" (changement
+// sensible : il faut un appui long sur le bouton 2 du boîtier), "refuse"
+// ou la raison du rejet.
 TPMS.liaisonEcrireReglages = function (b, octets, maintenantMs) {
-  if (!b.liaison.connecte || !b.liaison.appaire) return "refuse";
+  var l = b.liaison;
+  if (!l.connecte || !l.appaire) return "refuse";
   var r = TPMS.decoderReglages(octets);
   if (r === null) return "format invalide";
   var probleme = TPMS.verifierReglages(r);
@@ -130,6 +142,51 @@ TPMS.liaisonEcrireReglages = function (b, octets, maintenantMs) {
     TPMS.boitierJournal(b, maintenantMs, "Réglages refusés : " + probleme);
     return probleme;
   }
+  // Une nouvelle demande remplace celle qui attendait encore.
+  TPMS.liaisonAnnulerAttente(b, maintenantMs, "remplacé par une nouvelle demande");
+  var masque = TPMS.changementSensible(b.reglages, r);
+  if (masque !== 0) {
+    l.enAttente = r;
+    l.masqueAttente = masque;
+    l.attenteJusquaMs = maintenantMs + TPMS.CONFIRMATION_DUREE_MS;
+    b.ecranUrgent = true;
+    // Une ligne de journal par raison.
+    TPMS.lignesSensibles(masque).forEach(function (ligne) {
+      TPMS.boitierJournal(b, maintenantMs, "App demande : " + ligne + " (à confirmer)");
+    });
+    return "attente-bouton";
+  }
+  TPMS.liaisonAppliquerReglages(b, r, maintenantMs);
+  TPMS.boitierJournal(b, maintenantMs, "Réglages reçus de l'app");
+  return "ok";
+};
+
+// Appui long sur le bouton 2 pendant l'attente : on applique.
+// Appelée seulement par boitierBouton (un VRAI appui), jamais par l'app.
+TPMS.liaisonConfirmer = function (b, maintenantMs) {
+  var l = b.liaison;
+  if (l.enAttente === null) return false;
+  var r = l.enAttente;
+  l.enAttente = null;
+  l.masqueAttente = 0;
+  TPMS.liaisonAppliquerReglages(b, r, maintenantMs);
+  TPMS.boitierJournal(b, maintenantMs, "Changement sensible confirmé sur le boîtier");
+  return true;
+};
+
+// Abandon d'un changement sensible : autre bouton, délai dépassé,
+// déconnexion, veille ou nouvelle demande. Les réglages ne changent pas.
+TPMS.liaisonAnnulerAttente = function (b, maintenantMs, raison) {
+  var l = b.liaison;
+  if (l.enAttente === null) return;
+  l.enAttente = null;
+  l.masqueAttente = 0;
+  b.ecranUrgent = true;
+  TPMS.boitierJournal(b, maintenantMs, "Changement sensible annulé (" + raison + ")");
+};
+
+// Recopie des réglages déjà vérifiés dans ceux du boîtier.
+TPMS.liaisonAppliquerReglages = function (b, r, maintenantMs) {
   // Si on change de capteur, on oublie tout ce qu'on savait de l'ancien.
   ["AV", "AR"].forEach(function (pos) {
     if (r.appairage[pos] !== b.reglages.appairage[pos]) b.roues[pos] = TPMS.creerRoue();
@@ -142,18 +199,20 @@ TPMS.liaisonEcrireReglages = function (b, octets, maintenantMs) {
   b.reglages.protections = r.protections;
   b.reglages.appairage = r.appairage;
   b.ecranUrgent = true;
-  TPMS.boitierJournal(b, maintenantMs, "Réglages reçus de l'app");
-  return "ok";
 };
 
+// Les commandes de l'app passent par boitierAction et NON par
+// boitierBouton : la commande ACQUITTER (= appui long sur le bouton 2)
+// ne doit jamais pouvoir confirmer un changement sensible à la place
+// du cycliste.
 TPMS.liaisonCommande = function (b, octet, maintenantMs) {
   if (!b.liaison.connecte || !b.liaison.appaire) return "refuse";
   if (octet === TPMS.COMMANDE.RAZ_TRAJET) {
-    TPMS.boitierBouton(b, 1, true, maintenantMs);
+    TPMS.boitierAction(b, 1, true, maintenantMs);
     return "ok";
   }
   if (octet === TPMS.COMMANDE.ACQUITTER) {
-    TPMS.boitierBouton(b, 2, true, maintenantMs);
+    TPMS.boitierAction(b, 2, true, maintenantMs);
     return "ok";
   }
   return "commande inconnue";

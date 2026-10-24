@@ -19,6 +19,10 @@ void creerLiaison(Liaison* l) {
   l->essais = 0;
   l->bloqueJusquaMs = 0;
   l->sequence = 0;
+  l->enAttente = false;
+  l->masqueAttente = 0;
+  l->attenteJusquaMs = 0;
+  l->reglagesChanges = false;
 }
 
 bool liaisonBloquee(const Boitier* b, int32_t maintenantMs) {
@@ -72,6 +76,8 @@ void liaisonSecurisee(Boitier* b, int32_t maintenantMs) {
 }
 
 void liaisonDeconnexion(Boitier* b, int32_t maintenantMs) {
+  // Le téléphone qui a demandé le changement est parti : on l'oublie.
+  liaisonAnnulerAttente(b, maintenantMs, "téléphone déconnecté");
   // Une déconnexion pendant l'appairage rend le code inutile.
   if (b->liaison.code[0] != '\0') {
     b->liaison.code[0] = '\0';
@@ -101,6 +107,7 @@ bool liaisonMesures(Boitier* b, int32_t maintenantMs, uint8_t* o) {
   mesures.veille = vue.veille;
   mesures.enCharge = vue.enCharge;
   mesures.eclairage = vue.eclairage;
+  mesures.attenteConfirmation = b->liaison.enAttente;
   mesures.sequence = b->liaison.sequence;
   b->liaison.sequence = (uint16_t)(b->liaison.sequence + 1);   // repasse à 0 après 65535
   encoderMesures(&mesures, o);
@@ -114,7 +121,8 @@ bool liaisonLireReglages(const Boitier* b, uint8_t* o) {
 }
 
 const char* liaisonEcrireReglages(Boitier* b, const uint8_t* octets, int longueur, int32_t maintenantMs) {
-  if (!b->liaison.connecte || !b->liaison.appaire) return "refuse";
+  Liaison* l = &b->liaison;
+  if (!l->connecte || !l->appaire) return "refuse";
 
   // On décode dans une COPIE des réglages : rien n'est modifié tant que
   // tout n'a pas été vérifié.
@@ -127,32 +135,79 @@ const char* liaisonEcrireReglages(Boitier* b, const uint8_t* octets, int longueu
     boitierJournal(b, maintenantMs, texte);
     return probleme;
   }
-  // Si on change de capteur, on oublie tout ce qu'on savait de l'ancien.
-  for (int i = 0; i < NB_ROUES; i++) {
-    if (memcmp(r.appairage.adresse[i], b->reglages.appairage.adresse[i], TAILLE_ADRESSE) != 0) {
-      creerRoue(&b->roues[i]);
+  // Une nouvelle demande remplace celle qui attendait encore.
+  liaisonAnnulerAttente(b, maintenantMs, "remplacé par une nouvelle demande");
+  uint8_t masque = changementSensible(&b->reglages, &r);
+  if (masque != 0) {
+    l->enAttente = true;
+    l->attente = r;
+    l->masqueAttente = masque;
+    l->attenteJusquaMs = maintenantMs + CONFIRMATION_DUREE_MS;
+    b->ecranUrgent = true;
+    // Une ligne de journal par raison (même texte qu'en JS).
+    for (int i = 0; i < NB_RAISONS_SENSIBLES; i++) {
+      if ((masque & (1 << i)) == 0) continue;
+      char texte[64];
+      snprintf(texte, sizeof(texte), "App demande : %s (à confirmer)", TEXTES_SENSIBLES[i]);
+      boitierJournal(b, maintenantMs, texte);
     }
+    return "attente-bouton";
   }
-  b->reglages.circonferenceMm = r.circonferenceMm;
-  b->compteur.circonferenceMm = r.circonferenceMm;
-  b->reglages.seuils.roue[POS_AV] = r.seuils.roue[POS_AV];
-  b->reglages.seuils.roue[POS_AR] = r.seuils.roue[POS_AR];
-  b->reglages.delaiVeilleMs = r.delaiVeilleMs;
-  b->reglages.protections = r.protections;
-  b->reglages.appairage = r.appairage;
-  b->ecranUrgent = true;
+  liaisonAppliquerReglages(b, &r);
   boitierJournal(b, maintenantMs, "Réglages reçus de l'app");
   return "ok";
 }
 
+bool liaisonConfirmer(Boitier* b, int32_t maintenantMs) {
+  Liaison* l = &b->liaison;
+  if (!l->enAttente) return false;
+  l->enAttente = false;
+  l->masqueAttente = 0;
+  liaisonAppliquerReglages(b, &l->attente);
+  l->reglagesChanges = true;   // à sauver en flash (materiel/liaison_ble.cpp)
+  boitierJournal(b, maintenantMs, "Changement sensible confirmé sur le boîtier");
+  return true;
+}
+
+void liaisonAnnulerAttente(Boitier* b, int32_t maintenantMs, const char* raison) {
+  Liaison* l = &b->liaison;
+  if (!l->enAttente) return;
+  l->enAttente = false;
+  l->masqueAttente = 0;
+  b->ecranUrgent = true;
+  char texte[96];
+  snprintf(texte, sizeof(texte), "Changement sensible annulé (%s)", raison);
+  boitierJournal(b, maintenantMs, texte);
+}
+
+void liaisonAppliquerReglages(Boitier* b, const Reglages* r) {
+  // Si on change de capteur, on oublie tout ce qu'on savait de l'ancien.
+  for (int i = 0; i < NB_ROUES; i++) {
+    if (memcmp(r->appairage.adresse[i], b->reglages.appairage.adresse[i], TAILLE_ADRESSE) != 0) {
+      creerRoue(&b->roues[i]);
+    }
+  }
+  b->reglages.circonferenceMm = r->circonferenceMm;
+  b->compteur.circonferenceMm = r->circonferenceMm;
+  b->reglages.seuils.roue[POS_AV] = r->seuils.roue[POS_AV];
+  b->reglages.seuils.roue[POS_AR] = r->seuils.roue[POS_AR];
+  b->reglages.delaiVeilleMs = r->delaiVeilleMs;
+  b->reglages.protections = r->protections;
+  b->reglages.appairage = r->appairage;
+  b->ecranUrgent = true;
+}
+
 const char* liaisonCommande(Boitier* b, uint8_t octet, int32_t maintenantMs) {
   if (!b->liaison.connecte || !b->liaison.appaire) return "refuse";
+  // Les commandes de l'app passent par boitierAction et NON par
+  // boitierBouton : ACQUITTER (= appui long sur le bouton 2) ne doit
+  // jamais confirmer un changement sensible à la place du cycliste.
   if (octet == COMMANDE_RAZ_TRAJET) {
-    boitierBouton(b, 1, true, maintenantMs);
+    boitierAction(b, 1, true, maintenantMs);
     return "ok";
   }
   if (octet == COMMANDE_ACQUITTER) {
-    boitierBouton(b, 2, true, maintenantMs);
+    boitierAction(b, 2, true, maintenantMs);
     return "ok";
   }
   return "commande inconnue";

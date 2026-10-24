@@ -37,6 +37,7 @@
     connecte: false,
     mesures: null,
     reglages: null,
+    demandeSensible: null,   // réglages sensibles envoyés, en attente du bouton du boîtier
     derniereSequence: -1,
     perdues: 0,
     periodeHeures: 24,
@@ -141,6 +142,7 @@
 
   function connexionPerdue() {
     etat.connecte = false;
+    etat.demandeSensible = null;   // le boîtier l'annule aussi à la déconnexion
     afficherLiaison();
     afficherVue("vueConnexion");
   }
@@ -158,6 +160,7 @@
     }
     etat.derniereSequence = m.sequence;
     etat.mesures = m;
+    suivreDemandeSensible(m);
     enregistrerHistorique(m);
     afficherPneus();
     if (vueActive() === "vueHistorique") dessinerHistorique();
@@ -406,14 +409,48 @@
       message.className = "message erreur";
       return;
     }
+    // Couper une protection ou changer de capteur : le boîtier attendra
+    // un appui long sur son bouton 2 (voir TPMS.changementSensible).
+    var sensible = etat.reglages !== null && TPMS.changementSensible(etat.reglages, r) !== 0;
     var resultat = await transport.ecrireReglages(TPMS.encoderReglages(r));
-    if (resultat === "ok") {
+    // Avec la vraie radio, l'écriture réussit toujours : c'est le drapeau
+    // « attente » de MESURES qui dira la suite. Le simulateur répond
+    // directement "attente-bouton".
+    if (resultat === "attente-bouton" || (resultat === "ok" && sensible)) {
+      etat.demandeSensible = r;
+      message.textContent = "Changement sensible : confirme-le sur le boîtier par un appui long sur le bouton 2 (30 s). Un autre bouton l'annule.";
+      message.className = "message attention";
+    } else if (resultat === "ok") {
       etat.reglages = r;
       message.textContent = "Réglages enregistrés dans le boîtier.";
       message.className = "message";
     } else {
       message.textContent = "Refusé : " + resultat + ".";
       message.className = "message erreur";
+    }
+  }
+
+  // Suivi d'un changement sensible : tant que le drapeau est levé, le
+  // boîtier attend. Dès qu'il est baissé, on relit les réglages EN
+  // VIGUEUR pour savoir si le cycliste a confirmé ou non.
+  // Le boîtier traite l'écriture avant d'envoyer sa notification
+  // suivante : toute notification reçue après l'écriture en tient compte,
+  // même si le cycliste a déjà répondu (drapeau jamais vu levé).
+  async function suivreDemandeSensible(m) {
+    var demandes = etat.demandeSensible;
+    if (!demandes || m.attenteConfirmation) return;
+    etat.demandeSensible = null;
+    var message = $("messageReglages");
+    try {
+      var actuels = TPMS.decoderReglages(await transport.lireReglages());
+      var confirme = actuels && TPMS.trameEnHexa(TPMS.encoderReglages(actuels)) === TPMS.trameEnHexa(TPMS.encoderReglages(demandes));
+      remplirReglages(actuels);
+      message.textContent = confirme
+        ? "Changement confirmé sur le boîtier et appliqué."
+        : "Changement annulé sur le boîtier (autre bouton, délai dépassé ou veille). Les anciens réglages restent en vigueur.";
+      message.className = confirme ? "message" : "message erreur";
+    } catch (e) {
+      message.textContent = "Lecture des réglages impossible : " + e.message;
     }
   }
 

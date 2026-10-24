@@ -54,6 +54,25 @@ TPMS.dessinerEcran = function (e, vue) {
 
   // ---- Code d'appairage, par-dessus tout le reste ----
   if (vue.codeAppairage) TPMS.dessinerCodeAppairage(e, vue.codeAppairage);
+
+  // ---- Changement sensible demandé par l'app, à confirmer ----
+  if (vue.confirmation) TPMS.dessinerConfirmation(e, vue.confirmation);
+};
+
+// Fenêtre au centre de l'écran : ce que l'app veut changer, et comment
+// répondre. Le cycliste voit exactement ce qu'il accepte.
+TPMS.dessinerConfirmation = function (e, masque) {
+  var N = TPMS.NOIR;
+  TPMS.ecranRectPlein(e, 10, 40, 180, 120, TPMS.BLANC);
+  TPMS.ecranCadre(e, 10, 40, 180, 120, N);
+  TPMS.ecranCadre(e, 12, 42, 176, 116, N);
+  TPMS.ecranTexteCentre(e, 100, 50, "CONFIRMER ?", 2, N);
+  var lignes = TPMS.lignesSensibles(masque);
+  for (var i = 0; i < lignes.length; i++) {
+    TPMS.ecranTexteCentre(e, 100, 72 + 10 * i, lignes[i], 1, N);
+  }
+  TPMS.ecranTexteCentre(e, 100, 130, "APPUI LONG BOUTON 2 : OUI", 1, N);
+  TPMS.ecranTexteCentre(e, 100, 142, "AUTRE BOUTON : NON", 1, N);
 };
 
 // Fenêtre au centre de l'écran avec le code à taper sur le téléphone.

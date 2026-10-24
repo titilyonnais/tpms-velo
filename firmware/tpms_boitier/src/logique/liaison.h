@@ -11,7 +11,9 @@
 //   - afficher sur l'écran le code à 6 chiffres que la pile lui donne ;
 //   - compter les échecs et bloquer l'appairage 1 min après 3 échecs ;
 //   - refuser les réglages tant que le lien n'est pas appairé et chiffré ;
-//   - vérifier que les réglages reçus ont du sens.
+//   - vérifier que les réglages reçus ont du sens ;
+//   - garder en attente un changement SENSIBLE (protection coupée,
+//     capteur remplacé) jusqu'à un appui long sur le bouton 2.
 //
 // Pourquoi un code affiché ? Sans lui, l'appairage « Just Works » ne
 // protège pas d'une attaque de l'homme du milieu : un pirate pourrait
@@ -35,10 +37,12 @@
 #define LIAISON_H
 
 #include <stdint.h>
+#include "protocole.h"
 
 const int32_t CODE_DUREE_MS = 60000;     // le code reste affiché 1 min
 const uint8_t CODE_ESSAIS_MAX = 3;       // 3 codes faux...
 const int32_t CODE_BLOCAGE_MS = 60000;   // ... et l'appairage est bloqué 1 min
+const int32_t CONFIRMATION_DUREE_MS = 30000;   // 30 s pour confirmer un changement sensible
 
 struct Liaison {
   bool connecte;           // téléphone connecté ET lien chiffré
@@ -48,6 +52,14 @@ struct Liaison {
   uint8_t essais;
   int32_t bloqueJusquaMs;
   uint16_t sequence;       // numéro de la prochaine notification MESURES
+  bool enAttente;          // des réglages sensibles attendent l'appui sur le bouton 2
+  Reglages attente;        // ... les voici (en JS : enAttente vaut ces réglages ou null)
+  uint8_t masqueAttente;   // ce qu'ils changent (SENSIBLE_...)
+  int32_t attenteJusquaMs;
+  // Pas d'équivalent en JS : levé quand le bouton applique des réglages,
+  // pour que materiel/liaison_ble.cpp les sauve en flash et mette à jour
+  // la caractéristique REGLAGES. Remis à false par liaison_ble.cpp.
+  bool reglagesChanges;
 };
 
 struct Boitier;   // décrit dans boitier.h
@@ -94,9 +106,21 @@ bool liaisonMesures(Boitier* b, int32_t maintenantMs, uint8_t* o);
 // Lecture des réglages : réservée à un téléphone appairé.
 bool liaisonLireReglages(const Boitier* b, uint8_t* o);
 
-// Écriture des réglages. Retourne "ok", "refuse", "format invalide"
-// ou la raison du rejet (comme en JS).
+// Écriture des réglages. Retourne "ok", "attente-bouton" (changement
+// sensible : il faut un appui long sur le bouton 2 du boîtier), "refuse",
+// "format invalide" ou la raison du rejet (comme en JS).
 const char* liaisonEcrireReglages(Boitier* b, const uint8_t* octets, int longueur, int32_t maintenantMs);
+
+// Appui long sur le bouton 2 pendant l'attente : on applique.
+// Appelée seulement par boitierBouton (un VRAI appui), jamais par l'app.
+bool liaisonConfirmer(Boitier* b, int32_t maintenantMs);
+
+// Abandon d'un changement sensible (autre bouton, délai dépassé,
+// déconnexion, veille, nouvelle demande). Les réglages ne changent pas.
+void liaisonAnnulerAttente(Boitier* b, int32_t maintenantMs, const char* raison);
+
+// Recopie des réglages déjà vérifiés dans ceux du boîtier.
+void liaisonAppliquerReglages(Boitier* b, const Reglages* r);
 
 // Retourne "ok", "refuse" ou "commande inconnue".
 const char* liaisonCommande(Boitier* b, uint8_t octet, int32_t maintenantMs);
