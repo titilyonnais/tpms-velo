@@ -182,9 +182,19 @@ var TYPES = {
 };
 
 // Dossiers jamais servis : le serveur lui-même (clés de démo, base de
-// données), l'historique git, les fichiers cachés.
-function cheminInterdit(morceaux) {
+// données), l'historique git, les fichiers cachés, et dans la maquette de
+// l'entrepôt les certificats et CLÉS PRIVÉES, les données et les journaux
+// (le dépôt y est monté en entier dans le conteneur). Par prudence, aucun
+// fichier de clé ou de base n'est servi, où qu'il soit.
+var DOSSIERS_ENTREPOT_INTERDITS = ["certificats", "donnees", "journaux"];
+var EXTENSIONS_INTERDITES = [".cle", ".key", ".db", ".sqlite", ".srl", ".csr"];
+function cheminInterdit(morceauxBruts) {
+  // En minuscules : sous Windows, /Serveur/ désigne le même dossier que /serveur/.
+  var morceaux = morceauxBruts.map(function (m) { return m.toLowerCase(); });
   if (morceaux[0] === "serveur" || morceaux[0] === "node_modules") return true;
+  if (morceaux[0] === "entrepot" && DOSSIERS_ENTREPOT_INTERDITS.indexOf(morceaux[1]) >= 0) return true;
+  var dernier = morceaux[morceaux.length - 1] || "";
+  if (EXTENSIONS_INTERDITES.indexOf(path.extname(dernier).toLowerCase()) >= 0) return true;
   return morceaux.some(function (m) { return m.charAt(0) === "."; });
 }
 

@@ -2,7 +2,7 @@
 // demonstration.js — Essais de sécurité commentés de la maquette
 // ---------------------------------------------------------------------
 // À lancer sur le PC, maquette démarrée (docker compose up -d) :
-//   node entrepot/demonstration.js        les 12 essais à la suite (≈ 3 min)
+//   node entrepot/demonstration.js        les 13 essais à la suite (≈ 3 min)
 //   node entrepot/demonstration.js 6      un seul essai (pour l'oral)
 //
 // Chaque essai dit ce qui est tenté, ce qu'on attend, ce qu'on obtient,
@@ -127,6 +127,15 @@ var ESSAIS = [
       var apres = compteursPareFeu()["REFUS OT vers supervision"];
       return { obtenu: "code HTTP « " + code.slice(0, 3) + " » (000 = pas de réponse) ; compteur « REFUS OT vers supervision » : +" + (apres - avant),
         ok: code.indexOf("000") === 0 && apres > avant };
+    } },
+
+  { titre: "Un poste de bureau réclame à la supervision la clé privée du courtier",
+    attendu: "403 : la supervision ne sert ni certificats, ni clés, ni base, ni journaux (même en majuscules)",
+    lancer: async function () {
+      var codes = ["/entrepot/certificats/courtier.cle", "/Entrepot/Certificats/courtier.cle", "/entrepot/journaux/central.log"].map(function (a) {
+        return compose(["exec", "-T", "poste", "curl", "-sk", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", "https://10.10.20.20:8443" + a]).trim();
+      });
+      return { obtenu: "codes HTTP : " + codes.join(", "), ok: codes.every(function (c) { return c === "403"; }) };
     } },
 
   { titre: "L'intrus se connecte au courtier SANS certificat",

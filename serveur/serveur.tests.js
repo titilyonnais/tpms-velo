@@ -218,6 +218,12 @@ async function testsSecurite() {
   verifier("les clés de démo ne sont pas servies", (await fetch(s.url + "/serveur/cles-demo.json")).status === 403);
   verifier("sortie du dépôt par ../ impossible", [403, 404, 400].indexOf((await fetch(s.url + "/..%2f..%2f..%2fWindows/win.ini")).status) >= 0);
   verifier("fichiers cachés (.git) non servis", (await fetch(s.url + "/.git/config")).status === 403);
+  // Maquette de l'entrepôt : le dépôt est monté en entier, certificats et clés privées compris.
+  var secrets = await Promise.all(["/entrepot/certificats/courtier.cle", "/entrepot/certificats/ac.pem", "/entrepot/donnees/flotte.db",
+    "/entrepot/journaux/central.log", "/app/cle.key", "/Entrepot/Journaux/central.log", "/Serveur/cles-demo.json"].map(function (a) { return fetch(s.url + a); }));
+  verifier("certificats, clés privées, base et journaux de l'entrepôt non servis, même en majuscules (403)",
+    secrets.every(function (r) { return r.status === 403; }), secrets.map(function (r) { return r.status; }).join());
+  verifier("les programmes de l'entrepôt restent servis (page des chariots)", (await fetch(s.url + "/entrepot/reception.js")).status === 200);
 
   await arreter(s);
 }
