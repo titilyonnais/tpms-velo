@@ -185,7 +185,7 @@ Pendant une location, la position du vélo est celle du client. Gardée sans lim
 
 ### Scénarios de la version industrielle (réseau de l'entrepôt)
 
-Les scénarios S24 à S31 visent l'infrastructure de l'entrepôt : passerelles, réseau de l'usine, courtier MQTT, supervision. Ils sont rejoués sur la maquette Docker par `entrepot/demonstration.js` (13 essais, § 5.7), avec un conteneur « intrus » branché sur le réseau de l'atelier, et dans le simulateur de l'usine (`entrepot/simulateur.html`, 20 essais, dont la coupure de courant, l'horloge faussée, le brouillage et l'inondation, que la maquette ne permet pas).
+Les scénarios S24 à S31 visent l'infrastructure de l'entrepôt : passerelles, réseau de l'usine, courtier MQTT, supervision. Ils sont rejoués sur la maquette Docker par `entrepot/demonstration.js` (14 essais, § 5.7), avec un conteneur « intrus » branché sur le réseau de l'atelier, et dans le simulateur de l'usine (`entrepot/simulateur.html`, 20 essais, dont la coupure de courant, l'horloge faussée, le brouillage et l'inondation, que la maquette ne permet pas).
 
 ### S24 – Rebond depuis la bureautique vers l'atelier
 

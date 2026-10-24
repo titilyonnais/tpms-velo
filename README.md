@@ -5,7 +5,7 @@
 Projet de BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité ».
 Auteur : Thibault MORRETTON.
 
-**Version industrielle (24/10/2026).** Les pneus gonflables d'une **flotte de chariots élévateurs** portent des capteurs TPMS Bluetooth ; des **passerelles** au plafond de l'entrepôt les écoutent et publient leurs trames en **MQTT sur TLS** jusqu'à une **supervision**, à travers un **réseau d'usine découpé en zones** (atelier, serveurs, bureautique, DMZ) par un pare-feu, avec NTP et syslog. Tout le réseau tourne dans une **maquette Docker** lancée en une commande, avec une démonstration de 13 essais de sécurité : voir [`entrepot/README.md`](entrepot/README.md) et [`docs/orientation-industrielle.md`](docs/orientation-industrielle.md). Le kit vélo ci-dessous sert de **démonstrateur** : mêmes capteurs, même logique.
+**Version industrielle (24/10/2026).** Les pneus gonflables d'une **flotte de chariots élévateurs** portent des capteurs TPMS Bluetooth ; des **passerelles** au plafond de l'entrepôt les écoutent et publient leurs trames en **MQTT sur TLS** jusqu'à une **supervision**, à travers un **réseau d'usine découpé en zones** (atelier, serveurs, bureautique, DMZ) par un pare-feu, avec NTP et syslog. Tout le réseau tourne dans une **maquette Docker** lancée en une commande, avec une démonstration de 14 essais de sécurité : voir [`entrepot/README.md`](entrepot/README.md) et [`docs/orientation-industrielle.md`](docs/orientation-industrielle.md). Le kit vélo ci-dessous sert de **démonstrateur** : mêmes capteurs, même logique.
 
 Le projet est aussi un **logiciel de simulation complète** du kit : tout est calculé comme dans la réalité (physique des pneus, vélo et parcours, radio Bluetooth, électronique, batterie), sans matériel.
 
