@@ -1,0 +1,5 @@
+# Clés privées et certificats de la maquette (fabriqués par generer-certificats.js)
+certificats/
+# Base de données et journal central de la maquette
+donnees/
+journaux/

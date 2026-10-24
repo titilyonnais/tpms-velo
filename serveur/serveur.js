@@ -608,7 +608,10 @@ module.exports = {
 if (require.main === module) {
   var argv = process.argv;
   var dossierCertificats = path.join(__dirname, "certificats");
-  var fichierCert = path.join(dossierCertificats, "cert.pem"), fichierCle = path.join(dossierCertificats, "cle.pem");
+  // SERVEUR_CERT et SERVEUR_CLE : certificat signé par l'AC de la maquette
+  // de l'entrepôt (entrepot/), à la place du certificat auto-signé.
+  var fichierCert = process.env.SERVEUR_CERT || path.join(dossierCertificats, "cert.pem");
+  var fichierCle = process.env.SERVEUR_CLE || path.join(dossierCertificats, "cle.pem");
   var certificatPresent = fs.existsSync(fichierCert) && fs.existsSync(fichierCle);
   var enHttps = argv.indexOf("--https") >= 0 || (certificatPresent && argv.indexOf("--http") < 0);
   if (enHttps && !certificatPresent) {
@@ -640,7 +643,9 @@ if (require.main === module) {
     console.log("Serveur de flotte TPMS : " + (enHttps ? "https" : "http") + "://localhost:" + port + "/flotte/");
     console.log("Base : " + cheminBase + " · clés et jetons de DÉMO : serveur/cles-demo.json");
     console.log("Comptes de lecture : " + serveur.comptes.map(function (c) { return c.nom + " (" + c.role + ")"; }).join(", "));
-    if (enHttps) {
+    if (enHttps && process.env.SERVEUR_CERT) {
+      console.log("HTTPS actif (" + fichierCert + "), certificat signé par l'AC de la maquette de l'entrepôt.");
+    } else if (enHttps) {
       console.log("HTTPS actif (serveur/certificats/cert.pem). Certificat auto-signé de démo : le navigateur affiche");
       console.log("un avertissement, c'est normal. Script de flotte : node serveur/flotte-vers-serveur.js --https");
     } else {

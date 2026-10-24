@@ -1,0 +1,99 @@
+#!/usr/sbin/nft -f
+# =====================================================================
+# regles.nft — Règles du pare-feu entre les zones de l'entrepôt
+# ---------------------------------------------------------------------
+# Matrice des flux : docs/orientation-industrielle.md, § 3.4.
+# Politique par défaut : TOUT est refusé. On n'ouvre que les « conduits »
+# nécessaires (logique de la norme IEC 62443 : zones et conduits).
+# Chaque règle a un compteur : `nft list ruleset` montre combien de
+# paquets ont été acceptés ou refusés, flux par flux.
+#
+#   VLAN 10  OT atelier    10.10.10.0/24   passerelles
+#   VLAN 20  serveurs      10.10.20.0/24   courtier .10, supervision .20, NTP .30, syslog .40
+#   VLAN 30  bureautique   10.10.30.0/24   poste .50
+#   VLAN 40  DMZ           10.10.40.0/24   accès distant (prévu)
+# Le PC de démonstration (l'hôte Docker) a l'adresse .1 dans chaque réseau.
+# Il atteint la supervision par le port 8443 du pare-feu, publié par Docker,
+# que le pare-feu redirige vers la supervision (fin du fichier).
+# =====================================================================
+flush ruleset
+
+define OT          = 10.10.10.0/24
+define BUREAUTIQUE = 10.10.30.0/24
+define DMZ         = 10.10.40.0/24
+define COURTIER    = 10.10.20.10
+define SUPERVISION = 10.10.20.20
+define NTP         = 10.10.20.30
+define SYSLOG      = 10.10.20.40
+# Adresses de l'hôte Docker (le PC de démonstration) : Docker choisit
+# lui-même par quel réseau arrive le port publié, d'où la liste.
+define HOTE        = { 10.10.10.1, 10.10.20.1, 10.10.30.1, 10.10.40.1 }
+
+table inet pare_feu {
+
+  # Ce qui TRAVERSE le pare-feu, d'une zone à l'autre.
+  chain transit {
+    type filter hook forward priority filter; policy drop;
+
+    # Les réponses aux connexions déjà autorisées repassent (pare-feu « à états »).
+    ct state established,related counter accept
+    ct state invalid counter drop
+
+    # 6. Le PC de démonstration (redirigé par le pare-feu) → supervision.
+    # Placée en tête : ses adresses .1 sont aussi dans les réseaux des
+    # règles 4 et 5, qui sinon compteraient ses paquets.
+    ip saddr $HOTE ip daddr $SUPERVISION tcp dport 8443 counter accept comment "6 PC de demonstration vers supervision"
+
+    # 1. Passerelles → courtier MQTT, en TLS seulement.
+    ip saddr $OT ip daddr $COURTIER tcp dport 8883 counter accept comment "1 passerelles vers courtier MQTT TLS"
+    # 2. Passerelles → heure (NTP).
+    ip saddr $OT ip daddr $NTP udp dport 123 counter accept comment "2 passerelles vers NTP"
+    # 3. Passerelles → journal central (syslog).
+    ip saddr $OT ip daddr $SYSLOG udp dport 514 counter accept comment "3 passerelles vers syslog"
+    # 4. Bureautique → page de supervision, en HTTPS.
+    ip saddr $BUREAUTIQUE ip daddr $SUPERVISION tcp dport 8443 counter accept comment "4 bureautique vers supervision HTTPS"
+    # 5. DMZ (accès distant, prévu) → supervision, en HTTPS.
+    ip saddr $DMZ ip daddr $SUPERVISION tcp dport 8443 counter accept comment "5 DMZ vers supervision HTTPS"
+
+    # Tout le reste est refusé ; on compte les refus par sens, pour la démonstration.
+    ip saddr $BUREAUTIQUE ip daddr $OT counter drop comment "REFUS bureautique vers OT"
+    ip saddr $OT ip daddr $BUREAUTIQUE counter drop comment "REFUS OT vers bureautique"
+    ip saddr $BUREAUTIQUE ip daddr $COURTIER counter drop comment "REFUS bureautique vers courtier"
+    ip saddr $OT ip daddr $SUPERVISION counter drop comment "REFUS OT vers supervision"
+    counter drop comment "REFUS autres"
+  }
+
+  # Ce qui est destiné au pare-feu lui-même : rien, sauf le ping depuis les serveurs.
+  chain entree {
+    type filter hook input priority filter; policy drop;
+    ct state established,related accept
+    iif "lo" accept
+    ip saddr 10.10.20.0/24 icmp type echo-request accept
+    counter drop comment "REFUS vers le pare-feu"
+  }
+
+  # Ce que le pare-feu émet lui-même : autorisé.
+  chain sortie {
+    type filter hook output priority filter; policy accept;
+  }
+}
+
+# Le PC de démonstration envoie sa requête au port 8443 du PARE-FEU (seul
+# conteneur dont un port est publié) : le pare-feu la redirige vers la
+# supervision (traduction d'adresse de destination), puis la règle n° 6
+# la laisse passer. Seul le PC est redirigé : une passerelle qui viserait
+# le pare-feu sur ce port reste refusée.
+table ip traduction {
+  chain avant_routage {
+    type nat hook prerouting priority dstnat;
+    ip saddr $HOTE fib daddr type local tcp dport 8443 counter dnat to $SUPERVISION:8443
+  }
+  # Ces connexions redirigées repartent avec l'adresse du pare-feu
+  # (10.10.20.254) : la supervision lui répond, et lui seul renvoie la
+  # réponse au PC. (Sans cela, Docker réécrit l'adresse du PC et la
+  # réponse se perd.)
+  chain apres_routage {
+    type nat hook postrouting priority srcnat;
+    ct status dnat ip daddr $SUPERVISION tcp dport 8443 counter masquerade
+  }
+}

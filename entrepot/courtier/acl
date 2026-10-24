@@ -1,0 +1,22 @@
+# =====================================================================
+# acl — Droits par sujet du courtier MQTT (moindre privilège)
+# ---------------------------------------------------------------------
+# « user » = le nom (CN) du certificat présenté.
+# Tout ce qui n'est pas écrit ici est INTERDIT.
+# =====================================================================
+
+# Le serveur de supervision LIT tout ce que publient les passerelles,
+# et n'écrit rien.
+user serveur-supervision
+topic read entrepot/#
+
+# Chaque passerelle n'écrit que sous SON numéro : elle ne peut ni se
+# faire passer pour une autre, ni lire ce que publient les autres.
+user passerelle-1
+topic write entrepot/+/passerelle/1/#
+
+user passerelle-2
+topic write entrepot/+/passerelle/2/#
+
+user passerelle-3
+topic write entrepot/+/passerelle/3/#

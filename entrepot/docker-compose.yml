@@ -1,0 +1,194 @@
+# =====================================================================
+# docker-compose.yml — Maquette du réseau de l'entrepôt
+# ---------------------------------------------------------------------
+# Lancer (depuis le dossier entrepot/) :
+#   node generer-certificats.js        (une fois : AC, certificats, clés)
+#   docker compose up -d --build
+#   docker compose ps                  (état des conteneurs)
+#   node demonstration.js              (essais de sécurité commentés)
+#   docker compose down                (tout arrêter)
+# Supervision : https://localhost:8443/flotte/chariots.html depuis ce PC.
+#
+# Chaque « VLAN » est un réseau Docker. Au démarrage, chaque conteneur
+# SUPPRIME sa route par défaut (pas d'accès à Internet) et reçoit une
+# seule route « 10.10.0.0/16 via le pare-feu » (d'où NET_ADMIN) : le
+# seul passage entre les réseaux est le conteneur pare-feu (règles dans
+# pare-feu/regles.nft). (Des réseaux Docker « internes » ne conviennent
+# pas : Docker y jette tout paquet destiné à un autre réseau, même
+# confié à un routeur.)
+# Plan d'adressage : docs/orientation-industrielle.md, § 3.3.
+# =====================================================================
+name: entrepot-tpms
+
+# Réglages communs des conteneurs Node (le dépôt est monté en lecture seule).
+x-node: &node
+  image: node:24-alpine
+  working_dir: /app
+  volumes:
+    - ..:/app:ro
+  cap_add: [NET_ADMIN]
+  environment: &env-node
+    TZ: Europe/Paris
+  restart: unless-stopped
+
+services:
+
+  # ---- Routeur et pare-feu entre les zones ----------------------------
+  pare-feu:
+    build: ./pare-feu
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv4.ip_forward: 1
+    networks:
+      ot:          { ipv4_address: 10.10.10.254 }
+      serveurs:    { ipv4_address: 10.10.20.254 }
+      bureautique: { ipv4_address: 10.10.30.254 }
+      dmz:         { ipv4_address: 10.10.40.254 }
+    ports:
+      - "127.0.0.1:8443:8443"      # le PC de démonstration → supervision (DNAT par le pare-feu)
+    restart: unless-stopped
+
+  # ---- Zone serveurs (VLAN 20) -----------------------------------------
+  courtier:
+    image: eclipse-mosquitto:2
+    cap_add: [NET_ADMIN]
+    entrypoint: ["sh", "-c", "ip route del default; ip route replace 10.10.0.0/16 via 10.10.20.254 && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"]
+    volumes:
+      - ./courtier:/mosquitto/config:ro
+      - ./certificats:/certificats:ro
+    networks:
+      serveurs: { ipv4_address: 10.10.20.10 }
+    restart: unless-stopped
+
+  supervision:
+    <<: *node
+    command: ["sh", "-c", "ip route del default; ip route replace 10.10.0.0/16 via 10.10.20.254 && exec node --no-warnings serveur/serveur.js --https --base /donnees/flotte.db"]
+    environment:
+      <<: *env-node
+      SERVEUR_CERT: /certificats/supervision.pem
+      SERVEUR_CLE: /certificats/supervision.cle
+      MQTT_HOTE: 10.10.20.10
+      MQTT_NOM: courtier
+      MQTT_CA: /certificats/ac.pem
+      MQTT_CERT: /certificats/serveur-supervision.pem
+      MQTT_CLE: /certificats/serveur-supervision.cle
+    volumes:
+      - ..:/app:ro
+      - ./certificats:/certificats:ro
+      - ./donnees:/donnees
+    networks:
+      serveurs: { ipv4_address: 10.10.20.20 }
+    depends_on: [courtier]
+
+  ntp:
+    build: ./ntp
+    cap_add: [NET_ADMIN]
+    networks:
+      serveurs: { ipv4_address: 10.10.20.30 }
+    restart: unless-stopped
+
+  syslog:
+    build: ./syslog
+    cap_add: [NET_ADMIN]
+    volumes:
+      - ./journaux:/journaux
+    networks:
+      serveurs: { ipv4_address: 10.10.20.40 }
+    restart: unless-stopped
+
+  # ---- Zone OT atelier (VLAN 10) : les passerelles ---------------------
+  passerelle-1: &passerelle
+    <<: *node
+    command: ["sh", "-c", "ip route del default; ip route replace 10.10.0.0/16 via 10.10.10.254 && exec node entrepot/passerelle.js"]
+    environment: &env-passerelle
+      <<: *env-node
+      PASSERELLE_ID: "1"
+      COURTIER: 10.10.20.10
+      COURTIER_NOM: courtier
+      CA: /certificats/ac.pem
+      CERT: /certificats/passerelle-1.pem
+      CLE: /certificats/passerelle-1.cle
+      NTP: 10.10.20.30
+      SYSLOG: 10.10.20.40
+    volumes:
+      - ..:/app:ro
+      - ./certificats:/certificats:ro
+    networks:
+      ot:  { ipv4_address: 10.10.10.11 }
+      air: { ipv4_address: 10.10.99.11 }
+    depends_on: [pare-feu]
+
+  passerelle-2:
+    <<: *passerelle
+    environment:
+      <<: *env-passerelle
+      PASSERELLE_ID: "2"
+      CERT: /certificats/passerelle-2.pem
+      CLE: /certificats/passerelle-2.cle
+    networks:
+      ot:  { ipv4_address: 10.10.10.12 }
+      air: { ipv4_address: 10.10.99.12 }
+
+  passerelle-3:
+    <<: *passerelle
+    environment:
+      <<: *env-passerelle
+      PASSERELLE_ID: "3"
+      CERT: /certificats/passerelle-3.pem
+      CLE: /certificats/passerelle-3.cle
+    networks:
+      ot:  { ipv4_address: 10.10.10.13 }
+      air: { ipv4_address: 10.10.99.13 }
+
+  # ---- Zone bureautique (VLAN 30) --------------------------------------
+  poste:
+    build: ./poste
+    cap_add: [NET_ADMIN]
+    command: ["sh", "-c", "ip route del default; ip route replace 10.10.0.0/16 via 10.10.30.254 && exec sleep infinity"]
+    volumes:
+      - ..:/app:ro
+      - ./certificats:/certificats:ro
+    networks:
+      bureautique: { ipv4_address: 10.10.30.50 }
+    restart: unless-stopped
+
+  # ---- Hors réseau de l'usine : la simulation --------------------------
+  # « monde » fait vivre les chariots et diffuse leurs annonces Bluetooth
+  # sur le réseau « air » (la radio). Il n'existe pas dans la réalité.
+  monde:
+    <<: *node
+    command: ["node", "entrepot/monde.js"]
+    environment:
+      <<: *env-node
+      AIR_DIFFUSION: 10.10.99.255
+    networks:
+      air: { ipv4_address: 10.10.99.2 }
+
+  # ---- Démonstration : un intrus branché sur le réseau OT --------------
+  # Lancé seulement par demonstration.js (profil « attaques »).
+  intrus:
+    build: ./poste
+    profiles: [attaques]
+    cap_add: [NET_ADMIN]
+    command: ["sh", "-c", "ip route del default; ip route replace 10.10.0.0/16 via 10.10.10.254 && exec sleep infinity"]
+    volumes:
+      - ..:/app:ro
+      - ./certificats:/certificats:ro
+    networks:
+      ot:  { ipv4_address: 10.10.10.66 }
+      air: { ipv4_address: 10.10.99.66 }
+
+# Docker « masque » (traduit vers sa propre adresse) les paquets qui
+# quittent un réseau : il faut le lui interdire, sinon un paquet routé par
+# le pare-feu arrive à la supervision avec l'adresse de l'hôte (10.10.20.1)
+# et la réponse se perd. Ces réseaux n'ont de toute façon pas d'Internet.
+x-sans-masquage: &sans-masquage
+  com.docker.network.bridge.enable_ip_masquerade: "false"
+
+networks:
+  ot:          { driver_opts: *sans-masquage, ipam: { config: [{ subnet: 10.10.10.0/24 }] } }
+  serveurs:    { driver_opts: *sans-masquage, ipam: { config: [{ subnet: 10.10.20.0/24 }] } }
+  bureautique: { driver_opts: *sans-masquage, ipam: { config: [{ subnet: 10.10.30.0/24 }] } }
+  dmz:         { driver_opts: *sans-masquage, ipam: { config: [{ subnet: 10.10.40.0/24 }] } }
+  # La « radio » Bluetooth simulée : seulement le monde et les passerelles.
+  air:         { internal: true, ipam: { config: [{ subnet: 10.10.99.0/24 }] } }
