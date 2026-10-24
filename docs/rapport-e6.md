@@ -19,7 +19,7 @@
 
 <br>
 
-> **Note sur l'état du projet.** Le matériel a été commandé mais n'est pas encore reçu au moment où j'écris ce rapport (mis à jour le 23/10/2026). Tout ce qui concerne le comportement réel des capteurs, les consommations électriques et l'étanchéité est donc une **hypothèse** ou un **résultat de simulation**, et je le signale à chaque fois. Les chiffres de ce rapport viennent du code du dépôt : je les ai obtenus en exécutant les fonctions avec Node.js ou en lançant les tests, pas en les recopiant à la main.
+> **Note sur l'état du projet.** Le matériel a été commandé mais n'est pas encore reçu au moment où j'écris ce rapport (mis à jour le 24/10/2026). Tout ce qui concerne le comportement réel des capteurs, les consommations électriques et l'étanchéité est donc une **hypothèse** ou un **résultat de simulation**, et je le signale à chaque fois. Les chiffres de ce rapport viennent du code du dépôt : je les ai obtenus en exécutant les fonctions avec Node.js ou en lançant les tests, pas en les recopiant à la main.
 
 ---
 
@@ -41,6 +41,7 @@
    - [6.12 Le journal de sécurité chaîné](#612-traçabilité--le-journal-de-sécurité-chaîné-s15)
    - [6.13 La sécurité du serveur de flotte](#613-la-sécurité-du-serveur-de-flotte)
 7. [Énergie](#7-énergie)
+   - [7.8 La recharge par grand froid](#78-la-recharge-par-grand-froid-24102026)
 8. [Tests et validation](#8-tests-et-validation)
    - [8.1 Les tests automatiques et l'intégration continue](#81-les-tests-automatiques)
 9. [Gestion de projet](#9-gestion-de-projet)
@@ -100,12 +101,12 @@ Le matériel n'étant pas encore arrivé, j'ai décidé le 22/10/2026 de faire d
 
 | Partie | Dossier | État |
 |---|---|---|
-| Logique partagée (trames, vitesse, fuite, alertes, sécurité, protocole BLE, énergie) | `logique/` | Terminée, testée |
+| Logique partagée (trames, vitesse, fuite, alertes, sécurité, protocole BLE, énergie, baromètre, boutons) | `logique/` | Terminée, testée |
 | Simulateur (monde physique, boîtier virtuel, interface) | `simulateur/` | Terminé, testé, en ligne |
 | Application Web Bluetooth | `app/` | Fonctionne avec le boîtier simulé ; à essayer avec le vrai boîtier |
 | Programme du boîtier (Arduino, C++) | `firmware/` | Écrit ; la partie logique est testée sur PC à chaque envoi de code ; jamais chargé sur la carte |
-| Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
-| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Version 2 : modèle paramétré de 10 pièces, rendu, contrôlé (aucune interférence aux cotes nominales), STL prêts ; pas encore imprimé |
+| Serveur de flotte et supervision (vélos de location) | `serveur/`, `flotte/` | Terminé, testé (lots signés, comptes de lecture par mot de passe et sessions qui expirent, HTTPS en option, règles RGPD) ; démo en ligne sans serveur |
+| Boîtier imprimé en 3D (OpenSCAD) | `boitier-3d/` | Version 2 : modèle paramétré de 10 pièces, avec un évent à membrane pour le baromètre, rendu, contrôlé (aucune interférence aux cotes nominales), STL prêts ; pas encore imprimé |
 | Dossier technique | `docs/` | Cahier des charges, architecture, protocole BLE, analyse de risques, bilan énergétique, schéma électrique |
 
 ---
@@ -122,11 +123,12 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | Microcontrôleur | Seeed XIAO nRF52840 | Radio BLE intégrée, chargeur de batterie LiPo intégré, très petite taille (21 × 17,5 mm), mode veille à quelques µA |
 | Écran | E-paper WeAct 1,54″, 200 × 200 pixels, contrôleur SSD1681, bus SPI | Lisible au soleil, ne consomme rien entre deux images |
 | Batterie | LiPo 3,7 V 500 mAh | Tient dans un boîtier de guidon ; la carte XIAO sait la recharger |
-| Recharge | Connecteur magnétique 2 broches | Pas de prise USB à ouvrir : meilleure étanchéité |
+| Recharge | Connecteur magnétique 2 broches ; recharge coupée hors de 2 à 43 °C par un interrupteur TPS22918 (ajout du 24/10/2026) | Pas de prise USB à ouvrir : meilleure étanchéité. Une LiPo s'abîme si on la recharge sous 0 °C, et le chargeur du XIAO ne surveille pas la température (§ 7.8) |
+| Baromètre | BMP280 (carte GY-BMP280, 3,3 V, en SPI) derrière un évent à membrane ePTFE (ajout du 24/10/2026) | Corrige l'erreur d'altitude des capteurs (0,17 bar à 1 500 m, § 5.4) et donne la température du boîtier pour couper la recharge par grand froid. Pas encore commandé |
 | Vitesse | Aimant de rayon + interrupteur reed filaire | Solution simple et classique des compteurs de vélo |
 | Alertes | Buzzer + LED rouge | Le cycliste entend l'alerte sans regarder l'écran |
 | Éclairage | 2 LED blanches latérales | Être vu de côté la nuit ; un vrai éclairage avant coûterait trop cher |
-| Boîtier | Imprimé en 3D en PETG, visé IPX7, joint torique radial ; collier de cintre serré par vis, boîtier enclenché par une glissière à cran (§ 4.7) | Imprimante 3D disponible au lycée ; boîtier amovible sans outil pour la recharge |
+| Boîtier | Imprimé en 3D en PETG, visé IPX7, joint torique radial, évent à membrane sous le fond ; collier de cintre serré par vis, boîtier enclenché par une glissière à cran (§ 4.7) | Imprimante 3D disponible au lycée ; boîtier amovible sans outil pour la recharge |
 | Application | Page web Web Bluetooth | Rien à installer. Mon téléphone est un iPhone : Safari ne gère pas Web Bluetooth, j'utilise donc le navigateur **Bluefy**. J'ai écarté Flutter parce que compiler une application iOS exige un Mac. |
 
 ### 2.2 Exigences fonctionnelles (synthèse)
@@ -142,13 +144,15 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | EF-08 | Détecter une fuite lente | Pente par régression linéaire sur 20 min ; alerte sous −0,15 bar/h |
 | EF-09 | Détecter une crevaison rapidement | Alerte CREVAISON moins de 10 s après le passage sous 0,5 bar |
 | EF-10 | Éclairage latéral de nuit | Bouton 2 appui court |
-| EF-11 | Veille quand le vélo ne roule plus, réveil seul | Veille après 5 min par défaut ; réveil par la roue ou un bouton |
+| EF-11 | Veille quand le vélo ne roule plus, réveil seul | Veille après 5 min par défaut ; réveil par la roue, un bouton ou le branchement du chargeur |
 | EF-12 | Fonctionner sans smartphone | Toutes les fonctions précédentes sans application |
 | EF-13 à EF-15 | Application : mesures en temps réel, réglages, historique, fuite sur plusieurs jours, export CSV | Chrome (PC, Android) et Bluefy (iPhone) |
 | EF-16 | Simulateur reproduisant le kit avant l'arrivée du matériel | Tous les modules manipulables dans le navigateur, y compris la vie privée |
 | EF-17 | Prévoir le prochain regonflage | « REGONFLER AV 12J AR 15J » sur l'écran ; erreur de 2 jours au plus à l'approche du seuil |
 | EF-18 | Statistiques par jour et par semaine (simulateur) | Distance, roulage, pression moyenne et minimale, regonflages, minutes en alerte, énergie |
 | EF-19 | Pression conseillée selon le cycliste et le pneu | Règle de Berto, ordre de grandeur signalé comme hypothèse |
+| EF-25 | Corriger l'erreur d'altitude des capteurs avec un baromètre | Écran et alertes en pression « manomètre » (capteur 2,00 bar sous 846 hPa → 2,17 bar) ; historique en pression du capteur |
+| EF-26 | Refuser la recharge de la LiPo par grand froid ou grosse chaleur | Recharge coupée hors de 2 à 43 °C (reprise à 5 °C ou sous 40 °C) ; toujours possible carte éteinte |
 
 ### 2.3 Exigences non fonctionnelles (synthèse)
 
@@ -157,8 +161,8 @@ Le cahier des charges complet, avec un critère de validation mesurable pour cha
 | Énergie | Autonomie du boîtier **≥ 1 semaine** (ENF-01), en visant plusieurs semaines ; piles des capteurs ≥ 1 an (ENF-02) |
 | Robustesse | Écran lisible au soleil, rafraîchi seulement si nécessaire ; boîtier étanche IPX7 ; boîtier amovible de son collier sans outil ; recharge sans ouvrir |
 | Logiciel | Logique séparée des sources de données et portable en C++ ; tests automatiques lancés à chaque modification ; code commenté en français ; rien à installer |
-| Cybersécurité | Liste blanche des capteurs ; rejet des valeurs impossibles ; détection d'un second émetteur sans confondre une vraie crevaison ; liaison app ↔ boîtier appairée et chiffrée ; code d'appairage résistant aux essais successifs ; contrôle des réglages reçus ; données gardées sur les appareils de l'utilisateur ; journal de sécurité traçable (ENF-19) ; détection d'une inondation d'annonces (ENF-20) ; capteurs « v2 » contre le pistage, **à l'état de proposition** (ENF-21) |
-| Serveur de flotte | Lots signés et protégés contre le rejeu (ENF-23, ENF-24) ; validation et requêtes SQL paramétrées (ENF-25) ; résistance à l'envoi massif (ENF-26) ; lecture réservée aux comptes, par rôle (ENF-27) ; échanges chiffrés en HTTPS (ENF-28) ; RGPD : minimisation de la position et durée de conservation (ENF-29) ; en production, une clé par boîtier et des secrets hors du dépôt (ENF-30, non tenue par la démonstration) |
+| Cybersécurité | Liste blanche des capteurs ; rejet des valeurs impossibles ; détection d'un second émetteur sans confondre une vraie crevaison ; liaison app ↔ boîtier appairée et chiffrée ; code d'appairage résistant aux essais successifs ; contrôle des réglages reçus ; confirmation sur le boîtier, par un bouton, de tout changement qui affaiblit la sécurité (ENF-31) ; données gardées sur les appareils de l'utilisateur ; journal de sécurité traçable (ENF-19) ; détection d'une inondation d'annonces (ENF-20) ; capteurs « v2 » contre le pistage, **à l'état de proposition** (ENF-21) |
+| Serveur de flotte | Lots signés et protégés contre le rejeu (ENF-23, ENF-24) ; validation et requêtes SQL paramétrées (ENF-25) ; résistance à l'envoi massif (ENF-26) ; lecture réservée aux comptes, par rôle (ENF-27), après connexion par mot de passe, avec des sessions qui expirent (ENF-32) ; échanges chiffrés en HTTPS (ENF-28) ; RGPD : minimisation de la position et durée de conservation (ENF-29) ; en production, une clé par boîtier et des secrets hors du dépôt (ENF-30, non tenue par la démonstration) |
 
 Le mode flotte (§ 5.10) et le serveur qui l'accompagne sont une **extension** pour un client professionnel : ils ne remplacent pas l'exigence ENF-18 (« pas de compte, pas de serveur ») du kit vendu au particulier.
 
@@ -198,6 +202,8 @@ Commande AliExpress, total du panier relevé le 20/10/2026.
 
 C'est le coût d'un prototype unique, au prix de détail et avec les frais de port : ce n'est pas un coût de revient en série. En dessinant le schéma électrique, j'ai vu qu'il manquait des composants à la commande : 2 MOSFET canal N (AO3400A ou 2N7002), une diode 1N4148, une diode Schottky SS14, des résistances (270 Ω, 2 × 100 Ω, 2 × 100 kΩ, 2 × 150 Ω, 1 kΩ), deux condensateurs (10 µF et 100 nF) et un connecteur pour le câble du reed (liste dans [schema-electrique.md](schema-electrique.md), § 7).
 
+Le 24/10/2026, l'ajout du baromètre et de la coupure de la recharge (§ 4.3) demande d'autres pièces : une carte **GY-BMP280** (3,3 V, 6 broches, utilisée en SPI), un interrupteur de puissance **TPS22918** (SOT-23-6), un **2N7002**, une résistance de **100 kΩ** (R10), une de **1 MΩ** (R11), une de **2,2 kΩ** (R12) et une **pastille autocollante ePTFE** de Ø 10 mm pour l'évent du boîtier (liste dans [../firmware/README.md](../firmware/README.md)). **Ces pièces ne sont pas encore chiffrées** : je n'ai pas relevé leurs prix, elles ne sont donc pas comprises dans les 86,61 €. Seule la pastille est estimée à environ 1 € dans [../boitier-3d/README.md](../boitier-3d/README.md).
+
 ### 2.6 Hypothèses à confirmer à la réception
 
 | Hypothèse | Valeur retenue | Comment la confirmer |
@@ -209,6 +215,9 @@ C'est le coût d'un prototype unique, au prix de détail et avec les frais de po
 | Vitesse à partir de laquelle le capteur sent la rotation | 4,4 km/h dans le simulateur ; le boîtier prend une marge (10 km/h, § 6.8) | Rouler de plus en plus vite et noter quand l'intervalle passe de 60 s à 3 s |
 | Consommations du boîtier | Valeurs des fiches techniques | Mesure à l'oscilloscope avec une résistance de shunt |
 | Appairage avec code sur iPhone | Fonctionne dans Bluefy | Essai avec le boîtier réel |
+| Durée d'un rafraîchissement de l'écran (fil BUSY supprimé le 24/10/2026) | Attente fixe de 2,5 s (complet) et 0,6 s (partiel), × 1,5 sous 10 °C, × 2 sous 0 °C | Mesurer BUSY à l'oscilloscope à 20 °C, au réfrigérateur puis au congélateur, **avant** de couper le fil |
+| Évent du boîtier | Pastille ePTFE de Ø 10 mm : débit d'air de 20 à 100 mL/min sous 70 hPa, pression d'entrée d'eau d'au moins 0,3 bar | Fiche du fournisseur, puis essais de l'évent (§ 4.7) |
+| Température du boîtier | Suit l'air extérieur avec une constante de temps d'environ 20 min (simulateur) | Relever la température du BMP280 lors d'une sortie par temps froid |
 
 ---
 
@@ -240,7 +249,8 @@ Ce qui fournit les données est une **source de données** interchangeable :
 |---|---|---|
 | Trame d'un capteur (18 octets) | `simulateur/monde/capteur.js` | Annonce BLE reçue par le nRF52840 |
 | Passage de l'aimant | `simulateur/monde/velo.js` (instant exact du passage) | Interruption de l'entrée reliée au reed |
-| Appui sur un bouton | Clic dans la page | Interruption de l'entrée du bouton |
+| Appui sur un bouton | Clic dans la page | Tension de la broche D5, lue en analogique (les deux boutons partagent cette broche, § 4.3) |
+| Pression de l'air et température du boîtier | `simulateur/monde/barometre.js` | Baromètre BMP280 sur le bus SPI |
 | Instant présent | Horloge simulée, accélérable | `millis()` |
 | Liaison avec l'application | `app/transport-simule.js` (messages entre deux pages) | `app/transport-ble.js` (Web Bluetooth) |
 | Mesures des vélos d'une flotte | `flotte/registre.js` (mode démo, dans le navigateur) | `serveur/` (Node.js + base SQLite) |
@@ -305,6 +315,7 @@ flowchart LR
 
     subgraph Boitier["Boîtier de guidon (XIAO nRF52840)"]
         RADIO["Radio BLE<br/>écoute par fenêtres"]
+        BARO["Baromètre BMP280<br/>derrière un évent"]
         LOGIQUE["Logique :<br/>décodage, sécurité, alertes,<br/>vitesse, fuite lente"]
         SORTIES["E-paper 200×200<br/>buzzer, LED d'alerte,<br/>LED d'éclairage"]
         GATT["Serveur GATT<br/>(service TPMS vélo)"]
@@ -315,6 +326,7 @@ flowchart LR
     CAV -- "annonces BLE en clair<br/>18 octets" --> RADIO
     CAR -- "annonces BLE en clair<br/>18 octets" --> RADIO
     REED -- "un top par tour<br/>(entrée GPIO)" --> LOGIQUE
+    BARO -- "pression de l'air,<br/>température (SPI)" --> LOGIQUE
     RADIO --> LOGIQUE
     LOGIQUE --> SORTIES
     LOGIQUE <--> GATT
@@ -362,7 +374,7 @@ Ce format a deux conséquences pour la sécurité : il n'y a **ni compteur ni si
 
 #### Matériel et câblage
 
-Le schéma complet, la nomenclature et les calculs sont dans [schema-electrique.md](schema-electrique.md). Le schéma est dessiné par le même code (`simulateur/vues/schema.js`) que celui qui l'anime dans le simulateur : il n'y a qu'un seul dessin à tenir à jour.
+Le schéma complet, la nomenclature et les calculs sont dans [schema-electrique.md](schema-electrique.md) ; les ajouts du 24/10/2026 (baromètre, coupure de la recharge, deux boutons sur une broche) sont décrits broche par broche dans [../firmware/README.md](../firmware/README.md). Le schéma est dessiné par le même code (`simulateur/vues/schema.js`) que celui qui l'anime dans le simulateur : il n'y a qu'un seul dessin à tenir à jour. Sa révision C (24/10/2026) ajoute U3 (BMP280), U4 (TPS22918), Q3, R10, R11 et R12 : il compte 34 composants repérés.
 
 ![Schéma électrique du boîtier de guidon](schema/schema-boitier.svg)
 
@@ -370,7 +382,11 @@ Les choix que je dois savoir justifier :
 
 | Choix | Justification |
 |---|---|
-| Les plots NFC sous la carte servent de sorties | Le XIAO n'a que 11 broches (D0 à D10) et il m'en faut 13. Les plots NFC (P0.09, P0.10) deviennent des sorties ordinaires ; j'y mets le buzzer et l'éclairage, qui sont à 0 au repos, pour éviter un courant de fuite entre ces deux broches. |
+| Les plots NFC sous la carte servent de sorties | Le XIAO n'a que 11 broches (D0 à D10) et il m'en faudrait 15 depuis l'ajout du baromètre et de la coupure de la recharge. Les plots NFC (P0.09, P0.10) deviennent des sorties ordinaires ; j'y mets le buzzer et l'éclairage, qui sont à 0 au repos, pour éviter un courant de fuite entre ces deux broches. Les trois lignes suivantes libèrent les broches qui manquaient encore. |
+| Fil BUSY de l'écran supprimé (24/10/2026) | L'écran signalait la fin d'un rafraîchissement par sa broche BUSY (D0). D0 sélectionne maintenant le baromètre ; le programme attend une durée fixe, choisie plus longue que le vrai rafraîchissement : 2,5 s pour un rafraîchissement complet, 0,6 s pour un partiel, × 1,5 sous 10 °C et × 2 sous 0 °C, car le contrôleur SSD1681 ralentit au froid (`TPMS.attenteEcranMs`, `logique/barometre.js`). **Ces durées sont des hypothèses** : je câblerai BUSY provisoirement pour le mesurer à l'oscilloscope, à 20 °C, au réfrigérateur et au congélateur, avant de couper le fil. |
+| Baromètre sur le bus SPI de l'écran | Le BMP280 partage l'horloge (D8) et la ligne MOSI (D10) avec l'écran ; sa sortie SDO arrive sur D9 (MISO), réservée par le bus SPI mais inutilisée jusque-là. Il ne coûte donc qu'une broche : D0, sa sélection. |
+| Deux boutons sur une seule broche (D5) | SW1 relie D5 à 0 V ; SW2 passe par R12 = 2,2 kΩ. Avec la résistance de tirage interne (13 kΩ, de 11 à 16 kΩ selon la puce), SW2 donne 3,3 × 2,2 / (2,2 + 13) ≈ 0,48 V, soit 12 à 17 % de VDD. Le programme lit D5 en analogique pendant un appui pour savoir quel bouton est enfoncé (`logique/boutons.js`, seuils à 6 % et 45 % de VDD). Les deux niveaux restent sous le seuil logique de 30 % de VDD : **les deux boutons réveillent toujours la carte**. Avec 3,3 kΩ, SW2 monterait jusqu'à 23 %, trop près du seuil. D6 est ainsi libérée pour la coupure de la recharge. |
+| Coupure de la recharge : U4 (TPS22918) et Q3 (2N7002) | La LiPo ne doit pas se recharger hors de 0 à 45 °C, et le chargeur BQ25101 du XIAO ne surveille pas la température. U4 coupe le 5 V du connecteur, après la diode D2 ; sa broche EN est tirée au 5 V par R10 (100 kΩ). Par grand froid, D6 rend Q3 passant : EN tombe à 0 et U4 coupe le 5 V. R11 (1 MΩ) tire la grille de Q3 à 0 : **carte éteinte ou batterie vide, la recharge reste toujours possible**, sinon une batterie vide ne pourrait plus jamais se recharger. Pendant la coupure, R10 consomme 50 µA, pris sur le chargeur et non sur la batterie ; R11 ne prend que 3,3 µA tant que D6 est à 1 (avec 100 kΩ, elle en prenait 33). |
 | Buzzer et éclairage commandés par un MOSFET canal N (AO3400A) | Le buzzer demande environ 25 mA, plus qu'une broche ne peut fournir. L'AO3400A est « niveau logique » : son seuil VGS(th) est de 0,65 à 1,45 V, donc 3,3 V sur la grille suffisent à le rendre passant. Un MOSFET ordinaire (seuil jusqu'à 4 V) ne conviendrait pas. |
 | Résistance de 100 kΩ entre grille et masse | Au démarrage et en veille, la broche est en haute impédance. Sans cette résistance, la grille « flotte » et le MOSFET peut conduire à moitié : le buzzer sifflerait et l'éclairage viderait la batterie. |
 | Diode 1N4148 aux bornes du buzzer | Le buzzer contient une bobine. À la coupure, le courant de la bobine ne peut pas s'arrêter net et ferait monter la tension du drain. La diode lui offre un chemin et limite la tension à environ 4 V. |
@@ -404,7 +420,11 @@ La police bitmap 5×7 est la même table dans le simulateur et dans le firmware 
 | Commande | Appui court | Appui long |
 |---|---|---|
 | Bouton 1 | Page suivante | Remise à zéro du trajet (la circonférence est conservée) |
-| Bouton 2 | Éclairage allumé ou éteint | Acquitter l'alerte (plus de bip, LED fixe) |
+| Bouton 2 | Éclairage allumé ou éteint | Acquitter l'alerte (plus de bip, LED fixe) ; ou **confirmer** un changement sensible demandé par l'application (§ 6.6) |
+
+Deux affichages ont été ajoutés le 24/10/2026 : la fenêtre « CONFIRMER ? », qui liste exactement ce que l'application veut changer (« COUPER LISTE BLANCHE », « NOUVEAU CAPTEUR AR »…) avec « APPUI LONG BOUTON 2 : OUI » et « AUTRE BOUTON : NON » ; et le mot « FROID » (ou « CHAUD ») devant le pourcentage de la batterie quand la recharge est coupée.
+
+**Le geste « oublier les téléphones appairés » a changé.** Il fallait maintenir les deux boutons pendant le démarrage. Depuis que les deux boutons partagent la broche D5, « les deux à la fois » donne 0 V, comme le bouton 1 seul : le programme ne peut plus les distinguer. Le geste est donc devenu : **maintenir le bouton 1 pendant 5 s au démarrage**.
 
 #### Comportement (la « boucle principale »)
 
@@ -415,7 +435,8 @@ Le comportement du boîtier est écrit dans `simulateur/boitier/boitier.js`, l'�
 3. **Évaluation des alertes** pour chaque roue, du plus grave au moins grave.
 4. **Sorties** : bip à l'apparition d'une alerte, LED clignotante tant que l'alerte n'est pas acquittée.
 5. **Écran** : au plus un rafraîchissement toutes les 2 s en roulant, et **seulement si l'image a changé** (comparaison des deux images) ; un rafraîchissement complet toutes les 20 mises à jour partielles pour effacer les traces ; une hystérésis de 0,03 bar évite de redessiner pour le bruit du capteur.
-6. **Veille** après 5 min sans tour de roue ni appui (réglable de 10 s à 1 h) ; réveil par un tour de roue ou un bouton.
+6. **Baromètre** : une mesure toutes les 10 s, boîtier éveillé. La pression de l'air corrige l'erreur d'altitude des capteurs pour l'affichage et les alertes (§ 5.4) ; la température décide si la recharge est permise (§ 7.8). Baromètre absent ou hors plage : pas de correction, recharge jamais coupée ; un baromètre qui se tait est noté au journal (« Baromètre muet »).
+7. **Veille** après 5 min sans tour de roue ni appui (réglable de 10 s à 1 h) ; réveil par un tour de roue, un bouton ou l'arrivée du 5 V du chargeur.
 
 ### 4.4 Le simulateur : une simulation complète
 
@@ -432,11 +453,14 @@ Autour du boîtier virtuel, `simulateur/moteur.js` fait vivre un monde physique.
 | Vélo et cycliste | `velo.js` | Bilan des forces (propulsion, poids en pente, roulement qui dépend de la pression, traînée de l'air, freins), 2e loi de Newton ; rotation des roues et instants de passage de l'aimant |
 | Radio BLE | `radio.js` | Affaiblissement selon la distance et l'environnement, ombrage par les obstacles, évanouissements rapides, masquage par la jante, canaux d'annonce 37/38/39, collisions entre paquets, Wi-Fi, brouillage, sensibilité du récepteur (−95 dBm), vélos voisins équipés des mêmes capteurs |
 | Batterie | `lipo.js` | Modèle de Thévenin (tension à vide selon l'état de charge, résistance interne, polarisation), effet du froid, autodécharge, protection, chargeur (courant constant puis tension constante) |
-| Circuit | `circuit.js` | Tension de chaque nœud et courant de chaque composant du schéma (LED par méthode de Newton, MOSFET, régulateur) |
+| Circuit | `circuit.js` | Tension de chaque nœud et courant de chaque composant du schéma (LED par méthode de Newton, MOSFET, régulateur), y compris le baromètre, la coupure de la recharge (U4, Q3, R10, R11) et l'échelle des boutons sur D5 |
+| Baromètre et température du boîtier | `barometre.js`, `moteur.js` | BMP280 avec son bruit (≈ 0,02 hPa) et son erreur absolue (±1 hPa, fiche Bosch) ; trois modes : derrière un évent (par défaut), sans évent (l'air enfermé à la fermeture ne voit pas l'altitude), aucun. Température du boîtier qui suit l'air avec retard (constante de temps d'environ 20 min, **hypothèse**) ; sur son chargeur, le boîtier est « à la maison » à 19 °C, sauf option « recharge dehors » |
 | Attaquant | `sources/pirate.js` | Émetteur BLE pirate : usurpation d'adresse, rejeu de trames enregistrées, brouillage, pirate synchronisé, inondation |
 | Espion | `sources/mouchards.js` | 20 récepteurs BLE posés le long des rues, qui notent chaque passage d'adresse (§ 6.10) |
 
-**Un exemple de réalisme utile : l'erreur en altitude.** Un capteur TPMS mesure la pression absolue et lui retire une pression atmosphérique **fixe** de 1 013,25 hPa, parce qu'il ne connaît pas l'altitude. À 1 500 m, l'air ne pèse plus que 846 hPa : le capteur annonce environ 0,17 bar de moins que ce que lirait un manomètre sur place. Le simulateur reproduit cet écart ; le vrai boîtier aura le même, faute de baromètre.
+**Un exemple de réalisme utile : l'erreur en altitude.** Un capteur TPMS mesure la pression absolue et lui retire une pression atmosphérique **fixe** de 1 013,25 hPa, parce qu'il ne connaît pas l'altitude. À 1 500 m, l'air ne pèse plus que 846 hPa : le capteur annonce environ 0,17 bar de moins que ce que lirait un manomètre sur place. Le simulateur reproduit cet écart. Au départ, je l'avais seulement noté comme une limite ; depuis le 24/10/2026, le boîtier le corrige avec son baromètre (§ 5.4). L'option « sans évent » montre pourquoi l'évent est indispensable : l'air enfermé dans un boîtier étanche garde la pression de la fermeture, et la correction reste nulle en montagne.
+
+**Un second exemple : la recharge par grand froid.** Avec l'option « recharge dehors », par −5,7 °C, la recharge reste coupée pendant 90 min et la batterie ne bouge pas ; ramené à la maison, le boîtier se réchauffe et la recharge reprend au bout d'environ 11 min (scénario vérifié dans le simulateur, § 7.8).
 
 #### Le moteur pas à pas
 
@@ -452,12 +476,12 @@ L'interface est un tableau de bord sombre, avec une barre latérale et huit page
 
 | Page | Contenu |
 |---|---|
-| Vue d'ensemble | Pneus AV/AR avec courbe, pression conseillée et prochain regonflage ; vélo, boîtier virtuel, carte, batterie, sécurité, événements |
-| Configuration | Nouvelle simulation (parcours, météo, heure, chambres, pressions, poids du cycliste, plage des capteurs, capteurs du commerce ou « v2 », graine, planning) ; réglages du boîtier |
+| Vue d'ensemble | Pneus AV/AR avec courbe, pression conseillée et prochain regonflage (en montagne, la pression affichée par le boîtier est suivie de celle du capteur et de la correction d'altitude) ; vélo, boîtier virtuel, carte, batterie, sécurité, événements |
+| Configuration | Nouvelle simulation (parcours, météo, heure, chambres, pressions, poids du cycliste, plage des capteurs, capteurs du commerce ou « v2 », baromètre du boîtier, lieu de la recharge, graine, planning) ; réglages du boîtier |
 | Pneus | Pression réelle et pression affichée par le boîtier ; dernières trames, en hexadécimal et décodées |
 | Radio et sécurité | Vue de dessus, devenir de chaque annonce (reçue, radio coupée, trop faible, collision, corrompue, brouillée), attaques, protections, journal chaîné, trafic |
 | Vie privée | Réseau de récepteurs espions et trajets qu'ils reconstituent (§ 6.10) |
-| Électronique | Schéma animé (courants, tensions), batterie LiPo et recharge, répartition du courant, autonomie d'une journée type |
+| Électronique | Schéma animé (courants, tensions), batterie LiPo et recharge, température du boîtier, état de la recharge (permise ou coupée), pression du baromètre et correction d'altitude, répartition du courant, autonomie d'une journée type |
 | Application | L'application de `app/` reliée au boîtier simulé ; attaque de l'homme du milieu |
 | Données | Courbes de tout l'enregistrement, statistiques par jour et par semaine, export CSV, sauvegarde et rejeu de scénario |
 
@@ -468,8 +492,8 @@ L'application (`app/`) est une page web. **Web Bluetooth** est une interface des
 | Vue | Rôle |
 |---|---|
 | Pneus | Pressions, températures, piles, états ; vitesse, trajet, batterie du boîtier |
-| Historique | Courbes des pressions, tendance depuis le dernier regonflage (en bar par jour), date estimée du prochain regonflage (même fonction `TPMS.joursAvantSeuil` que le boîtier, § 5.5), export CSV |
-| Réglages | Circonférence, seuils, délai de veille, protections, adresses des capteurs (lien chiffré obligatoire) |
+| Historique | Courbes des pressions, tendance depuis le dernier regonflage (en bar par jour, calculée **sans** la correction d'altitude), date estimée du prochain regonflage (même fonction `TPMS.joursAvantSeuil` que le boîtier, § 5.5), export CSV (date, pression avant, pression arrière, `correction_altitude_bar`) |
+| Réglages | Circonférence, seuils, délai de veille, protections, adresses des capteurs (lien chiffré obligatoire) ; un changement sensible attend la confirmation sur le boîtier |
 
 **Deux transports, une seule application.** L'application ne parle jamais directement à la radio. Elle passe par un « transport » qui offre les mêmes fonctions (`connecter`, `lireReglages`, `ecrireReglages`, `commande`, `surMesures`…) en deux versions : `transport-ble.js` (vraie radio) et `transport-simule.js` (boîtier virtuel du simulateur, par messages entre deux pages). Les deux transportent **les mêmes octets**. C'est le même principe que pour les capteurs : la source change, la logique reste.
 
@@ -477,11 +501,16 @@ L'application (`app/`) est une page web. **Web Bluetooth** est une interface des
 
 | Caractéristique | Taille | Rôle |
 |---|---|---|
-| MESURES | 20 octets | Notification toutes les 5 s : pressions (mbar), températures, piles, états, vitesse, distance, batterie, drapeaux, numéro de séquence |
+| MESURES | 20 octets | Notification toutes les 5 s : pressions « manomètre » (mbar), températures, piles, états, vitesse, distance, batterie, drapeaux (octet 17 ; bit 3 : changement sensible en attente de confirmation, bit 4 : recharge coupée), numéro de séquence (octet 18), correction d'altitude (octet 19, en pas de 4 mbar) |
 | REGLAGES | 23 octets | Lecture et écriture : circonférence, seuils, délai de veille, protections, adresses des capteurs appairés |
-| COMMANDE | 1 octet | Remise à zéro du trajet, acquittement des alertes |
+| COMMANDE | 1 octet | Remise à zéro du trajet, acquittement des alertes (cette commande ne peut pas confirmer un changement sensible, § 6.6) |
 
 J'ai choisi 20 octets pour MESURES parce que c'est la charge utile maximale d'une notification avec la taille de paquet par défaut (MTU de 23 octets moins 3 octets d'en-tête) : pas besoin de négociation. REGLAGES en fait 23 : le firmware demandera une MTU plus grande, point à vérifier sur le vrai téléphone.
+
+**Ce qui a changé dans le protocole le 24/10/2026.**
+
+- *La correction d'altitude.* Les pressions de MESURES sont celles qu'un manomètre lirait sur place : le boîtier y a ajouté la correction de son baromètre, rappelée dans l'octet 19 (entier signé, pas de 4 mbar, de −0,512 à +0,508 bar). L'application **retire** cette correction pour calculer la tendance de son historique : elle suit ainsi la quantité d'air du pneu, et un aller-retour en montagne ne ressemble plus à une fuite (§ 5.4). Pour faire de la place sans dépasser 20 octets, le numéro de séquence est passé de 2 octets à 1 : 255 notifications perdues de suite, soit environ 21 min, restent détectables, ce qui suffit pour compter les pertes.
+- *La confirmation par bouton.* Quand l'application écrit un réglage sensible (couper une protection, changer l'adresse d'un capteur), le boîtier n'applique rien et lève le bit 3 de l'octet 17. L'application affiche « confirme-le sur le boîtier par un appui long sur le bouton 2 (30 s) » ; quand le bit retombe, elle relit REGLAGES pour savoir si le changement a été confirmé ou annulé. Avec la vraie radio, l'écriture BLE réussit toujours : c'est ce drapeau qui donne la suite (le simulateur répond directement « attente-bouton »).
 
 ### 4.6 Le firmware C++
 
@@ -500,11 +529,13 @@ Choix principaux :
 - **Image de 1 bit par pixel** : 5 000 octets par image. Le boîtier garde l'image affichée et celle en préparation ; une comparaison `memcmp` dit s'il faut rafraîchir.
 - **Pas d'allocation dynamique** : les tableaux qui grandissent en JavaScript deviennent des tableaux de taille fixe avec un compteur.
 - **Files d'attente** : l'interruption du reed, le scanner BLE et la liaison avec l'application ne touchent jamais à la logique ; ils déposent un événement que `loop()` transmet. Deux morceaux de programme ne modifient donc jamais l'état en même temps.
-- **Veille en mode System OFF** (environ 5 µA) : réglages et trajet sauvegardés en flash avant l'extinction.
+- **Veille en mode System OFF** (environ 5 µA) : réglages et trajet sauvegardés en flash avant l'extinction. Le réveil se fait par le reed, par chaque bouton (SW2 à travers R12) et par l'arrivée du 5 V du chargeur (détection de VBUS). Avant de s'éteindre, le boîtier relâche toujours la coupure de la recharge : si le câble est branché, le 5 V revient aussitôt, le réveille, et il remesure la température (§ 7.8).
+- **Écran sans fil BUSY** : un rafraîchissement complet bloque `loop()` jusqu'à 2,5 s (5 s sous 0 °C) ; une petite tâche FreeRTOS fait clignoter la LED et biper le buzzer pendant ce temps, pour que les bips gardent leur durée.
+- **Baromètre** (`barometre_bmp280.cpp`) : bibliothèque Adafruit BMP280 sur le bus SPI partagé avec l'écran (bibliothèque GxEPD2).
 - **Copies d'annonce ignorées** : une annonce BLE est émise sur 3 canaux en quelques millisecondes ; le firmware ignore les copies reçues à moins de 100 ms d'écart, sinon le contrôle du rythme les prendrait pour un second émetteur.
 - **Tests embarqués** : avec `AUTOTEST 1`, les tests de la logique sont rejoués sur la carte au démarrage.
 
-**État de vérification.** La logique C++ (`src/logique/`, 16 fichiers `.cpp`, dont `sha256.cpp`, `journal.cpp` et `trame2.cpp` ajoutés le 23/10/2026) est compilée avec g++ sur PC et ses **109 tests sont exécutés** à chaque envoi de code par GitHub Actions (§ 8.1). Jusqu'au 22/10/2026, je ne pouvais que vérifier sa syntaxe avec le compilateur pour ESP32 installé sur mon PC : les tests C++ n'avaient jamais tourné. Le programme complet n'a en revanche **jamais été compilé avec le cœur Arduino de Seeed ni chargé sur la carte**, puisque je ne l'ai pas encore. Les points incertains sont marqués `// À VÉRIFIER :` dans le code et listés dans [../firmware/README.md](../firmware/README.md).
+**État de vérification.** La logique C++ (`src/logique/`, 18 fichiers `.cpp`, dont `sha256.cpp`, `journal.cpp` et `trame2.cpp` ajoutés le 23/10/2026, `barometre.cpp` et `boutons.cpp` le 24/10/2026) est compilée avec g++ sur PC et ses **136 tests sont exécutés** à chaque envoi de code par GitHub Actions (§ 8.1). Jusqu'au 22/10/2026, je ne pouvais que vérifier sa syntaxe avec le compilateur pour ESP32 installé sur mon PC : les tests C++ n'avaient jamais tourné. Le programme complet n'a en revanche **jamais été compilé avec le cœur Arduino de Seeed ni chargé sur la carte**, puisque je ne l'ai pas encore. Les points incertains sont marqués `// À VÉRIFIER :` dans le code et listés dans [../firmware/README.md](../firmware/README.md).
 
 ### 4.7 Le boîtier imprimé en 3D
 
@@ -525,12 +556,12 @@ Chaque cote est marquée de sa source : **[FICHE]** (fiche du composant), **[MES
 | Étanchéité | Joint torique **53 × 1,8 NBR 70** (ISO 3601-1, équivalent AS568-032), **radial**, dans une gorge de la jupe de la façade | Voir le calcul ci-dessous |
 | Fermeture | 4 vis M2 × 6 à tête fraisée (DIN 965) dans des inserts laiton M2 × 4 posés à chaud (trou de 3,2 mm), **hors du joint** | Un filetage dans le plastique s'userait aux ouvertures ; l'eau qui suivrait une vis bute sur le joint |
 | Vitre | PMMA 1 mm collé **sous** la façade, tenu par l'écran | La pression de l'eau plaque la vitre contre sa colle au lieu de la décoller |
-| Boutons, buzzer, LED, reed | Lamages plats pour les joints des boutons ; membrane de 1,2 mm devant le buzzer ; LED collées à l'époxy ; passe-fil serré (trou de 2,2 mm pour un câble de 2,5 mm) + cône de silicone pour le reed | Aucun trou ouvert vers l'extérieur |
+| Boutons, buzzer, LED, reed | Lamages plats pour les joints des boutons ; membrane de 1,2 mm devant le buzzer ; LED collées à l'époxy ; passe-fil serré (trou de 2,2 mm pour un câble de 2,5 mm) + cône de silicone pour le reed | Aucun trou ouvert vers l'extérieur, en dehors de l'évent fermé par sa membrane |
 | Recharge | Connecteur magnétique dans le fond, noyé dans l'époxy | À l'abri de la pluie quand le boîtier est sur le vélo ; on recharge le boîtier retiré |
 | Montage | Détrompeur : la façade ne peut pas être montée à l'envers | L'écran reste dans le bon sens, le nom « TPMS » côté cycliste |
-| Évent | Aucun | Calcul : +0,09 bar à la fermeture, environ −0,08 bar au refroidissement (40 → 15 °C) ; une membrane ePTFE (environ 1 €) est prévue si l'essai échoue |
+| Évent (24/10/2026) | Trou de Ø 3 mm sous le fond, à l'arrière, au centre entre les deux boutons, fermé à l'intérieur par une pastille autocollante ePTFE de Ø 10 mm posée sur une assise de Ø 12 | Le baromètre doit mesurer l'air extérieur, pas l'air enfermé à la fermeture (détail ci-dessous) |
 | Matière | **PETG**, buse 0,4 mm, coque et façade remplies à 100 % | Le PLA se déforme vers 55–60 °C : un boîtier sombre au soleil dépasse cette température. L'ASA tient mieux mais demande une imprimante fermée |
-| Masse (pièces pleines) | Coque 25 g, façade 8 g, collier 10 g, bride 6 g | Volumes des STL × 1,27 g/cm³ |
+| Masse (pièces pleines) | Coque 26 g, façade 8 g, collier 10 g, bride 6 g ; boîtier équipé ≈ 66 g, BMP280 compris | Volumes des STL × 1,27 g/cm³ |
 
 #### Les dimensions sont calculées
 
@@ -562,6 +593,18 @@ La gorge est imprimable façade retournée : flanc bas à 45° (sans support) ; 
 
 ![Coupe du boîtier monté sur son collier : joint, façade, vitre, écran, batterie, XIAO, glissière à cran, cale, cintre, collier et bride](../boitier-3d/rendus/coupe.png)
 
+#### Le baromètre BMP280 et l'évent à membrane (24/10/2026)
+
+**Pourquoi un évent.** Dans un boîtier étanche, le baromètre mesurerait l'air enfermé à la fermeture et ne verrait jamais l'altitude. J'ai donc percé un trou de 3 mm dans le fond et prévu de coller dessus, à l'intérieur, une **pastille à membrane ePTFE** (téflon expansé) : ses pores laissent passer l'air mais pas l'eau liquide. C'est la solution des compteurs GPS IPX7 qui ont un altimètre barométrique. Jusqu'au 23/10/2026, le boîtier n'avait pas d'évent ; le § 2.6 de [../boitier-3d/README.md](../boitier-3d/README.md) s'intitule maintenant « Baromètre BMP280 et évent à membrane ».
+
+**Où le mettre.** Sous le fond, à l'arrière, au centre (X = 0, Y = −18,3 mm), entre les deux boutons : à l'abri des projections de la roue avant (le cintre et le collier sont devant et dessous) et hors de la glissière, qui commence 10 mm plus en avant. Pour prouver que rien ne le masque, le contrôle d'interférences contient une colonne d'air fictive (`air_event`, Ø 8 mm sur 12 mm sous le trou) qu'aucune pièce ni aucun composant ne doit toucher.
+
+**L'évent est-il assez rapide ?** En descente de col (60 km/h sur 8 %, soit 80 m de dénivelé par minute, environ 9,6 hPa/min), il faut faire entrer 35 cm³ × 9,6 / 1 013 = **0,33 cm³ d'air par minute** dans le boîtier. Une pastille courante laisse passer de l'ordre de 20 à 100 mL/min sous 70 hPa (**hypothèse**, à lire sur la fiche) : l'écart nécessaire n'est que de 0,2 à 1,2 hPa, soit 2 à 10 m d'altitude et au plus 0,001 bar sur les pneus. C'est négligeable.
+
+**L'évent aide aussi l'étanchéité.** Sans évent, la fermeture comprimait l'air intérieur (+0,09 bar, environ 20 N qui repoussent la façade) et un boîtier chaud refroidi par une averse (40 → 15 °C) se mettait en dépression (−0,08 bar), ce qui « aspire » l'eau vers les collages. Avec l'évent, ces écarts disparaissent. En contrepartie, **la membrane devient un point d'étanchéité de plus** : sous 1 m d'eau, l'évent ne peut plus faire entrer d'air, et la membrane voit comme les collages jusqu'à 0,18 bar. Il faut donc une pastille dont la pression d'entrée d'eau dépasse largement 0,2 bar (viser au moins 0,3 bar).
+
+**Le berceau du BMP280.** La carte GY-BMP280 (11,5 × 15 mm, **hypothèse**) est posée à plat juste au-dessus de la pastille, sur 4 plots d'angle avec 4 équerres de centrage, avec une lame d'air de 1 mm sous elle pour que l'air de l'évent rejoigne tout le boîtier. Elle passe sous les corps des boutons : en supposant des composants jusqu'au bord de la carte, il reste **0,41 mm** de garde (un `assert` le vérifie). Elle mesure l'air du bas du boîtier, 7 mm sous la batterie : c'est une image de la température de la batterie au repos, suffisante pour autoriser ou non la recharge. La plaquette des MOSFET, qui reçoit en plus U4, Q3, R10, R11 et R12, passe de 12 × 14 à **15 × 14 mm** : un calcul de surface demande 184 mm² (deux fois la surface des pastilles des composants, pour souder au fer).
+
 #### La fixation : collier, bride, cales et glissière à cran
 
 - **Le collier et la bride** sont imprimés à plat (l'anneau est dans le plan des couches, le sens le plus solide en impression FDM). La bride glisse de côté sur le bossage avant du collier, passe sous le cintre et se serre à l'arrière par une **vis M3 × 14** (DIN 912) et un **écrou M3 noyé**. Pas de charnière à imprimer, et on pose le collier sans démonter les poignées. Le collier se pose avec une clé et reste sur le vélo.
@@ -591,9 +634,11 @@ La pièce **`test_jeux`** (environ 20 min, 8 g) essaie trois valeurs de chaque :
 
 #### Les contrôles et les défauts trouvés
 
-**Rendu complet** (OpenSCAD 2021.01, `$fn = 96`, moteur CGAL) des **10 pièces** : coque, façade, collier, bride, 4 demi-cales, `test_jeux` et `essai_joint`. Aucun avertissement ; chaque pièce est fermée (« Simple: yes ») et d'un seul tenant (compté par `outils/composantes-stl.js`). Temps de rendu : coque 301 s, façade 320 s, collier 14 s, bride 15 s, chaque cale 29 s, `test_jeux` 79 s ; l'export complet avec les images prend environ 14 min (`outils/exporter.js`). Les STL sont déjà orientés pour l'impression dans `boitier-3d/stl/`.
+**Rendu complet** (OpenSCAD 2021.01, `$fn = 96`, moteur CGAL) des **10 pièces** : coque, façade, collier, bride, 4 demi-cales, `test_jeux` et `essai_joint`. Aucun avertissement ; chaque pièce est fermée (« Simple: yes ») et d'un seul tenant (compté par `outils/composantes-stl.js`). Le 23/10/2026, l'export complet avec les images avait pris environ 14 min (coque 301 s, façade 320 s). Le 24/10/2026, après l'ajout de l'évent et du berceau du BMP280, tout a été rendu de nouveau sur un ordinateur environ 5 fois plus rapide, avec 5 rendus en parallèle : coque 63 s, façade 63 s, `essai_joint` 62 s, `test_jeux` 15 s (`outils/exporter.js`). Les STL sont déjà orientés pour l'impression dans `boitier-3d/stl/`.
 
-**Contrôle d'interférences** (`outils/verifier-interferences.js`, `$fn = 32`, environ 6 min). Chaque composant est dessiné en volume « fantôme » à ses cotes nominales : écran, vitre, XIAO, batterie, buzzer, boutons, LED, connecteur, plaquette des MOSFET, câble du reed, joint écrasé, vis, inserts, cintre, chambre à air, vis et écrou M3. En position montée, le script calcule l'intersection de chaque pièce avec chaque composant, puis des pièces entre elles. Toutes les intersections sont **vides**, ou de volume nul là où les pièces se touchent volontairement (façade posée sur la coque, boîtier posé sur le collier). Un dernier contrôle grossit la cavité de la coque de 2 mm : elle doit rester dans la coque, ce qui prouve qu'aucune paroi ne fait moins de 2 mm. Résultat : conforme.
+**Contrôle d'interférences** (`outils/verifier-interferences.js`, `$fn = 32` ; le 24/10/2026 : 36 calculs en 80 s, 6 en parallèle). Chaque composant est dessiné en volume « fantôme » à ses cotes nominales : écran, vitre, XIAO, batterie, buzzer, boutons, LED, connecteur, plaquette des MOSFET (15 × 14), câble du reed, joint écrasé, vis, inserts, carte du BMP280, pastille et colonne d'air de l'évent, cintre, chambre à air, vis et écrou M3. En position montée, le script calcule l'intersection de chaque pièce avec chaque composant, puis des pièces entre elles. Toutes les intersections sont **vides**, ou de volume nul là où les pièces se touchent volontairement (façade posée sur la coque, boîtier posé sur le collier). Un dernier contrôle grossit la cavité de la coque de 2 mm : elle doit rester dans la coque, ce qui prouve qu'aucune paroi ne fait moins de 2 mm. Résultat du 24/10/2026 : **aucune collision, parois ≥ 2 mm**.
+
+*Le contrôle voit-il vraiment un défaut ?* Je l'ai vérifié par deux erreurs volontaires : la carte du BMP280 relevée de 2 mm donne une intersection de 0,447 mm³ avec le corps d'un bouton, et un cylindre de Ø 3,6 mm placé dans le trou de l'évent (Ø 3,25 mm dessiné) donne 2,804 mm³ de matière. Les deux sont bien signalés comme des collisions (seuil : 0,001 mm³).
 
 Ces contrôles ont trouvé **7 défauts** pendant la conception, tous corrigés :
 
@@ -611,9 +656,10 @@ Dans la version 1, j'avais d'abord vérifié le modèle par des scripts Node.js 
 
 #### Ce qui reste hypothétique
 
-- Les cotes marquées [HYPOTHÈSE] : épaisseurs et hauteurs des composants de l'écran et de la XIAO, débord de la prise USB-C, écrous et têtes des boutons (l'écrou fixe la hauteur du boîtier), connecteur magnétique, collerette des LED, câble du reed, plaquette des MOSFET, perçage des inserts réellement achetés, présence d'un joint 53 × 1,8 dans le kit commandé. Le contrôle d'interférences ne vaut que pour ces cotes nominales : je le relancerai après les avoir mesurées.
+- Les cotes marquées [HYPOTHÈSE] : épaisseurs et hauteurs des composants de l'écran et de la XIAO, débord de la prise USB-C, écrous et têtes des boutons (l'écrou fixe la hauteur du boîtier), connecteur magnétique, collerette des LED, câble du reed, plaquette des MOSFET, carte GY-BMP280 (elle passe sous les corps des boutons), pastille ePTFE, perçage des inserts réellement achetés, présence d'un joint 53 × 1,8 dans le kit commandé.
+- La pastille ePTFE : pression d'entrée d'eau, débit d'air, tenue de son adhésif sur le PETG, encrassement par la boue. Il faudra vérifier que l'évent « respire » : boîtier fermé, monter 3 étages (environ 10 m, 1,2 hPa de moins) et voir la mesure du BMP280 suivre en quelques secondes, puis refaire avec l'évent bouché par du ruban. L'ePTFE laisse aussi passer la vapeur d'eau : une légère buée sous la vitre par temps froid est possible. Le contrôle d'interférences ne vaut que pour ces cotes nominales : je le relancerai après les avoir mesurées.
 - La précision de l'imprimante (d'où `test_jeux` et `essai_joint`).
-- L'étanchéité réelle, collages compris : bulles dans l'eau tiède, puis immersion à 1 m pendant 30 min, d'abord à vide avec un papier absorbant à l'intérieur.
+- L'étanchéité réelle, collages compris : bulles dans l'eau tiède (évent bouché par du ruban pour que les autres fuites bullent), puis essai de l'évent seul, puis immersion à 1 m pendant 30 min évent ouvert, d'abord à vide avec un papier absorbant à l'intérieur.
 - Le son du buzzer à travers 1,2 mm de PETG, la portée BLE dans le boîtier fermé.
 - La tenue du cran dans le temps (fluage du PETG), la force de déverrouillage, et la tenue du collier sur un vrai cintre.
 
@@ -633,6 +679,7 @@ flowchart TB
     C -- "trame acceptée" --> D["4. Mesure courante<br/>+ historique compensé en température<br/>(1 point / 30 s, 20 min)"]
     D --> E["5. Analyse<br/>pente par régression linéaire<br/>(bar/h), relevés sur 2 semaines<br/>→ prévision du regonflage"]
     D --> F["6. Alertes<br/>INTRUSION, ATTENTE, PERDU, CREVAISON,<br/>BASSE, HAUTE, FUITE, OK"]
+    BARO["Baromètre du boîtier<br/>correction d'altitude"] -- "pression « manomètre »<br/>(écran, alertes)" --> F
     E --> F
     F --> G["7a. Boîtier<br/>e-paper, bip, LED"]
     F --> H["7b. Application<br/>notification MESURES (20 octets, 5 s)"]
@@ -690,6 +737,31 @@ Dans l'exemple, les deux mesures (2,5 bar à 35 °C et 2,272 bar à 15 °C) donn
 
 Limite : la température mesurée est celle du capteur, dans le bouchon de valve, à l'extérieur du pneu. Elle suit l'air du pneu imparfaitement ; la correction est donc partielle. Je le vérifierai sur le vélo.
 
+#### La correction d'altitude : une pression pour l'écran, une autre pour l'historique
+
+**Le défaut des capteurs.** Un capteur TPMS mesure la pression **absolue** de l'air du pneu et lui retire une pression atmosphérique **fixe** de 1 013,25 hPa, car il ne connaît ni l'altitude ni la météo. Un manomètre, lui, retire la vraie pression de l'air. À 1 500 m, l'air ne fait plus que 846 hPa : le capteur annonce **0,17 bar de moins** que le manomètre de la pompe. À Lyon (environ 170 m, environ 993 hPa), l'écart n'est que de 0,02 bar.
+
+**La mesure qui corrige.** Depuis le 24/10/2026, le boîtier a un baromètre BMP280 (§ 4.3, § 4.7) qui mesure l'air réel, altitude et météo comprises. La correction est (`TPMS.correctionAltitudeBar`, `logique/barometre.js`) :
+
+```
+pression « manomètre » = pression du capteur + (1 013,25 − pression de l'air en hPa) / 1 000
+```
+
+Exemple vérifié par un test : capteur 2,00 bar, air 846 hPa → 2,00 + 0,167 = **2,17 bar**. Garde-fous : une mesure hors de la plage du BMP280 (300 à 1 100 hPa) ou un baromètre muet ne donnent aucune correction (le boîtier se comporte alors comme sans baromètre) ; une trame à 0 bar reste à 0 (pneu vide), sans ajouter la correction. La précision absolue du BMP280 est de ±1 hPa d'après la fiche de Bosch, soit ±0,001 bar.
+
+**Deux grandeurs, deux usages.** C'est le choix le plus intéressant de cette évolution, du point de vue de la donnée. La même trame donne deux pressions, et chacune répond à une question différente :
+
+| Question | Grandeur utilisée | Pourquoi |
+|---|---|---|
+| « Mon pneu est-il assez gonflé, là, maintenant ? » (écran, alertes CREVAISON, BASSE et HAUTE) | Pression **« manomètre »**, corrigée de l'altitude | C'est elle que le cycliste lit sur sa pompe, et les seuils sont réglés avec elle. Exemple d'un test : capteur 1,70 bar à 1 500 m, soit 1,87 bar réels → **pas d'alerte basse** pour un seuil de 1,8 bar. Sans baromètre, le boîtier aurait bipé pour rien |
+| « Mon pneu perd-il de l'air ? » (historique de la fuite lente, relevés de la prévision du regonflage) | Pression **du capteur**, compensée en température | Elle suit la **quantité d'air** du pneu (le nombre de moles n de P·V = n·R·T), sans dépendre de l'altitude |
+
+Si l'historique gardait la pression « manomètre », une descente de col ressemblerait à une fuite. Calcul fait avec l'atmosphère standard du simulateur (`TPMS.pressionAtmospheriquePa`, exécuté avec Node.js) : en descendant de 1 000 m jusqu'au niveau de la mer, la correction passe de +0,11 bar (0,1145) à 0 ; à 60 km/h sur 8 % (80 m de dénivelé par minute), la descente dure 12,5 min, soit une baisse d'environ 0,55 bar/h, plus de trois fois le seuil de fuite lente (−0,15 bar/h). La pression du capteur, elle, ne bouge pas : aucune fausse alerte.
+
+L'application applique la même règle : elle reçoit les pressions « manomètre » et la correction (octet 19 de MESURES, § 4.5), **retire** la correction pour calculer sa tendance sur plusieurs jours, et compare la dernière pression « manomètre » aux seuils. L'export CSV contient une colonne `correction_altitude_bar`, pour que celui qui analyse les données puisse refaire l'un ou l'autre calcul.
+
+Cette distinction résume ce que j'entends par valoriser une donnée : une valeur juste n'est utile que si l'on choisit la bonne grandeur pour la bonne question. Une donnée juste mal employée produit une fausse alerte, exactement comme une donnée fausse.
+
 #### Dans l'application : la fuite très lente sur plusieurs jours
 
 L'historique de 20 minutes ne voit pas une fuite de quelques centièmes de bar **par jour**. L'application garde un historique long, dans le stockage local du navigateur, et applique **la même fonction de pente** (`TPMS.penteMoindresCarresParHeure`, `logique/fuite.js`), exprimée en bar par jour, depuis le dernier regonflage. Elle signale une fuite en dessous de −0,05 bar/jour (une chambre à air perd naturellement de l'ordre de 0,02 bar/jour, d'après le commentaire de `app/app.js`) et estime la date à laquelle il faudra regonfler.
@@ -743,7 +815,7 @@ Chaque roue est évaluée du plus grave au moins grave (`TPMS.evaluerRoue`, `log
 | 7 | FUITE | Pente < −0,15 bar/h | FUITE LENTE |
 | 8 | OK | Aucun des cas précédents | OK |
 
-Seuils par défaut du boîtier : avant 1,8 à 3,2 bar, arrière 2,0 à 3,4 bar (l'arrière porte plus de poids). Dans le simulateur, à la création d'une sortie, les seuils sont réglés à 80 % et 125 % des pressions choisies.
+Seuils par défaut du boîtier : avant 1,8 à 3,2 bar, arrière 2,0 à 3,4 bar (l'arrière porte plus de poids). Depuis le 24/10/2026, les états CREVAISON, BASSE et HAUTE comparent aux seuils la pression « manomètre », corrigée de l'altitude ; seule la pente de la fuite lente reste calculée sur la pression du capteur (§ 5.4). Dans le simulateur, à la création d'une sortie, les seuils sont réglés à 80 % et 125 % des pressions choisies.
 
 **Pourquoi deux délais de perte, et pourquoi 10 km/h ?** Un capteur qui ne sent pas la rotation de la roue n'annonce plus qu'une fois par minute. Avec un délai unique de 60 s, chaque arrêt déclenchait une fausse alerte « capteur perdu ». Puis la semaine simulée a montré le même problème dans une montée à 4 km/h : le boîtier voyait la roue tourner, mais le capteur, sous son seuil de détection, se croyait à l'arrêt (défauts n° 3 et 10, § 6.8). Le délai de 60 s n'est donc appliqué qu'au-dessus de 10 km/h, vitesse à laquelle je suis sûr que le capteur est en mode roulage. Le silence se compte depuis le plus récent de ces instants : dernière trame acceptée, réveil du boîtier, fin d'une quarantaine.
 
@@ -753,10 +825,10 @@ Seuils par défaut du boîtier : avant 1,8 à 3,2 bar, arrière 2,0 à 3,4 bar (
 
 | Support | Ce qui est montré | Choix |
 |---|---|---|
-| Écran e-paper | Pressions, températures, piles, états, vitesse, distance, statistiques du trajet, prochain regonflage, batterie, « SATURE » si la radio est inondée | Colonne de la roue en alerte en négatif ; pression inconnue « -.-- » plutôt qu'une valeur douteuse ; hystérésis de 0,03 bar |
+| Écran e-paper | Pressions « manomètre » (corrigées de l'altitude), températures, piles, états, vitesse, distance, statistiques du trajet, prochain regonflage, batterie (« FROID » si la recharge est coupée), « SATURE » si la radio est inondée, « CONFIRMER ? » pour un changement sensible | Colonne de la roue en alerte en négatif ; pression inconnue « -.-- » plutôt qu'une valeur douteuse ; hystérésis de 0,03 bar |
 | Buzzer et LED | Apparition d'une alerte | Bip une fois, LED clignotante jusqu'à l'acquittement, puis fixe tant que le problème dure |
 | Application | Mesures en temps réel, courbes, tendance, date de regonflage | Le numéro de séquence de MESURES permet de compter et d'afficher les notifications perdues |
-| Export CSV de l'application | Date, pression avant, pression arrière | Les données sortent du téléphone seulement à la demande de l'utilisateur |
+| Export CSV de l'application | Date, pression avant, pression arrière, correction d'altitude | Les données sortent du téléphone seulement à la demande de l'utilisateur ; la colonne de correction permet de retrouver la pression du capteur |
 
 ### 5.9 Les données du simulateur : enregistrement, statistiques, rejeu
 
@@ -954,7 +1026,7 @@ La gravité 3 couvre aussi une atteinte importante à la vie privée (trajets, h
 | S4 Rejeu | 3 × 3 = **9 élevé** | Rythme et quarantaine ; vraisemblance | 3 × 1 = **3 faible** | 3 × 1, trame refusée (compteur) |
 | S5 Brouillage | 2 × 2 = **4 moyen** | « CAPTEUR PERDU » avec bip et LED | 1 × 2 = **2 faible** | = |
 | S6 Brouillage + imitation | 3 × 1 = **3 faible** | Seule la vraisemblance limite les variations brusques | 3 × 1 = **3 faible** (résiduel assumé) | 1 × 2 = **2 faible** |
-| S7 Appairage malveillant, homme du milieu | 3 × 2 = **6 moyen** | BLE Secure Connections, code affiché sur l'e-paper | 3 × 1 = **3 faible** | = |
+| S7 Appairage malveillant, homme du milieu | 3 × 2 = **6 moyen** | BLE Secure Connections, code affiché sur l'e-paper ; changements sensibles confirmés par un bouton du boîtier (téléphone appairé volé ou page piégée) | 3 × 1 = **3 faible** | = |
 | S8 Essais de codes | 3 × 2 = **6 moyen** | Code aléatoire valable 60 s, blocage après 3 codes faux | 3 × 1 = **3 faible** | = |
 | S9 Réglages absurdes | 2 × 2 = **4 moyen** | Vérification des réglages par le boîtier et par l'app | 2 × 1 = **2 faible** | = |
 | S10 Vol des données | 1 × 2 = **2 faible** | Liaison chiffrée, données locales | 1 × 1 = **1 faible** | = |
@@ -1002,13 +1074,22 @@ trame reçue
 | **Appairage BLE Secure Connections** | Échange de clés par courbe elliptique (P-256) ; code à 6 chiffres tiré au hasard, affiché 60 s sur l'e-paper, non remplaçable tant qu'il est valide ; chiffrement AES-CCM | S7, S10 |
 | **Blocage** | 3 codes faux → appairage bloqué 60 s | S8 |
 | **Accès réservé** | MESURES, REGLAGES, COMMANDE refusés sans appairage | S7, S10 |
-| **Confirmation par bouton** | Couper une protection ou changer de capteur depuis l'application ne s'applique qu'après un appui long sur le bouton 2 ; l'écran affiche ce qui va changer ; autre bouton, 30 s sans réponse, veille ou déconnexion annulent (§ 6.14) | S7 (téléphone appairé volé ou piégé) |
+| **Confirmation par bouton** | Couper une protection (liste blanche, vraisemblance, rythme) ou changer l'adresse d'un capteur appairé depuis l'application ne s'applique qu'après un appui long sur le bouton 2 ; l'écran affiche « CONFIRMER ? » et la liste exacte de ce qui va changer ; autre bouton, 30 s sans réponse, veille, déconnexion du téléphone ou nouvelle écriture annulent ; la commande ACQUITTER de l'application ne peut pas confirmer ; demande et réponse notées au journal chaîné | S7 (téléphone appairé volé ou page piégée) |
 | **Contrôle des réglages** | Circonférence 1 000 à 3 000 mm ; seuils 0,5 à 6 bar avec bas < haut ; veille 10 s à 1 h ; contrôle côté app **et** côté boîtier | S9 |
 | **Données locales** | Kit du particulier : pas de compte, pas de serveur | S10 |
 
 **Pourquoi 3 confirmations ?** Le contrôle du rythme demande 3 anomalies pour conclure à une intrusion. Avec 3 confirmations exigées par la vraisemblance, le rythme détecte le pirate **avant** que ses fausses valeurs ne soient confirmées. En contrepartie, un vrai regonflage est accepté avec quelques secondes de retard (test « regonflage réel : suspect puis accepté »).
 
 **Pourquoi un code affiché et pas un code fixe ?** Sans code (mode « Just Works »), l'appairage BLE ne protège pas d'un homme du milieu : la simulation le montre (§ 6.7). Le code n'est visible que par la personne qui a le boîtier sous les yeux : c'est ce qui authentifie le téléphone. Avec 3 essais au plus par minute contre un code parmi 1 000 000, il faudrait environ 231 000 minutes, soit environ 160 jours (un peu plus de 5 mois) d'essais ininterrompus à côté du boîtier, pour avoir une chance sur deux (calcul : ln 0,5 / ln(1 − 3 × 10⁻⁶)). Et chaque tentative fait apparaître un code sur l'écran, donc se remarque.
+
+**Pourquoi une confirmation par bouton (ajoutée le 24/10/2026) ?** L'appairage par code protège d'un inconnu, mais pas d'un téléphone **déjà appairé** : un téléphone volé, ou une page web piégée ouverte dans Bluefy, peut écrire n'importe quel réglage valide. Or couper la liste blanche suffit à rendre une inondation dangereuse : sans elle, les fausses trames passent pour nos roues (§ 6.7). Le boîtier demande donc une preuve de présence physique : un appui long sur son bouton 2.
+
+- *Ce qui est sensible* (`TPMS.changementSensible`, `logique/protocole.js`, qui renvoie un masque de 5 bits) : une protection qui passe d'active à inactive, ou l'adresse d'un capteur appairé qui change. Les seuils et la circonférence ne le sont pas (ils sont déjà contrôlés, § 6.6), et réactiver une protection non plus : demander une confirmation pour tout lasserait l'utilisateur.
+- *Ce qui se passe* : l'écriture de REGLAGES répond « attente-bouton » et rien n'est appliqué ; l'écran affiche la liste exacte, par exemple « COUPER LISTE BLANCHE » ou « NOUVEAU CAPTEUR AR » ; le bit 3 de l'octet 17 de MESURES prévient l'application. Appui long sur le bouton 2 : appliqué. Tout autre appui, 30 s sans réponse (`CONFIRMATION_DUREE_MS`), la veille, la déconnexion du téléphone ou une nouvelle écriture : annulé.
+- *Le piège évité* : l'application sait déjà envoyer la commande ACQUITTER, qui fait la même chose qu'un appui long sur le bouton 2. Si cette commande pouvait confirmer, la protection ne servirait à rien. Les commandes de l'application passent par `TPMS.boitierAction` ; seul `TPMS.boitierBouton`, appelé par un vrai appui, confirme. Un test le vérifie (« confirmation : la commande ACQUITTER de l'app ne confirme pas »).
+- *La trace* : le journal chaîné (§ 6.12) reçoit une ligne par raison, « App demande : COUPER LISTE BLANCHE (à confirmer) », puis « confirmé sur le boîtier » ou « annulé » avec la raison.
+
+Cette protection est écrite en JavaScript et en C++ (20 tests JavaScript, 11 tests C++). Sa limite : quelqu'un qui a à la fois le vélo et le téléphone déverrouillé peut tout changer, mais c'est la situation du propriétaire.
 
 ### 6.7 Les attaques simulées et leurs résultats
 
@@ -1054,6 +1135,8 @@ Une fausse pression modérée peut donc être affichée 3 s au plus, mais le bo�
 | **Homme du milieu à l'appairage** (S7), **sans code** (« Just Works ») | Attaque **réussie** : le pirate écrit un seuil bas de 0,5 bar, plus aucune alerte de pression basse, le cycliste ne voit rien | C'est pourquoi le mode sans code est refusé |
 | **Homme du milieu**, **avec le code** à 6 chiffres affiché sur l'e-paper (mon choix) | **Échec** : 3 essais faux, puis appairage bloqué 1 min | Le code doit être tiré au hasard à chaque appairage |
 | **Rejeu face aux capteurs v2** pendant une crevaison | 163 à 173 trames rejouées refusées en 4 min (« compteur déjà vu »), crevaison signalée | Le dernier compteur devra être sauvegardé en flash avant la veille |
+
+Le 24/10/2026, j'ai ajouté le cas du **téléphone appairé volé ou de la page piégée** (S7) : l'application demande de couper la liste blanche. Les tests montrent que rien n'est appliqué avant le bouton, que la demande s'affiche à l'écran, que la commande ACQUITTER de l'application ne confirme pas, que l'appui long sur le bouton 2 applique le changement sans autre effet (ni éclairage, ni changement de page), et qu'un autre bouton, 30 s d'attente ou la déconnexion annulent. Limite : le propriétaire, qui a le vélo sous la main, reste maître des réglages.
 
 ### 6.8 Les failles révélées par la simulation, puis corrigées
 
@@ -1140,15 +1223,25 @@ Le serveur (§ 5.10) est exposé sur un réseau : c'est un second système, avec
 | Inondation de requêtes | 120 requêtes/min au plus par vélo authentifié ; adresse IP bloquée 5 min après 30 refus/min | Tests (seuils réduits) : requêtes en trop → `429` ; un vélo n'est pas pénalisé par un autre ; IP bloquée après des signatures fausses |
 | Page piégée, fuite de fichiers | En-têtes de sécurité (CSP, `nosniff`, `X-Frame-Options`) ; textes reçus échappés dans la page ; dossier `serveur/` (clés, base) et fichiers cachés jamais servis ; `../` impossible | Tests : clés de démo et `.git` non servis, sortie du dépôt par `../` impossible |
 | Traçabilité | Chaque refus est noté (heure, IP, vélo annoncé, motif) dans la table `refus`, affichée par la supervision ; gardé 6 mois (§ 5.11) | Journal des refus |
-| Lecture des données par n'importe qui (S20) | Toute lecture `GET /api/*` exige un **jeton** de compte (`Authorization: Bearer`). Deux **rôles** : le technicien lit la tournée, les vélos, l'historique, les alertes et les statistiques sans la partie sécurité ; le gestionnaire lit en plus le journal des refus, qui contient des adresses IP. Le serveur ne garde que l'**empreinte SHA-256** de chaque jeton et compare à temps constant | Jeton faux : `401`, journalisé, compté pour le blocage d'IP ; technicien sur `/api/refus` : `403` ; aucun jeton en clair en mémoire |
-| Écoute du réseau (S22) | **HTTPS** dès qu'un certificat est présent : port 8443, TLS 1.2 minimum, en-tête **HSTS** ; sinon HTTP sur le port 8080, avec un avertissement au démarrage et sur la page | Requête HTTPS réussie ; en-tête HSTS présent ; lot signé accepté en HTTPS |
+| Lecture des données par n'importe qui (S20) | Depuis le 24/10/2026 : **connexion par mot de passe** (`POST /api/connexion`), dont le serveur ne garde que le sel et l'**empreinte scrypt** ; puis toute lecture `GET /api/*` exige le **jeton de session** reçu (`Authorization: Bearer`), qui **expire**. Deux **rôles** : le technicien lit la tournée, les vélos, l'historique, les alertes et les statistiques sans la partie sécurité ; le gestionnaire lit en plus le journal des refus, qui contient des adresses IP | Mot de passe faux ou compte inconnu : `401` avec le même message ; jeton faux : `401`, journalisé, compté pour le blocage d'IP ; technicien sur `/api/refus` : `403` |
+| Jeton de session volé (poste partagé, capture d'écran) | Session fermée après **15 min sans requête** et au plus tard **8 h** après la connexion ; au plus **3 sessions** par compte ; **vraie déconnexion** (`POST /api/deconnexion`) qui détruit la session côté serveur | Session expirée après 16 min sans requête : `401`, motif `session-expiree` ; après la déconnexion, le jeton recopié ne vaut plus rien |
+| Écoute du réseau (S22) : mots de passe, jetons de session, mesures | **HTTPS** dès qu'un certificat est présent : port 8443, TLS 1.2 minimum, en-tête **HSTS** ; sinon HTTP sur le port 8080, avec un avertissement au démarrage et sur la page | Requête HTTPS réussie ; en-tête HSTS présent ; lot signé accepté en HTTPS |
 | Faux serveur (homme du milieu) | Le script de la flotte vérifie le certificat du serveur : il fait confiance **explicitement** au certificat de démonstration (option `ca`), sans jamais couper la vérification | Sans cette confiance, la connexion est refusée |
 
 L'essai réel avec `flotte-vers-serveur.js --attaque-rejeu --attaque-signature` donne les refus attendus. En mode démo, un « banc d'essai de sécurité » rejoue ces cas dans le navigateur : lot valide `201`, rejeu `401`, pression modifiée `401`, mauvaise clé `401`, lot vieux de 2 min `401`, pression à 12 bar `400`.
 
-**Les comptes, en détail.** La page de supervision demande le jeton à l'ouverture et le garde dans `sessionStorage` (oublié à la fermeture de l'onglet) ; un bouton « Se déconnecter » l'efface, et la page avertit si elle parle au serveur en HTTP. Un jeton faux est une tentative d'attaque : il reçoit `401`, il est noté dans le journal et il compte pour le blocage de l'adresse IP (5 min après 30 refus par minute). En revanche, une simple visite **sans** jeton (la page ouverte avant la connexion) reçoit aussi `401`, mais n'est ni journalisée ni comptée : ce n'est pas une attaque, et le journal de sécurité ne doit pas se remplir de bruit. Les deux jetons de démonstration sont dans `serveur/cles-demo.json`, marqués comme tels ; `generer-cles-demo.js --nouveaux-jetons` en tire d'autres.
+**Les comptes, en détail : du jeton fixe à la session qui expire.** Jusqu'au 23/10/2026, chaque compte avait un jeton fixe, valable pour toujours : un jeton volé restait utilisable jusqu'à ce qu'on retire son empreinte de la configuration, et « Se déconnecter » ne faisait qu'oublier le jeton dans la page. Je l'avais noté comme une limite ; je l'ai traité le 24/10/2026 (`serveur/sessions.js`, nouveau fichier) :
 
-*Pourquoi SHA-256 suffit pour stocker les jetons.* Si quelqu'un volait la configuration du serveur, il ne trouverait que des empreintes. Pour retrouver un jeton à partir de son empreinte, il devrait essayer des jetons au hasard : chaque jeton est tiré sur **192 bits**, il faudrait donc en moyenne 2¹⁹¹ essais, ce qui est hors de portée même avec un calcul très rapide. Les fonctions volontairement lentes (scrypt, bcrypt) servent aux **mots de passe** choisis par des humains, qu'on retrouve en essayant un dictionnaire de mots probables ; un jeton aléatoire n'a pas ce défaut. La comparaison à temps constant (`crypto.timingSafeEqual`) évite qu'on devine l'empreinte en mesurant le temps de réponse.
+1. **Connexion** : la page de supervision demande le compte et le mot de passe et les envoie une seule fois à `POST /api/connexion`. Un mot de passe faux et un compte inconnu reçoivent **la même réponse, dans le même temps** (le serveur fait le calcul scrypt sur un compte fictif) : on ne peut pas savoir quels comptes existent.
+2. **Session** : le serveur répond par un jeton de session de **256 bits** tiré au hasard. Il ne garde que son empreinte SHA-256, le compte, l'heure de connexion et celle de la dernière requête, en mémoire.
+3. **Expiration** : 15 min sans requête (la durée repart à chaque requête) ou 8 h au plus après la connexion, une journée de travail, même si la session sert sans arrêt. Une 4e session sur un même compte ferme la plus ancienne.
+4. **Déconnexion** : « Se déconnecter » appelle `POST /api/deconnexion`, qui détruit la session côté serveur (`204`).
+
+La page garde le jeton dans `sessionStorage` (oublié à la fermeture de l'onglet) et avertit si elle parle au serveur en HTTP. Le script `flotte-vers-serveur.js` se connecte de la même façon (options `--compte` et `--mot-de-passe`).
+
+*Qu'est-ce qui est journalisé ?* Un mot de passe faux est une tentative d'attaque : il reçoit `401`, il est noté dans le journal (motif `connexion`, **sans** le mot de passe essayé) et il compte pour le blocage de l'adresse IP (5 min après 30 refus par minute). Un jeton inconnu aussi (motif `authentification`). En revanche, une visite **sans** jeton (la page ouverte avant la connexion) et une session **expirée** reçoivent `401` (motif `session-expiree` pour la seconde) sans être journalisées : ce ne sont pas des attaques, et le journal de sécurité ne doit pas se remplir de bruit. Les mots de passe de démonstration sont dans `serveur/cles-demo.json`, marqués comme tels, et hachés dès la lecture ; `generer-cles-demo.js --nouveaux-mots-de-passe` en tire d'autres.
+
+*Pourquoi scrypt pour les mots de passe, et SHA-256 pour les jetons de session ?* Un mot de passe est choisi par un humain : on peut le retrouver à partir de son empreinte en essayant un dictionnaire de mots probables. Il faut donc une fonction **volontairement lente et gourmande en mémoire** : scrypt (N = 2¹⁴), environ 50 ms et 16 Mo par essai. Avec le fichier volé, essayer des milliards de mots de passe coûterait très cher ; pour le serveur, 50 ms à chaque connexion ne gênent pas. Un jeton de session, au contraire, est tiré au hasard sur 256 bits : pour le retrouver à partir de son empreinte, il faudrait en moyenne 2²⁵⁵ essais, hors de portée même avec un calcul très rapide. Un hachage rapide (SHA-256) suffit, et il est calculé à chaque requête : le serveur retrouve la session par l'empreinte du jeton présenté, si bien que le temps de réponse ne renseigne pas sur le jeton lui-même. Pour les mots de passe, la comparaison des empreintes se fait à temps constant (`crypto.timingSafeEqual`), et un compte fictif rend la réponse aussi lente pour un compte inconnu.
 
 *Pourquoi faire confiance au certificat plutôt que couper la vérification.* Mon certificat de démonstration est **auto-signé** (`serveur/generer-certificat.js`, avec openssl) : aucune autorité ne l'a signé, donc Node.js le refuse par défaut. La solution facile serait `rejectUnauthorized: false`, qui accepte n'importe quel certificat : le trafic serait chiffré, mais vers n'importe qui, y compris un faux serveur placé au milieu. J'ai préféré donner au script **ce** certificat précis comme seule autorité de confiance (option `ca`) : il accepte mon serveur et refuse tous les autres. Un test le vérifie dans les deux sens. La clé privée est dans `serveur/certificats/`, exclu de Git : aucune clé privée dans le dépôt public. En production, on prendrait un certificat Let's Encrypt pour le vrai nom de domaine, et la vérification normale suffirait.
 
@@ -1156,9 +1249,10 @@ L'essai réel avec `flotte-vers-serveur.js --attaque-rejeu --attaque-signature` 
 
 **Limites qui restent, que j'assume pour une démonstration :**
 
-- **jetons fixes, sans expiration** : un jeton volé reste valable jusqu'à ce qu'on retire son empreinte de la configuration ; l'étape suivante serait des sessions à durée limitée, ou l'authentification de l'entreprise (OpenID Connect) ;
-- **déconnexion côté navigateur seulement** : « Se déconnecter » fait oublier le jeton par la page, le serveur ne l'invalide pas ;
-- **secrets de démonstration publics** dans le dépôt (`serveur/cles-demo.json`, marqués « DÉMONSTRATION ») : clés des vélos et jetons des comptes. En vrai : une clé par boîtier gravée à la fabrication, un coffre à secrets côté serveur, seulement l'empreinte des jetons dans la configuration, ou une signature à clé publique (ECDSA) pour que le serveur ne détienne pas de quoi signer ;
+- **sessions en mémoire** : elles sont perdues au redémarrage du serveur (il faut se reconnecter) et ne valent que pour un seul serveur ;
+- **jeton dans `sessionStorage`** : un script de la page peut le lire ; la politique de sécurité du contenu (CSP) limite ce risque, mais un cookie `HttpOnly; Secure; SameSite=Strict` serait plus sûr ;
+- **pas de second facteur** (code à usage unique) ; en entreprise, l'étape suivante serait l'authentification centralisée (OpenID Connect) ;
+- **secrets de démonstration publics** dans le dépôt (`serveur/cles-demo.json`, marqués « DÉMONSTRATION ») : clés des vélos et mots de passe des comptes. En vrai : une clé par boîtier gravée à la fabrication, un coffre à secrets côté serveur, chaque personne choisit son mot de passe et le fichier ne garde que le sel et l'empreinte scrypt, ou une signature à clé publique (ECDSA) pour que le serveur ne détienne pas de quoi signer ;
 - **certificat auto-signé** : le chiffrement est réel, mais l'identité du serveur n'est garantie par aucune autorité, et le navigateur affiche un avertissement ;
 - limitation de débit en mémoire : remise à zéro au redémarrage, valable pour un seul serveur ;
 - liaison boîtier → serveur supposée (passerelle ou LTE-M), non réalisée.
@@ -1175,8 +1269,8 @@ Avec ces mesures, les trois scénarios du serveur qui restaient élevés ou moye
 | **S13 : pirate synchronisé** | Toujours repéré, mais une crevaison peut rester masquée par moments ; l'attaque demande de suivre le cycliste à 1 m. |
 | **S11, S14 et S5 : déni de service** | L'information est perdue, mais le cycliste le sait. C'est préférable à une fausse valeur présentée comme vraie. |
 | **Capteur perdu signalé en 10 min sous 10 km/h** | Prix de la correction des fausses pertes en montée lente (défaut n° 10). |
-| **Le propriétaire peut désactiver les protections** | Utile pour la démonstration. Depuis le 24/10/2026, il faut pour cela un appui long sur le bouton 2 du boîtier, en plus du téléphone appairé : un téléphone volé ou une page piégée ne suffit plus (`TPMS.changementSensible`, `docs/analyse-de-risques.md` § 6.13). Quelqu'un qui a à la fois le vélo et le téléphone déverrouillé reste maître des réglages, comme le propriétaire. |
-| **Serveur de flotte : jetons sans expiration, certificat auto-signé, secrets de démonstration publics** | Limites d'une démonstration, listées au § 6.13 avec la mesure à prendre en production (sessions à durée limitée, Let's Encrypt, une clé par boîtier). |
+| **Le propriétaire peut désactiver les protections** | Utile pour la démonstration. Depuis le 24/10/2026, il faut pour cela un appui long sur le bouton 2 du boîtier, en plus du téléphone appairé : un téléphone volé ou une page piégée ne suffit plus (`TPMS.changementSensible`, § 6.6, `docs/analyse-de-risques.md` § 6.13). Il en va de même pour changer l'adresse d'un capteur appairé. Quelqu'un qui a à la fois le vélo et le téléphone déverrouillé reste maître des réglages, comme le propriétaire. |
+| **Serveur de flotte : sessions en mémoire, jeton lisible par la page, pas de second facteur, certificat auto-signé, secrets de démonstration publics** | Limites d'une démonstration, listées au § 6.13 avec la mesure à prendre en production (cookie `HttpOnly`, OpenID Connect, Let's Encrypt, une clé par boîtier). Depuis le 24/10/2026, les jetons fixes et sans expiration sont remplacés par une connexion par mot de passe et des sessions qui expirent. |
 | **Hors périmètre** | Lecture de la mémoire du boîtier par accès physique ; téléphone compromis (il ne peut toutefois plus couper les protections sans le bouton du boîtier) ; mise à jour du firmware (prévue par USB uniquement, donc avec accès physique). |
 
 ---
@@ -1196,6 +1290,7 @@ Objectif du cahier des charges (ENF-01) : **autonomie du boîtier d'au moins une
 | 2 LED d'éclairage | 10 mA | 2 × 5 mA |
 | Rafraîchissement partiel / complet de l'e-paper | 1,5 / 6 mA·s par rafraîchissement | ≈ 3 mA pendant 0,5 s / 2 s |
 | Bip | 9 mA·s | 25 mA pendant 3 × 0,12 s |
+| Baromètre BMP280 (ajouté le 24/10/2026) | 0,1 µA en sommeil ; ≈ 0,4 µA en moyenne avec une mesure toutes les 10 s | Fiche Bosch (valeurs reprises dans `simulateur/monde/circuit.js`) |
 | Batterie | 500 mAh, dont 90 % utilisables (450 mAh) | On ne vide pas une LiPo complètement |
 
 Pour les événements brefs (rafraîchir l'écran, biper), je raisonne en **charge par événement** (courant × durée, en mA·s), puis je convertis : 1 mAh = 3 600 mA·s.
@@ -1221,6 +1316,8 @@ Journée type : 1 h de roulage en 2 sorties, 15 min d'éclairage, 6 min d'applic
 **Autonomie = 450 mAh / 7,063 mAh par jour = 63,7 jours**, soit environ 9 semaines. L'exigence d'une semaine est tenue avec une marge d'un facteur 9 environ, **selon le modèle**.
 
 Deux postes font 85 % de la consommation : l'**écoute radio** et l'**éclairage**. Ce sont eux que je mesurerai en priorité.
+
+Le baromètre n'est pas compté dans `energie.js`. Même en supposant 0,4 µA pendant 24 h, il ne coûterait que 0,4 × 24 / 1 000 ≈ 0,01 mAh par jour, soit 0,14 % du total : l'autonomie de 63,7 jours ne change pas. Le modèle du circuit, lui, le compte, ainsi que la semaine simulée du § 7.5.
 
 ### 7.3 Le choix de la fenêtre d'écoute : consommation contre rapidité d'alerte
 
@@ -1291,26 +1388,42 @@ Le lycée n'a pas de mesureur de consommation dédié (PPK2). Le protocole prév
 
 Les valeurs mesurées remplaceront les hypothèses de `logique/energie.js` ; le bilan, les tests et le simulateur seront alors recalculés automatiquement.
 
+### 7.8 La recharge par grand froid (24/10/2026)
+
+**Le problème.** Une LiPo ne se recharge qu'entre 0 et 45 °C (fiches des cellules) : en dessous de 0 °C, le lithium se dépose en métal sur l'électrode, la batterie perd de la capacité et peut se mettre en court-circuit interne. Un boîtier rechargé dehors, ou rentré d'une sortie d'hiver et branché aussitôt, est exactement dans ce cas. Le chargeur BQ25101 du XIAO ne surveille pas la température : c'est au boîtier de couper sa recharge.
+
+**La règle** (`TPMS.blocageCharge`, `logique/barometre.js`) : recharge coupée **sous 2 °C ou au-dessus de 43 °C**. Je prends 2 °C au lieu de 0 et 43 °C au lieu de 45 : le BMP280 n'est précis qu'à ±1 °C, et la batterie peut être un peu plus froide que l'air du boîtier. Une **hystérésis de 3 °C** évite que la recharge s'allume et s'éteigne sans cesse autour du seuil : elle ne repart qu'à 5 °C (ou sous 40 °C). Sans mesure de température, rien n'est bloqué : c'est le comportement de la carte seule. Le matériel qui coupe (U4, Q3, R10, R11) est décrit au § 4.3.
+
+**Ce que cela coûte en énergie.**
+
+- Pendant la coupure, R10 (100 kΩ) consomme 50 µA, pris sur le chargeur et non sur la batterie. R11, entre la grille de Q3 et la masse, vaut **1 MΩ** : tant que D6 est à 1, elle ne prend que 3,3 µA à la batterie (33 µA avec la valeur de 100 kΩ prévue au départ).
+- Sur un chargeur bloqué, le boîtier n'est pas sur le vélo : il **n'écoute plus les capteurs**. La batterie ne fournit alors que **0,024 mA** d'après le circuit simulé (processeur éveillé, baromètre, R11…), au lieu d'environ 3 mA en écoute (60 % × 5 mA). Un tour de roue ou un bouton rallument l'écoute.
+- Avant la veille, le boîtier relâche la coupure. Si le câble est branché, le 5 V revient, réveille la carte (raison « chargeur branché »), qui remesure la température et recoupe si besoin. Tant qu'il fait froid, ce cycle se répète toutes les 5 min (le délai de veille), avec de très courtes impulsions de charge au moment des réveils.
+
+**Exemple vérifié dans le simulateur** (option « recharge dehors ») : dehors à −5,7 °C, la recharge reste coupée pendant 90 min et la batterie reste stable ; à la maison (19 °C), le boîtier se réchauffe (constante de temps supposée d'environ 20 min) et la recharge reprend au bout d'environ 11 min.
+
+**À vérifier sur le matériel** (§ 8.6) : l'absence réelle de courant de charge au froid, en particulier pendant les courts réveils, et la température vue par le BMP280 par rapport à celle de la cellule.
+
 ---
 
 ## 8. Tests et validation
 
 ### 8.1 Les tests automatiques
 
-Le dépôt contient **589 tests JavaScript en 7 suites** et **109 tests C++**, tous réussis. Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
+Le dépôt contient **668 tests JavaScript en 7 suites** et **136 tests C++**, tous réussis (le 24/10/2026, 79 tests JavaScript et 27 tests C++ ont été ajoutés pour la confirmation par bouton, le baromètre et les sessions de la flotte). Les tests JavaScript se lancent par une seule commande : `node simulateur/tests/tout.js` (environ 20 s sur mon ordinateur). La première suite s'ouvre aussi dans le navigateur (`simulateur/tests/tests.html`).
 
 | Suite | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|---|
-| Logique et boîtier | `tests.js` | 158 | Trames, vitesse et distance, fuite lente, prévision du regonflage (9), statistiques (8), pression conseillée (5), alertes et hystérésis, délais de perte, boîtier complet, sécurité et scénarios pirate, inondation (3), SHA-256, HMAC et journal chaîné, capteurs v2 (12), protocole boîtier ↔ application, appairage par code et homme du milieu, énergie, écran |
+| Logique et boîtier | `tests.js` | 208 | Trames, vitesse et distance, fuite lente, prévision du regonflage (9), statistiques (8), pression conseillée (5), alertes et hystérésis, délais de perte, boîtier complet, sécurité et scénarios pirate, inondation (3), SHA-256, HMAC et journal chaîné, capteurs v2 (12), protocole boîtier ↔ application (séquence sur 1 octet, correction d'altitude, recharge coupée), appairage par code et homme du milieu, confirmation par bouton des changements sensibles (20), correction d'altitude, recharge par grand froid, deux boutons sur une broche, attente de l'écran sans BUSY, énergie, écran |
 | Pneu, météo, capteur | `pneu.tests.js` | 72 | Atmosphère et météo, loi des gaz, altitude, échauffement (soleil, freinage), crevaisons, fuite lente, perméation, mesure du capteur |
 | Vélo et parcours | `velo.tests.js` | 62 | Parcours (longueurs, dénivelés, revêtements, feux), vitesse selon la puissance, la pente, le vent et la pression |
 | Radio | `radio.tests.js` | 62 | Affaiblissement et portée, masquage par la jante, paquets sur les canaux 37/38/39, fenêtre d'écoute, collisions |
-| Électronique | `electronique.tests.js` | 80 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près |
-| Monde complet | `moteur.tests.js` | 38 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 |
-| Serveur de flotte | `serveur/serveur.tests.js` | 117 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; comptes, rôles et empreinte des jetons ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) |
-| **Total JavaScript** | | **589** | |
+| Électronique | `electronique.tests.js` | 86 | LiPo et protection, recharge (CC puis CV), tensions, LED, MOSFET, accord avec `energie.js` à 10 % près ; boutons sur D5 (SW2 à ≈ 0,48 V à travers R12), coupure de la recharge par U4 et Q3, relâchée d'elle-même carte éteinte (R11) |
+| Monde complet | `moteur.tests.js` | 45 | Scénarios de bout en bout : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse perte, découpage du temps, fin d'attaque, semaine type (avec prévision du regonflage), pistage avec capteurs du commerce et v2 ; baromètre avec évent, sans évent et absent ; recharge par grand froid dehors, puis à la maison |
+| Serveur de flotte | `serveur/serveur.tests.js` | 133 | Signature, rejeu, horodatage, validation, injection SQL, taille et type du corps, en-têtes, fichiers protégés, limitation de débit ; simulation de la flotte ; tendances ; statistiques SQL identiques au registre JavaScript ; vélo qui fuit en tête de la tournée ; connexion par mot de passe (compte inconnu traité comme un mot de passe faux), sessions qui expirent (15 min d'inactivité, 8 h au plus, 3 par compte), vraie déconnexion, rôles ; position effacée pendant une location (base, API, historique, registre du mode démo) ; purge à 30 jours et 6 mois ; migration d'une ancienne base ; HTTPS avec un certificat temporaire (confiance, refus sans confiance, HSTS, lot signé) |
+| **Total JavaScript** | | **668** | |
 
-**Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **109 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
+**Les tests C++ et l'intégration continue.** La logique traduite en C++ a sa propre série de **136 tests** (`firmware/tpms_boitier/src/logique/tests_logique.cpp`). Jusqu'au 22/10/2026, ils n'avaient jamais tourné : je n'avais sur mon PC qu'un compilateur pour ESP32, qui vérifie la syntaxe mais produit un programme impossible à lancer sur le PC. Depuis le 23/10/2026, **GitHub Actions** (`.github/workflows/tests.yml`) lance automatiquement, à chaque envoi de code (push) et sur une machine Linux :
 
 1. toutes les suites JavaScript, avec Node 24 ;
 2. la compilation de la logique C++ avec g++ (C++11, avertissements activés) et l'exécution de ses tests (`firmware/tests_pc/main.cpp`).
@@ -1340,6 +1453,11 @@ Quelques tests représentatifs, avec ce qu'ils garantissent :
 | « statistiques : temps moyen entre regonflages identique (SQL LAG = JavaScript) » | Les deux sources de données de la flotte donnent les mêmes résultats |
 | « RGPD base : la position envoyée pendant la location n'est PAS stockée (NULL) » | Le serveur applique la minimisation même si un boîtier envoie la position |
 | « HTTPS : sans faire confiance au certificat, la connexion est refusée (vérification active) » | La vérification du certificat n'est jamais coupée |
+| « confirmation : la commande ACQUITTER de l'app ne confirme pas » | Seul un vrai appui sur le boîtier peut confirmer un changement sensible |
+| « altitude : 1,70 au capteur mais 1,87 réels → pas d'alerte basse (seuil 1,8) » et « altitude : l'historique garde la pression du capteur » | Les deux grandeurs du § 5.4 sont bien utilisées chacune à sa place |
+| « carte endormie ou éteinte : la coupure se relâche toute seule (R11) » | Une batterie vide pourra toujours se recharger |
+| « connexion : compte inconnu → même réponse (on ne dévoile pas les comptes) » | Le serveur ne laisse pas deviner les noms des comptes |
+| « déconnexion : le jeton ne vaut plus rien, même recopié (401) » et « session : expirée après 16 min sans requête (401, motif session-expiree) » | Un jeton volé a une durée de vie limitée |
 
 Un test qui vérifie qu'une faiblesse existe (« le pirate rapide finit par passer ») peut surprendre. Je l'ai gardé exprès : il prouve que la protection « rythme » est nécessaire, et il échouerait si quelqu'un changeait le comportement sans s'en rendre compte.
 
@@ -1359,6 +1477,7 @@ Certains résultats ne viennent pas d'un test unique mais d'une **campagne** : l
 | Pistage | 5 jours de semaine type | 10 trajets reliés (capteurs du commerce) ; aucun (capteurs v2) |
 | Fuite lente vue par le serveur de flotte | 6 graines × 21 jours | Fuites de −0,15 à −0,5 bar/jour repérées en général en moins d'un jour et demi ; 0 fausse alerte |
 | Prévision du regonflage | 3 semaines simulées | 16 jours annoncés au 3e jour, seuil atteint vers le 18e ; erreur finale de 1 à 2 jours |
+| Recharge par grand froid | Recharge dehors (−5,7 °C), puis à la maison | Recharge coupée 90 min, batterie stable ; reprise environ 11 min après le retour à la maison |
 
 ### 8.4 Les vérifications manuelles de l'interface
 
@@ -1380,14 +1499,17 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | EF-16 (simulateur) | Réalisé, en ligne |
 | EF-17 (prévision du regonflage) | Erreur de 1 à 2 jours à l'approche du seuil, en simulation |
 | EF-18, EF-19 (statistiques, pression conseillée) | Réalisées dans le simulateur ; la pression conseillée reste un ordre de grandeur |
+| EF-25 (correction d'altitude) | Vérifiée par les tests (+0,167 bar à 846 hPa ; pas de fausse alerte basse en montagne ; historique en pression du capteur) et dans le simulateur ; baromètre non commandé, précision à comparer à une station météo |
+| EF-26 (recharge par grand froid) | Vérifiée par les tests (seuils, hystérésis, coupure relâchée carte éteinte) et dans le simulateur (90 min coupée à −5,7 °C) ; composants non commandés |
 | ENF-01 (≥ 1 semaine) | 63,7 jours selon le modèle ; 13,7 jours dans le cas défavorable |
 | ENF-02 (piles ≥ 1 an) | 524 jours selon le modèle, intervalle d'annonce à confirmer |
-| ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7) ; non vérifiables avant l'impression et l'essai |
-| ENF-08 à ENF-11 (logiciel) | Vérifiées (589 tests JavaScript, 109 tests C++, lancés à chaque envoi de code ; aucune installation) |
+| ENF-05 à ENF-07 (étanchéité, fixation, recharge) | Boîtier dessiné, calculé et contrôlé (§ 4.7), évent à membrane compris ; non vérifiables avant l'impression et l'essai |
+| ENF-08 à ENF-11 (logiciel) | Vérifiées (668 tests JavaScript, 136 tests C++, lancés à chaque envoi de code ; aucune installation) |
 | ENF-12 à ENF-20 (cybersécurité) | Vérifiées en simulation ; appairage réel à essayer sur iPhone |
+| ENF-31 (confirmation par bouton) | Vérifiée par 20 tests JavaScript et 11 tests C++ ; à essayer avec la vraie radio et Bluefy |
 | ENF-21 (capteurs v2) | Proposition simulée seulement ; non réalisable avec les capteurs commandés |
 | EF-20 à EF-24 (mode flotte) | Vérifiées par les tests du serveur et l'essai réel de 14 jours simulés ; liaison boîtier → serveur supposée |
-| ENF-23 à ENF-29 (serveur : signature, rejeu, validation, débit, comptes, HTTPS, RGPD) | Vérifiées par les 117 tests du serveur ; HTTPS avec un certificat auto-signé de démonstration |
+| ENF-23 à ENF-29 et ENF-32 (serveur : signature, rejeu, validation, débit, comptes, HTTPS, RGPD, sessions) | Vérifiées par les 133 tests du serveur ; HTTPS avec un certificat auto-signé de démonstration ; sessions en mémoire |
 | ENF-30 (une clé par boîtier, secrets hors du dépôt) | Non tenue par la démonstration (secrets de démonstration publics) |
 
 ### 8.6 Ce qui reste à valider sur le matériel réel
@@ -1406,6 +1528,12 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 | **Nombre d'annonces BLE inconnues en ville** | Le seuil d'inondation (50/s) pourrait donner de fausses détections | Compter les annonces reçues dans une rue fréquentée |
 | **Journal chaîné** | En RAM, il serait effacé à chaque veille | Sauvegarde en flash à la mise en veille écrite dans `stockage.cpp` : à essayer sur la carte |
 | **Boîtier imprimé** | Jeux d'impression, étanchéité, son du buzzer, portée radio, tenue du cran et du collier (§ 4.7) | Pièces `test_jeux` et `essai_joint`, mesure des composants puis nouveau contrôle d'interférences, bulles puis immersion 1 m 30 min, mesure du RSSI boîtier fermé |
+| **Durée de BUSY au froid** (ajouté le 24/10/2026) | Le fil BUSY est supprimé : si l'attente fixe (2,5 s / 0,6 s, × 1,5 sous 10 °C, × 2 sous 0 °C) est trop courte, l'image se brouille au froid | Câbler BUSY provisoirement, mesurer sa durée à l'oscilloscope à 20 °C, au réfrigérateur (5 °C) et au congélateur (−18 °C), garder au moins 30 % de marge, **puis** couper le fil |
+| **Tension de D5 avec SW2 appuyé** | Elle doit rester sous 30 % de VDD pour réveiller la carte, et être reconnue comme SW2 | Relever D5 au multimètre (attendu : 0,40 à 0,55 V) ; réveiller la carte avec chaque bouton |
+| **Membrane de l'évent** | Sans elle qui « respire », le baromètre ne voit pas l'altitude ; mal choisie, elle laisse entrer l'eau | Essai de l'évent seul dans l'eau tiède (bulles fines par l'évent seulement), immersion IPX7 évent ouvert, puis 3 étages montés : la mesure doit suivre, et ne plus bouger évent bouché |
+| **Pression du baromètre** | La correction d'altitude en dépend directement | Comparer à une station météo proche, valeur au niveau du lieu (pas ramenée au niveau de la mer) |
+| **Absence de courant de charge au froid** | C'est le but de la coupure ; les courts réveils toutes les 5 min laissent passer de brèves impulsions | Boîtier sorti du réfrigérateur et branché : « FROID » à l'écran, multimètre en série sur le câble (aucun courant), puis reprise vers 5 °C |
+| **Confirmation par bouton avec la vraie radio** | Avec la vraie radio, l'écriture BLE réussit toujours : l'application dépend du bit 3 de MESURES | Couper la liste blanche depuis Bluefy, vérifier l'affichage « CONFIRMER ? », puis la relecture des réglages après l'appui ou l'annulation |
 
 ---
 
@@ -1416,7 +1544,8 @@ J'ai vérifié dans le navigateur ce que les tests automatiques ne voient pas :
 ```
 projet-tpms-velo/
 ├── logique/        logique partagée : trames (v1 et v2), vitesse, fuite et prévision, alertes,
-│                   sécurité, SHA-256 et journal, statistiques, conseil, protocole BLE, énergie
+│                   sécurité, SHA-256 et journal, statistiques, conseil, protocole BLE, énergie,
+│                   baromètre (altitude, recharge par grand froid, écran sans BUSY), boutons
 ├── simulateur/     jumeau numérique : boitier/, monde/, sources/, vues/, tests/
 ├── app/            application Web Bluetooth (transport réel ou simulé)
 ├── firmware/       programme du boîtier (Arduino, XIAO nRF52840), traduction C++ de la logique, tests_pc/
@@ -1461,7 +1590,7 @@ J'ai désactivé le traitement Jekyll de GitHub Pages pour que les fichiers soie
 
 ### 9.3 Chronologie
 
-Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt datent du 22 et du 23/10/2026 (sortie de `git log`) :
+Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt datent du 22 au 24/10/2026 (sortie de `git log`) :
 
 | Date et heure | Commit | Contenu |
 |---|---|---|
@@ -1484,9 +1613,13 @@ Le panier de matériel a été relevé le 20/10/2026. Les commits du dépôt dat
 | 09:01 | `f088154` | Boîtier 3D paramétré (OpenSCAD) |
 | 09:04 – 09:17 | `cb9bbf5`, `22370fb`, `5795390` | Test du délai de perte en montée lente ; documentation, présentation et rapport mis à jour |
 | 11:04 | `a92b81d` | Boîtier 3D rendu (OpenSCAD 2021.01), STL prêts ; sauvegarde en flash dans le firmware |
-| 11:09 | `1e0ec90` | Mode flotte : RGPD (minimisation, durée de conservation), comptes de lecture et HTTPS ; 589 tests |
+| 11:09 | `1e0ec90` | Mode flotte : RGPD (minimisation, durée de conservation), comptes de lecture et HTTPS ; 589 tests à cette date |
+| 15:47 | `36982a9` | Boîtier 3D version 2 (§ 4.7 : forme, joint, collier et glissière, tolérances, contrôle d'interférences) |
+| 24/10, 02:07 | `25897c9` | Confirmation par bouton des changements sensibles (couper une protection, changer de capteur) ; bit 3 de MESURES |
+| 03:00 | `f15b7e5` | Baromètre BMP280 : correction d'altitude, recharge coupée par grand froid, écran sans fil BUSY, deux boutons sur une broche, évent du boîtier 3D, schéma en révision C |
+| 03:09 | `46158e7` | Mode flotte : connexion par mot de passe et sessions qui expirent ; 668 tests JavaScript et 136 tests C++ |
 
-Après ces commits, le boîtier 3D a été refait (version 2, § 4.7 : forme, joint, collier et glissière, tolérances, contrôle d'interférences) : commit `36982a9`. À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 589 aujourd'hui, auxquels s'ajoutent 109 tests C++.
+À venir : réception du matériel, mesures, impression et essai du boîtier. Le nombre de tests JavaScript est passé de 52 au premier commit à 668 aujourd'hui, auxquels s'ajoutent 136 tests C++.
 
 ### 9.4 Outils utilisés
 
@@ -1520,6 +1653,7 @@ Après ces commits, le boîtier 3D a été refait (version 2, § 4.7 : forme, jo
 | Première version du boîtier trop carrée, peu réaliste | Version 2 refaite aux cotes des composants : forme de compteur GPS, joint radial calculé, collier de cintre et glissière à cran ; contrôle d'interférences qui a trouvé 7 défauts avant impression |
 | Imprimante encore inconnue | Jeux d'impression en paramètres ; pièce `test_jeux` (20 min) pour les régler, `essai_joint` pour le joint |
 | Cotes de l'écran différentes selon les sites | Relevé sur le plan officiel du fabricant (WeActStudio) |
+| Plus assez de broches sur le XIAO pour le baromètre et la coupure de la recharge | Fil BUSY de l'écran supprimé (attente fixe, plus longue au froid), baromètre sur le bus SPI de l'écran, deux boutons sur une seule broche lue en analogique ; le geste « oublier les téléphones » a dû changer |
 
 ---
 
@@ -1529,14 +1663,15 @@ Après ces commits, le boîtier 3D a été refait (version 2, § 4.7 : forme, jo
 
 | Objectif | Résultat |
 |---|---|
-| Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique, firmware, application et boîtier 3D écrits |
-| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 589 tests JavaScript et 109 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
-| Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
-| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes, HTTPS en option ; risques résiduels identifiés et justifiés |
+| Concevoir un kit complet (capteurs, boîtier, application) | Conception terminée ; schéma électrique (révision C, avec baromètre et coupure de la recharge), firmware, application et boîtier 3D écrits |
+| Tout mettre au point avant le matériel | Simulateur complet en ligne ; 668 tests JavaScript et 136 tests C++ lancés à chaque envoi de code ; 11 défauts de conception trouvés et corrigés |
+| Valoriser la donnée | Chaîne complète : trame → contrôles → historique compensé en température → fuite lente et prévision du regonflage → alertes → écran, application, CSV ; correction d'altitude par le baromètre, avec la pression « manomètre » pour l'écran et les alertes et la pression du capteur pour l'historique ; statistiques et rejeu dans le simulateur ; mode flotte : serveur, base SQLite, tendance sur plusieurs jours et tournée triée par priorité |
+| Sécuriser le système | Analyse de risques EBIOS RM simplifiée (15 scénarios pour le kit, 8 pour le serveur) ; protections démontrées par des attaques simulées ; pistage mesuré ; journal chaîné ; changements sensibles confirmés par un bouton du boîtier ; serveur signé et protégé contre le rejeu et l'injection, lecture réservée aux comptes par mot de passe et sessions qui expirent, HTTPS en option ; risques résiduels identifiés et justifiés |
+| Protéger la batterie | Recharge coupée hors de 2 à 43 °C, toujours possible carte éteinte ; vérifiée dans le simulateur |
 | Respecter le RGPD | Kit : données gardées sur le téléphone. Flotte : aucune position gardée pendant une location, mesures et alertes effacées après 30 jours, journal des refus après 6 mois |
 | Autonomie ≥ 1 semaine | 63,7 jours selon le modèle, concordance à 15 % près avec la semaine simulée |
 
-Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu et contrôlé mais pas imprimé. Le serveur de flotte garde des limites de démonstration (jetons sans expiration, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
+Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel réel, et le boîtier 3D est rendu et contrôlé mais pas imprimé. Les pièces ajoutées le 24/10/2026 (baromètre, coupure de la recharge, pastille de l'évent) ne sont ni commandées ni chiffrées. Le serveur de flotte garde des limites de démonstration (sessions en mémoire, pas de second facteur, certificat auto-signé, secrets de démonstration publics). Les résultats de ce rapport sont des résultats de simulation, appuyés sur des hypothèses que j'ai listées. Le pistage (S12) reste un risque élevé avec les capteurs du commerce ; les capteurs v2 et la liaison boîtier → serveur ne sont que des propositions.
 
 ### 10.2 Ce que j'ai appris
 
@@ -1549,6 +1684,9 @@ Ce qui n'est **pas** fait : rien n'a encore été vérifié sur le matériel ré
 - **La vie privée ne se règle pas après coup** : aucun réglage du boîtier ne corrige une adresse fixe émise par le capteur. Elle se décide dans la conception des composants.
 - **La même donnée vaut plus quand on l'agrège** : une pression toutes les 10 min ne dit rien seule ; sur 14 jours et 20 vélos, elle trie la journée d'un technicien.
 - **Le RGPD se traduit en règles de code** : « ne garder que ce qui sert » devient une position mise à `null` avant stockage, « limiter la conservation » devient une requête de purge avec une durée justifiée. Ces règles se testent comme le reste.
+- **Une même mesure peut donner deux grandeurs** : la pression « manomètre » répond à « suis-je assez gonflé ? », la pression du capteur à « est-ce que je perds de l'air ? ». Choisir la mauvaise aurait créé une fausse fuite à chaque descente de col.
+- **Une fonction de plus coûte des broches, et les broches coûtent des compromis** : pour ajouter le baromètre et la coupure de la recharge, j'ai supprimé un fil de l'écran (au prix d'hypothèses à mesurer au froid) et mis deux boutons sur une broche (au prix d'un geste changé pour l'utilisateur).
+- **Une protection d'accès ne vaut que si elle ne peut pas être contournée par une autre commande** : la commande ACQUITTER de l'application aurait pu confirmer à la place du bouton ; c'est un test qui le garantit.
 
 ### 10.3 Les étapes à la réception du matériel
 
@@ -1556,19 +1694,21 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 
 1. **Carte seule** : téléverser le programme, vérifier que les tests embarqués finissent par « 0 en échec ».
 2. **Capteurs TPMS** : mode découverte, relevé des adresses et du contenu des annonces, comparaison avec le format supposé, mesure de l'intervalle d'annonce et de la plage. Corriger `trame.h` et `logique/trame.js` si besoin, puis relancer les tests.
-3. **Écran** : sens, couleurs, propreté des rafraîchissements partiels.
-4. **Reed, boutons, LED, buzzer**, puis la veille et le réveil.
-5. **Application** sur l'iPhone avec Bluefy : appairage par code, MTU, écriture des réglages.
-6. **Consommations** à l'oscilloscope (§ 7.7), report des valeurs dans `logique/energie.js`.
-7. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, et d'un joint 53 × 1,8 NBR 70 si le kit commandé n'en contient pas ; quincaillerie du boîtier (inserts M2, vis M2 et M3, écrou M3).
-8. **Boîtier** (déjà rendu et contrôlé dans OpenSCAD, STL prêts) : mesure des composants et nouveau contrôle d'interférences ; impression de `test_jeux` puis de `essai_joint` pour régler les jeux, puis du boîtier et du collier ; essais d'étanchéité à vide avant d'y mettre l'électronique (§ 4.7).
+3. **Écran** : sens, couleurs, propreté des rafraîchissements partiels ; durée de BUSY mesurée à l'oscilloscope à 20 °C, au réfrigérateur et au congélateur, **avant** de couper le fil (§ 4.3).
+4. **Reed, boutons, LED, buzzer**, puis la veille et le réveil par chaque bouton ; tension de D5 avec SW2 appuyé (0,40 à 0,55 V attendus).
+5. **Baromètre et recharge** : pression comparée à une station météo proche ; boîtier sorti du réfrigérateur et branché : « FROID » à l'écran, aucun courant de charge, puis reprise vers 5 °C.
+6. **Application** sur l'iPhone avec Bluefy : appairage par code, MTU, écriture des réglages, confirmation d'un changement sensible par le bouton.
+7. **Consommations** à l'oscilloscope (§ 7.7), report des valeurs dans `logique/energie.js`.
+8. **Commande complémentaire** des composants passifs, des MOSFET et des diodes, de la carte GY-BMP280, du TPS22918, de la pastille ePTFE, et d'un joint 53 × 1,8 NBR 70 si le kit commandé n'en contient pas ; quincaillerie du boîtier (inserts M2, vis M2 et M3, écrou M3).
+9. **Boîtier** (déjà rendu et contrôlé dans OpenSCAD, STL prêts) : mesure des composants et nouveau contrôle d'interférences ; impression de `test_jeux` puis de `essai_joint` pour régler les jeux, puis du boîtier et du collier ; essais d'étanchéité à vide avant d'y mettre l'électronique, puis essai de l'évent (§ 4.7).
 
 ### 10.4 Évolutions possibles
 
 - **Capteurs v2** (§ 6.11) : c'est l'évolution la plus importante, la seule qui corrige le pistage. Elle demande de concevoir nos propres capteurs.
-- **Mode flotte en production** : les comptes, HTTPS, la minimisation de la position et la durée de conservation sont faits. Il reste : une clé par boîtier gravée à la fabrication et un coffre à secrets, des sessions à durée limitée (ou OpenID Connect) à la place des jetons fixes, un certificat Let's Encrypt, une limitation de débit partagée entre serveurs, et la réalisation de la liaison boîtier → serveur.
-- **Mesure de l'altitude** par un baromètre dans le boîtier, pour corriger l'erreur des capteurs en montagne (0,17 bar à 1 500 m).
-- **Refus de la charge par grand froid** (la charge d'une LiPo sous 0 °C l'abîme), en utilisant la température mesurée.
+- **Mode flotte en production** : les comptes, HTTPS, la minimisation de la position, la durée de conservation et, depuis le 24/10/2026, la connexion par mot de passe avec des sessions qui expirent sont faits. Il reste : une clé par boîtier gravée à la fabrication et un coffre à secrets, des sessions partagées entre plusieurs serveurs et qui survivent à un redémarrage, le jeton dans un cookie `HttpOnly`, un second facteur ou l'authentification de l'entreprise (OpenID Connect), un certificat Let's Encrypt, une limitation de débit partagée entre serveurs, et la réalisation de la liaison boîtier → serveur.
+- **Une mesure de température sur la cellule elle-même** : le BMP280 ne mesure que l'air du bas du boîtier, une image de la température de la batterie au repos.
+
+La confirmation par bouton, la mesure de l'altitude par un baromètre et le refus de la charge par grand froid, qui figuraient dans cette liste, ont été réalisés le 24/10/2026 (§ 6.6, § 5.4 et § 7.8).
 
 ---
 
@@ -1582,10 +1722,13 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | **Annonce (BLE)** | Court message diffusé à tous les appareils à portée, sans connexion (*advertising*). Les capteurs TPMS transmettent leurs mesures ainsi |
 | **Appairage, bonding** | Échange de clés entre deux appareils BLE pour chiffrer la liaison ; le *bonding* mémorise ces clés pour les connexions suivantes |
 | **BLE** | Bluetooth Low Energy : version basse consommation du Bluetooth |
+| **BMP280** | Baromètre numérique de Bosch : il mesure la pression de l'air (300 à 1 100 hPa, ±1 hPa) et la température (±1 °C) ; ici sur le bus SPI du boîtier |
 | **Caractéristique (GATT)** | Valeur exposée par un appareil BLE, que l'on peut lire, écrire ou recevoir en notification |
 | **dBm** | Puissance en décibels par rapport à 1 mW (0 dBm = 1 mW, −90 dBm = 1 picowatt) |
 | **E-paper** | Écran à papier électronique : il réfléchit la lumière, se lit au soleil et ne consomme rien pour garder une image |
 | **EBIOS Risk Manager** | Méthode d'analyse de risques de l'ANSSI |
+| **ePTFE** | Téflon expansé : membrane dont les pores laissent passer l'air (et la vapeur d'eau) mais pas l'eau liquide ; sert d'évent aux boîtiers étanches |
+| **Évent** | Petit passage qui laisse l'air entrer et sortir d'un boîtier fermé ; ici un trou de 3 mm fermé par une membrane ePTFE |
 | **GATT** | Organisation des données d'un appareil BLE en services et caractéristiques |
 | **Certificat auto-signé** | Certificat HTTPS signé par sa propre clé et non par une autorité : le chiffrement est réel, mais l'identité du serveur n'est pas garantie ; le client doit lui faire confiance explicitement |
 | **HMAC-SHA256** | Signature calculée avec une clé secrète partagée et la fonction SHA-256 : sans la clé, on ne peut ni fabriquer ni modifier un message signé |
@@ -1595,7 +1738,7 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | **Injection SQL** | Attaque qui glisse du code SQL dans une donnée envoyée au serveur ; empêchée par les requêtes paramétrées, où la donnée est transmise à part du texte SQL |
 | **Intégration continue** | Lancement automatique des tests à chaque envoi de code (ici GitHub Actions) |
 | **IPX7** | Indice de protection (IEC 60529) : étanche à une immersion temporaire à 1 m pendant 30 min |
-| **Jeton (Bearer)** | Longue suite de caractères aléatoires qui identifie un compte ; il est envoyé dans l'en-tête `Authorization: Bearer <jeton>` de chaque requête |
+| **Jeton (Bearer)** | Longue suite de caractères aléatoires qui identifie une session ouverte ; il est envoyé dans l'en-tête `Authorization: Bearer <jeton>` de chaque requête |
 | **Joint torique radial** | Joint écrasé entre le fond d'une gorge et une paroi cylindrique, comme celui d'un piston : son écrasement ne dépend pas du serrage des vis |
 | **Jumeau numérique** | Logiciel qui reproduit un système réel et son environnement pour le concevoir et le tester |
 | **LE Secure Connections (LESC)** | Méthode d'appairage BLE à base de courbe elliptique ; avec un code affiché (*Passkey*), elle protège de l'homme du milieu |
@@ -1615,6 +1758,9 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | **Rejeu** | Attaque qui consiste à renvoyer des messages enregistrés auparavant |
 | **RGPD** | Règlement européen sur la protection des données personnelles ; des trajets rattachés à une personne en sont |
 | **RSSI** | Puissance du signal reçu, en dBm |
+| **Pression « manomètre »** | Pression relative à l'air réel du lieu, celle que lit le manomètre d'une pompe ; le capteur TPMS, lui, retire une pression fixe de 1 013,25 hPa |
+| **scrypt** | Fonction de hachage volontairement lente et gourmande en mémoire, faite pour stocker les mots de passe : essayer des milliards de mots de passe devient très coûteux |
+| **Session (et jeton de session)** | Période pendant laquelle un compte connecté peut lire l'API sans redonner son mot de passe ; le jeton de session, tiré au hasard, la représente et cesse de valoir à l'expiration ou à la déconnexion |
 | **SHA-256, empreinte** | Fonction qui résume n'importe quel message en 32 octets ; changer un seul bit du message change toute l'empreinte |
 | **SQLite** | Base de données SQL contenue dans un simple fichier, sans serveur de base séparé |
 | **Shunt** | Résistance de faible valeur placée en série pour mesurer un courant par la tension à ses bornes |
@@ -1635,10 +1781,10 @@ L'ordre de mise en service est prévu dans [../firmware/README.md](../firmware/R
 | [analyse-de-risques.md](analyse-de-risques.md) | Analyse EBIOS RM simplifiée, scénarios S1 à S23 (S16 à S23 : serveur de flotte), mesures, capteurs v2, récit des défauts corrigés, pistage, risques résiduels |
 | [bilan-energetique.md](bilan-energetique.md) | Consommations, journée type, influence des réglages, piles, protocole de mesure |
 | [schema-electrique.md](schema-electrique.md) | Schéma, liaisons broche par broche, nomenclature, calculs justifiés |
-| [../firmware/README.md](../firmware/README.md) | Organisation du firmware, compilation, câblage, mise en service, points à vérifier |
+| [../firmware/README.md](../firmware/README.md) | Organisation du firmware, compilation, câblage (dont baromètre, coupure de la recharge et deux boutons sur une broche), composants à ajouter, mise en service, points à vérifier |
 | [../app/README.md](../app/README.md) | Vues et transports de l'application |
-| [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement (HTTP ou HTTPS), comptes de lecture, RGPD, API, format des envois signés, sécurité, limites |
-| [../boitier-3d/README.md](../boitier-3d/README.md) | Boîtier 3D : cotes, joint, impression, quincaillerie, montage, essais d'étanchéité |
+| [../serveur/README.md](../serveur/README.md) | Serveur de flotte : lancement (HTTP ou HTTPS), connexion par mot de passe et sessions, RGPD, API, format des envois signés, sécurité, limites |
+| [../boitier-3d/README.md](../boitier-3d/README.md) | Boîtier 3D : cotes, joint, évent à membrane et berceau du baromètre, impression, quincaillerie, montage, essais d'étanchéité |
 
 En ligne :
 
@@ -1664,23 +1810,26 @@ Références :
 Depuis la racine du dépôt (Node.js requis) :
 
 ```
-node simulateur/tests/tout.js              # les 589 tests JavaScript, 7 suites
-node simulateur/tests/tests.js             # suite « logique et boîtier » (158 tests)
+node simulateur/tests/tout.js              # les 668 tests JavaScript, 7 suites
+node simulateur/tests/tests.js             # suite « logique et boîtier » (208 tests)
+node serveur/serveur.tests.js              # suite « serveur de flotte » (133 tests)
 node docs/schema/genere-schema.js          # régénère docs/schema/schema-boitier.svg
-node serveur/serveur.js                    # serveur de flotte : http://localhost:8080/flotte/ (jeton demandé)
+node serveur/serveur.js                    # serveur de flotte : http://localhost:8080/flotte/ (compte et mot de passe demandés)
 node serveur/flotte-vers-serveur.js        # 20 vélos, 14 jours simulés et envoyés au serveur
+node serveur/flotte-vers-serveur.js --compte gestionnaire --mot-de-passe <mot de passe>
 node serveur/flotte-vers-serveur.js --attaque-rejeu --attaque-signature
+node serveur/generer-cles-demo.js --nouveaux-mots-de-passe   # nouveaux mots de passe de démo
 node serveur/generer-certificat.js         # certificat auto-signé de démo : le serveur passe en HTTPS (port 8443)
 node serveur/flotte-vers-serveur.js --https
 ```
 
-Les jetons des comptes de démonstration sont donnés dans `serveur/README.md`.
+Les mots de passe des comptes de démonstration sont donnés dans `serveur/README.md`.
 
 Tests C++ sur PC (avec g++, comme sur GitHub Actions) :
 
 ```
 g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
-./tests_pc                                 # 109 tests
+./tests_pc                                 # 136 tests
 ```
 
 Simulateur hors ligne : ouvrir `simulateur/index.html` par double-clic. Application avec le vrai boîtier : page servie en HTTPS (GitHub Pages), ouverte dans Chrome ou Bluefy.

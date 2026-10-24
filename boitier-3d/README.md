@@ -125,7 +125,7 @@ fond 2,0 + chanfrein 1,0 + garde 0,3 + écrou 16,5 + garde 0,3 + jupe 5,2 + faç
 
 Le contrôle d'interférence (§ 9) vérifie qu'aucun de ces composants ne touche une pièce.
 
-**Place sur la plaquette des MOSFET.** La coupure de la recharge ajoute U4 (interrupteur de puissance TPS22918, SOT-23-6, sur l'arrivée du 5 V du connecteur), Q3 (2N7002, SOT-23), R10 et R11 (100 kΩ) et R12 (2,2 kΩ, échelle des boutons). On compte la surface des pastilles de chaque boîtier CMS (cotes usuelles des empreintes) et on demande, pour souder au fer, **au moins 2 fois cette surface** (le reste sert aux pistes, aux fils et à la panne du fer) :
+**Place sur la plaquette des MOSFET.** La coupure de la recharge ajoute U4 (interrupteur de puissance TPS22918, SOT-23-6, sur l'arrivée du 5 V du connecteur), Q3 (2N7002, SOT-23), R10 (100 kΩ), R11 (1 MΩ) et R12 (2,2 kΩ, échelle des boutons). On compte la surface des pastilles de chaque boîtier CMS (cotes usuelles des empreintes) et on demande, pour souder au fer, **au moins 2 fois cette surface** (le reste sert aux pistes, aux fils et à la panne du fer) :
 
 | Composants | Boîtier | Pastilles | Surface |
 |---|---|---|---|

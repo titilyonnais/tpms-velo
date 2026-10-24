@@ -66,7 +66,7 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 
 TPMS.CIRCUIT = {
   resistances: { R1: 270, R2: 100, R3: 100, R4: 100e3, R5: 100e3, R6: 150, R7: 150, R8: 1000, R9: 1e6,
-                 R10: 100e3, R11: 100e3, R12: 2200 },
+                 R10: 100e3, R11: 1e6, R12: 2200 },
   pullupInterneOhm: 13000,         // nRF52840, 11 à 16 kΩ
   sortieForteOhm: 30,              // résistance équivalente d'une sortie « high drive »
   sortieStandardOhm: 300,          // sortie normale (≈ 0,5 mA pour 0,4 V de chute... ordre de grandeur)

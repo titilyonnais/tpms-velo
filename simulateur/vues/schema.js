@@ -508,7 +508,7 @@ function dessiner() {
   });
   branche("grille-q3", "R11", function () {
     fil([[990, 430], [1030, 430]]);
-    resistanceV(1005, 430, 492, "R11", "100 kΩ", false, true);
+    resistanceV(1005, 430, 492, "R11", "1 MΩ", false, true);
     masse(1005, 492);
   });
   noeud(1005, 430);

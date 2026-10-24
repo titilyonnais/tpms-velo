@@ -290,7 +290,7 @@
 <rect x="998" y="441" width="14" height="40" class="sch-corps"/>
 <polyline class="sch-fil sch-conducteur" data-courant="R11" points="1005,481 1005,492"/>
 <text x="992" y="458" class="sch-ref" text-anchor="end">R11</text>
-<text x="992" y="473" class="sch-val" text-anchor="end">100 kΩ</text>
+<text x="992" y="473" class="sch-val" text-anchor="end">1 MΩ</text>
 </g>
 <polyline class="sch-fil" points="1005,492 1005,502"/>
 <polyline class="sch-armature" points="994,502 1016,502"/>

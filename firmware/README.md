@@ -4,7 +4,7 @@ Programme Arduino du **Seeed XIAO nRF52840**, la carte du boîtier de guidon.
 
 Il est écrit **avant** l'arrivée du matériel. Il n'a donc jamais été compilé avec le vrai cœur Arduino de la carte. Tout ce qui reste incertain est marqué `// À VÉRIFIER :` dans le code et repris dans la liste à la fin de ce document.
 
-La partie **logique** (`src/logique/`), en revanche, est compilée et testée sur un ordinateur : 109 tests, lancés automatiquement par GitHub Actions à chaque push (voir « Tester la logique sur PC »).
+La partie **logique** (`src/logique/`), en revanche, est compilée et testée sur un ordinateur : 136 tests, lancés automatiquement par GitHub Actions à chaque push (voir « Tester la logique sur PC »).
 
 ## Organisation
 
@@ -124,11 +124,11 @@ Le XIAO n'a que 11 broches (D0 à D10), et il en faudrait 15. Quatre astuces :
              └───────────┤
                          D  2N7002 (Q3)
           D6 ───────┬─── G
-              100 kΩ (R11) S
+                1 MΩ (R11) S
                    GND    GND
 ```
 
-**Composants à ajouter** à la commande : 2 MOSFET canal N de niveau logique (AO3400 en CMS ou 2N7002) pour le buzzer et l'éclairage, 1 diode 1N4148, des résistances de 100 Ω, 100 kΩ, 150 Ω et 270 Ω. Depuis le 24/10/2026, en plus : une carte **GY-BMP280** (baromètre, version 3,3 V à 6 broches, utilisée en SPI), un interrupteur de puissance **TPS22918** (U4, SOT-23-6), un **2N7002** (Q3), deux résistances de **100 kΩ** (R10, R11), une de **2,2 kΩ** (R12) et une **pastille autocollante de membrane ePTFE** de Ø 10 mm pour l'évent du boîtier. En option, une résistance de 1 MΩ et un condensateur de 10 nF pour le reed (voir plus bas).
+**Composants à ajouter** à la commande : 2 MOSFET canal N de niveau logique (AO3400 en CMS ou 2N7002) pour le buzzer et l'éclairage, 1 diode 1N4148, des résistances de 100 Ω, 100 kΩ, 150 Ω et 270 Ω. Depuis le 24/10/2026, en plus : une carte **GY-BMP280** (baromètre, version 3,3 V à 6 broches, utilisée en SPI), un interrupteur de puissance **TPS22918** (U4, SOT-23-6), un **2N7002** (Q3), une résistance de **100 kΩ** (R10), une de **1 MΩ** (R11), une de **2,2 kΩ** (R12) et une **pastille autocollante de membrane ePTFE** de Ø 10 mm pour l'évent du boîtier. En option, une résistance de 1 MΩ et un condensateur de 10 nF pour le reed (voir plus bas).
 
 Justification des valeurs :
 - **LED d'alerte** : (3,3 V − 2,0 V) / 270 Ω ≈ 5 mA. Une broche normale du nRF52840 ne fournit qu'environ 2 mA. La broche D7 est donc réglée en sortie « forte » (*high drive*, jusqu'à environ 10 mA).

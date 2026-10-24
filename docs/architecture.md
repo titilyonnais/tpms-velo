@@ -13,7 +13,7 @@ Le kit comprend trois parties matérielles et logicielles :
 | Partie | Matériel | Rôle | Programme |
 |---|---|---|---|
 | Capteurs de roue | 2 capteurs TPMS BLE du commerce, vissés sur les valves Schrader | Mesurer pression, température et niveau de pile, puis les diffuser en annonces BLE (en clair) | Programme du fabricant, non modifiable |
-| Boîtier de guidon | Seeed XIAO nRF52840, écran e-paper 1,54″ 200×200 (SSD1681), LiPo 500 mAh, reed + aimant, 2 boutons, buzzer, LED | Recevoir les trames, calculer vitesse/distance, déclencher les alertes, afficher, dialoguer avec l'application | `firmware/` (traduction C++ de la logique, testée sur PC par 109 tests ; à essayer sur la carte à la réception du matériel) |
+| Boîtier de guidon | Seeed XIAO nRF52840, écran e-paper 1,54″ 200×200 (SSD1681), baromètre BMP280 sous un évent à membrane, LiPo 500 mAh avec coupure de la recharge par grand froid, reed + aimant, 2 boutons sur une seule broche, buzzer, LED | Recevoir les trames, corriger l'erreur d'altitude des capteurs, calculer vitesse/distance, déclencher les alertes, afficher, dialoguer avec l'application, protéger la batterie | `firmware/` (traduction C++ de la logique, testée sur PC par 136 tests ; à essayer sur la carte à la réception du matériel) |
 | Application | Téléphone ou PC : Chrome (PC, Android) ou Bluefy (iPhone) | Affichage des mesures, réglages, historique des pressions, détection de fuite très lente | `app/` (en cours) |
 
 Le téléphone de Thibault est un iPhone. Safari n'implémente pas Web Bluetooth ; l'application web sera donc utilisée sur iPhone avec le navigateur gratuit **Bluefy**, qui implémente Web Bluetooth, et sur PC ou Android avec **Chrome**. Une application Flutter a été écartée parce que compiler pour iOS exige un Mac.
@@ -25,8 +25,12 @@ flowchart LR
         CAR["Capteur TPMS arrière<br/>(pile CR1632)"]
     end
     REED["Aimant de rayon<br/>+ interrupteur reed"]
+    AIR["Air extérieur<br/>(altitude, météo, froid)"]
+    CHARGEUR["Chargeur 5 V<br/>(connecteur magnétique)"]
 
     subgraph Boitier["Boîtier de guidon (XIAO nRF52840)"]
+        BARO["Baromètre BMP280<br/>(bus SPI de l'écran)"]
+        COUPURE["Coupure de recharge<br/>U4 + Q3 (broche D6)"]
         RADIO["Radio BLE<br/>écoute par fenêtres"]
         LOGIQUE["Logique :<br/>décodage, sécurité, alertes,<br/>vitesse, fuite lente"]
         SORTIES["E-paper 200×200<br/>buzzer, LED alerte,<br/>LED d'éclairage"]
@@ -38,6 +42,10 @@ flowchart LR
     CAV -- "annonces BLE en clair<br/>18 octets" --> RADIO
     CAR -- "annonces BLE en clair<br/>18 octets" --> RADIO
     REED -- "un top par tour<br/>(entrée GPIO)" --> LOGIQUE
+    AIR -- "évent à membrane<br/>ePTFE" --> BARO
+    BARO -- "pression de l'air,<br/>température" --> LOGIQUE
+    LOGIQUE -- "hors de 2-43 °C" --> COUPURE
+    CHARGEUR --> COUPURE
     RADIO --> LOGIQUE
     LOGIQUE --> SORTIES
     LOGIQUE <--> GATT
@@ -82,7 +90,9 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 | `logique/fuite.js` | Historique (1 point / 30 s, 40 points = 20 min) de la pression ramenée à 20 °C (loi des gaz parfaits), et pente par régression linéaire (moindres carrés), en bar/h, après au moins 10 min de données. **Prévision du prochain regonflage** : un relevé au plus toutes les 3 h (30 au plus), perte en bar/jour, jours avant le seuil bas. Les fonctions de pente et de jours restants sont réutilisées par l'application | `pressionCompenseeBar`, `historiqueAjouter`, `historiquePenteBarH`, `creerReleves`, `relevesAjouter`, `predireRegonflage`, `joursAvantSeuil`, `texteJours` |
 | `logique/alertes.js` | État de chaque pneu, du plus grave au moins grave : INTRUSION, ATTENTE, PERDU, CREVAISON, BASSE, HAUTE, FUITE, OK ; capteur perdu après 60 s sans trame en mouvement, 600 s sinon (c'est le boîtier qui décide « en mouvement » : au-dessus de 10 km/h) ; hystérésis de 0,05 bar sur les alertes basse et haute (`HYSTERESIS_ALERTE_BAR`), pour qu'une pression qui oscille autour d'un seuil ne rallume pas l'alerte en boucle | `evaluerRoue`, `seuilsParDefaut`, `estAlerte`, `texteEtat` |
 | `logique/securite.js` | Protections contre les faux capteurs : liste blanche, vraisemblance, rythme (deux trames rapprochées ne comptent pas si la pression baisse : rafale d'une vraie crevaison) | `positionCapteur`, `verifierVraisemblance`, `controlerRythme` |
-| `logique/protocole.js` | Format des caractéristiques BLE boîtier ↔ app ; contrôle des réglages | `encoderMesures`, `decoderMesures`, `encoderReglages`, `decoderReglages`, `verifierReglages` |
+| `logique/protocole.js` | Format des caractéristiques BLE boîtier ↔ app ; contrôle des réglages ; repérage des changements « sensibles » (protection coupée, capteur changé) qui demandent un appui long sur le bouton 2 du boîtier | `encoderMesures`, `decoderMesures`, `encoderReglages`, `decoderReglages`, `verifierReglages`, `changementSensible`, `lignesSensibles` |
+| `logique/barometre.js` | Ce que le boîtier tire de son baromètre BMP280 : **correction d'altitude** des capteurs (qui retirent 1 013,25 hPa fixes : (1 013,25 − air) / 1 000 bar), **recharge refusée** hors de 2 à 43 °C (hystérésis de 3 °C), **attente fixe** de fin de rafraîchissement de l'écran, plus longue au froid (le fil BUSY est supprimé) | `correctionAltitudeBar`, `pressionCorrigeeBar`, `blocageCharge`, `attenteEcranMs` |
+| `logique/boutons.js` | Les deux boutons sur une seule broche (D5), lue en analogique : SW1 à 0 V, SW2 à ≈ 0,48 V à travers 2,2 kΩ ; seuils en proportion de VDD | `boutonDepuisTension` |
 | `logique/energie.js` | Consommations par état et bilan d'une journée type ; durée de vie des piles des capteurs | `consoInstantaneeMa`, `bilanJournee`, `dureeViePileCapteurJours` |
 | `logique/statistiques.js` | Statistiques par jour et par semaine à partir de l'enregistrement : distance, minutes de roulage, pression moyenne en roulant et minimale, regonflages, minutes en alerte, énergie consommée par le boîtier | `statistiquesParJour`, `statistiquesParSemaine` |
 | `logique/conseil.js` | Pression conseillée selon le poids du cycliste, la largeur du pneu et la répartition du poids (pression proportionnelle à la charge de la roue ; **hypothèse** : ordre de grandeur) | `pressionReferenceBar`, `pressionConseillee` |
@@ -94,7 +104,7 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 
 | Fichier | Rôle |
 |---|---|
-| `simulateur/boitier/boitier.js` | Le « cerveau » du boîtier, équivalent de `loop()` : écoute radio par fenêtres (3 s toutes les 5 s, position de la fenêtre changée à chaque période par `melangerEntier`), écoute renforcée de 15 s après une trame douteuse (`boitierEcouteRenforcee`), passage des trames dans les protections (ou, avec des capteurs v2, vérification de l'adresse privée, de la signature et du compteur), détection d'inondation (`boitierSurveillerSaturation`), historique compensé en température et relevés pour la prévision du regonflage, évaluation des alertes (délai de perte « en roulant » seulement au-dessus de 10 km/h, `VITESSE_ROULAGE_SURE_KMH`), journal recopié dans le journal chaîné, sorties (bip, LED), rafraîchissement de l'écran seulement si l'image change, mise en veille |
+| `simulateur/boitier/boitier.js` | Le « cerveau » du boîtier, équivalent de `loop()` : écoute radio par fenêtres (3 s toutes les 5 s, position de la fenêtre changée à chaque période par `melangerEntier`), écoute renforcée de 15 s après une trame douteuse (`boitierEcouteRenforcee`), passage des trames dans les protections (ou, avec des capteurs v2, vérification de l'adresse privée, de la signature et du compteur), détection d'inondation (`boitierSurveillerSaturation`), historique compensé en température et relevés pour la prévision du regonflage, évaluation des alertes (délai de perte « en roulant » seulement au-dessus de 10 km/h, `VITESSE_ROULAGE_SURE_KMH`), journal recopié dans le journal chaîné, sorties (bip, LED), rafraîchissement de l'écran seulement si l'image change, mise en veille ; depuis le 24/10/2026 : mesure du baromètre toutes les 10 s (`boitierBarometre` : pression affichée et alertes corrigées de l'altitude, historique gardé en pression du capteur), coupure de la recharge par grand froid relâchée avant la veille, réveil par le 5 V du chargeur (`boitierChargeurBranche`) et radio coupée sur un chargeur bloqué, confirmation des changements sensibles par appui long sur le bouton 2 (`boitierBouton` ; les commandes de l'app passent par `boitierAction` et ne peuvent pas confirmer) |
 | `simulateur/boitier/liaison.js` | Côté boîtier de la liaison avec l'app : code d'appairage affiché, blocage après 3 codes faux, refus des réglages sans appairage, contrôle des réglages reçus ; attaque de l'homme du milieu à l'appairage, avec ou sans code (`liaisonAttaqueHommeDuMilieu`) |
 | `simulateur/boitier/ecran.js` | Mise en page de l'écran 200×200 à partir d'une « vue » (valeurs à afficher) |
 | `simulateur/boitier/epaper.js` | Mémoire d'image et primitives de dessin, nommées comme Adafruit GFX (`fillRect`, `drawRect`…) |
@@ -105,14 +115,16 @@ Conséquence pratique : le temps est toujours passé en paramètre (`maintenantM
 | `simulateur/monde/parcours.js` | 4 parcours réels approchés autour de Lyon : altitude, pente, virages, revêtement, feux |
 | `simulateur/monde/velo.js` | Dynamique du vélo (poids, roulement selon la pression, air, freins), cycliste (puissance, feux, virages, crevaison), rotation des roues et passages de l'aimant |
 | `simulateur/monde/radio.js` | Propagation BLE (distance, ombrage, évanouissement, masquage par la jante), canaux 37/38/39, collisions, Wi-Fi, brouillage |
-| `simulateur/monde/lipo.js`, `circuit.js` | Batterie LiPo et chargeur ; tensions et courants de chaque composant du schéma |
+| `simulateur/monde/lipo.js`, `circuit.js` | Batterie LiPo et chargeur ; tensions et courants de chaque composant du schéma (34 repères depuis la révision C, dont le baromètre U3, l'interrupteur de recharge U4, Q3 et R10 à R12) |
+| `simulateur/monde/barometre.js` | Le BMP280 dans le boîtier étanche et l'air autour de lui : avec évent (l'air du boîtier suit l'extérieur, τ ≈ 5 s, **hypothèse**), sans évent (l'air piégé ne voit pas l'altitude) ou absent ; erreur propre à chaque exemplaire (±1 hPa, ±1 °C) et bruit | 
+| `simulateur/moteur.js` (baromètre et recharge) | Température du boîtier qui suit l'air avec retard (τ ≈ 20 min, **hypothèse**) ; sur son chargeur, le boîtier est « à la maison » à 19 °C, sauf option « recharge dehors » ; options « Baromètre du boîtier » et « Recharge du boîtier » de la page Configuration |
 | `simulateur/monde/alea.js` | Hasard reproductible (graine) : même graine et mêmes actions donnent la même sortie |
 | `simulateur/moteur.js` | Assemble le monde et le fait avancer pas à pas ; à la création, règle la circonférence du boîtier sur la vraie roue et les seuils à 80 % et 125 % des pressions choisies ; poids du cycliste ; capteurs du commerce ou v2 (clés de 16 octets partagées avec le boîtier) ; réseau de récepteurs espions ; attaques « synchro » (pirate synchronisé) et « inondation » ; planning « semaine type » (`genererPlanning`) ; vélo garé tenu sur sa béquille ; journal des actions pour le rejeu |
 | `simulateur/vues/` | Graphes, carte et profil, vue radio de dessus, schéma électrique animé, carte du pistage (`pistage.js` : récepteurs espions et trajet reconstitué) |
 | `simulateur/sources/pirate.js` | Attaquant : usurpation d'identité (fausse pression) ou rejeu de trames enregistrées |
 | `simulateur/sources/mouchards.js` | Espion de la vie privée : 20 récepteurs BLE posés le long des rues (environ tous les 700 m), qui notent chaque passage d'une adresse (`mouchardsEcouter`) ; reconstitution des trajets, des heures et du départ habituel (`mouchardsAnalyser`) |
 | `simulateur/app.js`, `index.html`, `style.css` | Interface du simulateur : fait avancer le monde au rythme choisi, transmet les actions, affiche le résultat |
-| `simulateur/tests/` | Tests automatiques : 6 suites, plus celle du serveur (`serveur/serveur.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (589 tests) |
+| `simulateur/tests/` | Tests automatiques : 6 suites, plus celle du serveur (`serveur/serveur.tests.js`), lancées ensemble par `node simulateur/tests/tout.js` (668 tests) |
 
 ### 2.5 Portage vers le firmware et l'application
 
@@ -130,6 +142,8 @@ Le code JavaScript est volontairement écrit dans un style proche du C :
 | Application (`app/`) | `logique/protocole.js` (décodage de MESURES, codage de REGLAGES, contrôle des réglages avant envoi), `logique/fuite.js` (calcul de pente, jours avant le seuil bas), `logique/alertes.js`, `logique/trame.js` | Fichiers JavaScript inclus tels quels par `app/index.html` |
 | Simulateur | Tout | Chargement par balises `<script>` |
 | Flotte et serveur (`flotte/`, `serveur/`) | `logique/trame.js`, `fuite.js`, `alertes.js`, `securite.js` (et `sha256.js` pour le banc d'essai de la page), avec le modèle de pneu et de capteur du simulateur | Dans Node par `flotte/node.js` (le serveur utilise `node:crypto` pour le HMAC), dans la page par balises `<script>` |
+
+Fichiers ajoutés au firmware le 24/10/2026 : `firmware/tpms_boitier/src/logique/barometre.h` et `barometre.cpp` (traduction de `logique/barometre.js`), `boutons.h` et `boutons.cpp` (traduction de `logique/boutons.js`), et, côté matériel, `firmware/tpms_boitier/src/materiel/barometre_bmp280.h` et `barometre_bmp280.cpp` (lecture du BMP280 sur le bus SPI partagé avec l'écran, bibliothèque Adafruit BMP280). Le câblage correspondant est dans `firmware/tpms_boitier/config.h` et `schema-electrique.md` (révision C).
 
 `logique/energie.js` ne sert qu'au simulateur et au dossier (`bilan-energetique.md`) : il n'a pas sa place dans le firmware. `logique/statistiques.js` et `logique/conseil.js` travaillent sur des semaines de mesures ou sur le profil du cycliste : ils servent au simulateur et pourront servir à l'application, pas au boîtier.
 
@@ -159,11 +173,11 @@ L'interface est un tableau de bord avec une barre latérale et huit pages :
 | Page | Contenu |
 |---|---|
 | Vue d'ensemble | Démarrer la sortie ou avancer jusqu'à la prochaine ; pneus avant et arrière (pression, pression conseillée, prochain regonflage, mini-courbe, boutons Crevaison, Fuite lente, Regonfler) ; vélo (vitesse, avancement) ; boîtier de guidon (écran e-paper au pixel près, LED, buzzer, boutons 1 et 2) ; carte ; batterie ; sécurité ; événements |
-| Configuration | Nouvelle simulation (parcours, déroulement : une sortie ou semaine type, météo, heure, chambres à air, pressions, poids du cycliste et pression conseillée, plage des capteurs, capteurs du commerce ou version 2, vélos équipés autour, graine) ; réglages du boîtier (circonférence, seuils, écoute radio, écran, veille, protections) |
+| Configuration | Nouvelle simulation (parcours, déroulement : une sortie ou semaine type, météo, heure, chambres à air, pressions, poids du cycliste et pression conseillée, plage des capteurs, capteurs du commerce ou version 2, baromètre du boîtier avec évent, sans évent ou absent, recharge à la maison ou dehors, vélos équipés autour, graine) ; réglages du boîtier (circonférence, seuils, écoute radio, écran, veille, protections) |
 | Pneus | Pression réelle et pression affichée par le boîtier ; dernières trames des capteurs (18 octets, ou 26 octets en version 2) |
 | Radio et sécurité | Vue de dessus, devenir des annonces (reçue, radio coupée, trop faible, collision…), attaquant (usurpation, rejeu, brouillage, pirate synchronisé, inondation), protections du boîtier, journal de sécurité chaîné (vérifier, falsifier une ligne, copier l'empreinte sur le téléphone), trafic radio |
 | Vie privée | Carte de ce que voient les récepteurs espions, trajet reconstitué, ce que l'espion a appris (trajets, heures, départ habituel), passages notés ; bouton « Relancer avec des capteurs v2 » |
-| Électronique | Schéma électrique animé (courants, tensions), batterie LiPo 500 mAh, répartition du courant, autonomie sur une journée type |
+| Électronique | Schéma électrique animé (courants, tensions), batterie LiPo 500 mAh, répartition du courant, autonomie sur une journée type ; température du boîtier, état de la recharge (coupée par grand froid ou non), baromètre et correction d'altitude |
 | Application | L'application de `app/` reliée au boîtier simulé ; échanges de la liaison boîtier ↔ téléphone ; attaque de l'homme du milieu à l'appairage, avec ou sans code |
 | Données | Courbes de tout l'enregistrement (pressions, températures, vitesse, altitude, batterie, piles des capteurs), bilan, statistiques par jour et par semaine, export CSV, sauvegarde et rejeu de scénario |
 
@@ -199,16 +213,21 @@ flowchart LR
     end
     PASS["Passerelle en station<br/>ou LTE-M (hypothèse)"]
     subgraph Serveur["serveur/serveur.js (Node.js 24)"]
-        API["API REST (HTTPS si certificat)<br/>contrôle : signature, rejeu,<br/>validation, débit, comptes, RGPD"]
+        API["API REST (HTTPS si certificat)<br/>contrôle : signature, rejeu,<br/>validation, débit, rôles, RGPD"]
+        SESS["Comptes et sessions<br/>serveur/sessions.js<br/>(sel + scrypt ; SHA-256 des jetons,<br/>15 min / 8 h, en mémoire)"]
         BASE[("SQLite<br/>serveur/base.js")]
         API <--> BASE
+        API <--> SESS
     end
     PAGE["Page de supervision<br/>flotte/index.html, page.js"]
     TECH["Technicien<br/>(tournée par priorité)"]
 
     BOI -- "lots signés HMAC-SHA256<br/>toutes les 30 min" --> PASS
     PASS -- "POST /api/mesures" --> API
-    PAGE -- "GET /api/velos, /alertes,<br/>/statistiques… (jeton de compte)" --> API
+    PAGE -- "1. POST /api/connexion<br/>(compte + mot de passe)" --> API
+    API -- "2. jeton de session<br/>(256 bits)" --> PAGE
+    PAGE -- "3. GET /api/velos, /alertes,<br/>/statistiques… (Bearer jeton)" --> API
+    PAGE -- "4. POST /api/deconnexion" --> API
     PAGE --> TECH
     TECH -- "regonfle, change la chambre" --> Velos
 ```
@@ -219,7 +238,7 @@ Les règles RGPD sont, elles aussi, écrites une seule fois dans `flotte/flotte-
 - **minimisation** (`TPMS.flotteMinimiserPosition`) : pendant une location, la position du vélo est celle du client ; elle n'est pas envoyée par le boîtier simulé, et le serveur la met à `null` avant stockage si un boîtier l'envoie quand même. La page liste les vélos en location sous la carte (« En location · position non conservée (RGPD) ») ;
 - **durée de conservation** (`TPMS.FLOTTE_CONSERVATION`) : mesures et alertes 30 jours, journal des refus (adresses IP) 6 mois ; la limite est comptée depuis la mesure la plus récente reçue (`TPMS.flotteLimiteConservation`), car la simulation compresse le temps ; statistiques agrégées et regonflages conservés.
 
-Accès : toutes les lectures `GET /api/*` exigent le jeton d'un compte (`Authorization: Bearer`) ; rôles « technicien » et « gestionnaire » (seul le second lit le journal des refus). La page de supervision affiche un écran de connexion quand elle parle au vrai serveur ; le mode démo fonctionne sans compte. Le serveur passe en HTTPS (port 8443, TLS 1.2 minimum, HSTS) dès qu'un certificat est présent dans `serveur/certificats/`, sinon il reste en HTTP (port 8080) avec un avertissement.
+Accès (depuis le 24/10/2026) : on se **connecte** par `POST /api/connexion` avec un compte et un mot de passe ; le serveur ne garde que le sel et l'empreinte scrypt de chaque mot de passe, et répond de la même façon, dans le même temps, pour un compte inconnu. Il rend un **jeton de session** de 256 bits tiré au hasard, dont il ne garde que l'empreinte SHA-256, en mémoire. Toutes les lectures `GET /api/*` exigent ce jeton (`Authorization: Bearer`). La session se ferme après 15 min sans requête et au plus tard 8 h après la connexion ; 3 sessions au plus par compte ; `POST /api/deconnexion` la détruit côté serveur. Rôles « technicien » et « gestionnaire » (seul le second lit le journal des refus). La page de supervision affiche un formulaire compte + mot de passe quand elle parle au vrai serveur ; le mode démo fonctionne sans compte. Le serveur passe en HTTPS (port 8443, TLS 1.2 minimum, HSTS) dès qu'un certificat est présent dans `serveur/certificats/`, sinon il reste en HTTP (port 8080) avec un avertissement.
 
 ### 4.3 Les fichiers
 
@@ -228,13 +247,14 @@ Accès : toutes les lectures `GET /api/*` exigent le jeton d'un compte (`Authori
 | `flotte/flotte.js` | Simulation de la flotte : 20 vélos, 6 stations à Lyon, locations tirées au hasard (reproductibles par graine), modèle de pneu du simulateur au pas de 60 s, fuites lentes et crevaisons, boîtier qui décode de vraies trames, technicien qui passe chaque matin |
 | `flotte/flotte-logique.js` | Règles pures partagées entre le serveur et la page : validation d'un lot, contrôle de la signature et du rejeu, minimisation de la position et durée de conservation (RGPD), tendance sur plusieurs jours, statut et priorité de chaque vélo, indicateurs |
 | `flotte/registre.js` | « Serveur en mémoire » du mode démo, mêmes réponses que l'API, même minimisation et même purge (`registrePurger`) |
-| `flotte/index.html`, `page.js`, `flotte.css` | Page de supervision : écran de connexion (jeton gardé en `sessionStorage`, « Se déconnecter », avertissement en HTTP), indicateurs, carte schématique des stations, vélos en location listés sans position, tournée triable par priorité, détail d'un vélo (courbe AV/AR ramenée à 20 °C, seuils), journal des alertes, statistiques, refus, banc d'essai de sécurité |
-| `serveur/serveur.js` | Serveur HTTP ou HTTPS sans dépendance : routes de l'API, authentification des lots, comptes et rôles (empreintes SHA-256 des jetons), limitation de débit, en-têtes de sécurité (HSTS en HTTPS), fichiers statiques (403 sur `serveur/` et les fichiers cachés) |
+| `flotte/index.html`, `page.js`, `flotte.css` | Page de supervision : formulaire de connexion compte + mot de passe (jeton de session gardé en `sessionStorage`, « Se déconnecter » qui appelle `/api/deconnexion`, avertissement en HTTP), indicateurs, carte schématique des stations, vélos en location listés sans position, tournée triable par priorité, détail d'un vélo (courbe AV/AR ramenée à 20 °C, seuils), journal des alertes, statistiques, refus, banc d'essai de sécurité |
+| `serveur/serveur.js` | Serveur HTTP ou HTTPS sans dépendance : routes de l'API (dont `/api/connexion` et `/api/deconnexion`), authentification des lots, rôles, limitation de débit (mots de passe faux compris), en-têtes de sécurité (HSTS en HTTPS), fichiers statiques (403 sur `serveur/` et les fichiers cachés) |
+| `serveur/sessions.js` | Comptes à mot de passe (sel + scrypt, N = 2¹⁴, ≈ 50 ms et 16 Mo par essai ; compte fictif pour un compte inconnu) et sessions qui expirent (jeton de 256 bits, empreinte SHA-256, 15 min d'inactivité, 8 h au plus, 3 par compte) ; l'heure est passée en paramètre, comme dans la logique du boîtier, pour que les tests puissent « avancer l'horloge » |
 | `serveur/base.js` | Schéma SQL commenté (tables `velos`, `mesures`, `alertes`, `regonflages`, `refus`) ; requêtes toujours paramétrées ; purge RGPD (`DELETE … WHERE t < ?`, index sur `t`) ; migration d'une ancienne base ; statistiques en SQL (`GROUP BY`, jointure sur `MAX(t)`, fonction `LAG` pour le temps moyen entre regonflages) |
-| `serveur/flotte-vers-serveur.js` | Client : simule la flotte en accéléré et envoie des lots signés, en HTTP ou en HTTPS (`--https`, confiance explicite au certificat de démo) ; options d'attaque (`--attaque-rejeu`, `--attaque-signature`) |
-| `serveur/cles-demo.json`, `generer-cles-demo.js` | Clés HMAC des 20 vélos et jetons des comptes **de démonstration** (publics) ; `--nouveaux-jetons` en tire d'autres |
+| `serveur/flotte-vers-serveur.js` | Client : simule la flotte en accéléré et envoie des lots signés, en HTTP ou en HTTPS (`--https`, confiance explicite au certificat de démo) ; se connecte pour lire l'API (`--compte`, `--mot-de-passe`) ; options d'attaque (`--attaque-rejeu`, `--attaque-signature`) |
+| `serveur/cles-demo.json`, `generer-cles-demo.js` | Clés HMAC des 20 vélos et mots de passe des comptes **de démonstration** (publics, hachés dès la lecture) ; `--nouveaux-mots-de-passe` en tire d'autres |
 | `serveur/generer-certificat.js` | Certificat HTTPS **auto-signé** de démonstration pour `localhost` (openssl), dans `serveur/certificats/`, exclu de Git |
-| `serveur/serveur.tests.js` | 117 tests : sécurité de l'API, débit, simulation de la flotte, bout en bout, comptes et rôles, RGPD (minimisation, conservation, migration), HTTPS |
+| `serveur/serveur.tests.js` | 133 tests : sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD (minimisation, conservation, migration), HTTPS |
 
 Lancement, API et format des lots signés : `serveur/README.md`. Sécurité du serveur : `analyse-de-risques.md`, § 5.6 et § 6.14.
 
@@ -268,12 +288,13 @@ projet-tpms-velo/
 │   ├── securite.js
 │   ├── sha256.js, journal.js      empreintes, HMAC, journal chaîné
 │   ├── protocole.js
+│   ├── barometre.js, boutons.js   correction d'altitude, recharge par grand froid, attente de l'écran ; deux boutons sur une broche
 │   ├── statistiques.js, conseil.js
 │   └── energie.js
 ├── simulateur/            simulation complète (page web)
 │   ├── index.html, app.js, style.css, moteur.js
 │   ├── boitier/           boitier.js, liaison.js, ecran.js, epaper.js, police5x7.js
-│   ├── monde/             alea, atmosphere, pneu, capteur, parcours, velo, radio, lipo, circuit
+│   ├── monde/             alea, atmosphere, pneu, capteur, parcours, velo, radio, lipo, circuit, barometre
 │   ├── sources/           pirate.js, mouchards.js
 │   ├── vues/              graphe.js, carte.js, schema.js, pistage.js
 │   └── tests/             tout.js et 6 suites
@@ -282,7 +303,7 @@ projet-tpms-velo/
 │   └── transport-ble.js, transport-simule.js
 ├── firmware/              programme du boîtier (XIAO nRF52840), traduction C++ de la logique
 │   └── tests_pc/          main.cpp : lance les tests de la logique C++ sur un PC
-├── serveur/               serveur de flotte (Node.js 24, SQLite), API REST, tests
+├── serveur/               serveur de flotte (Node.js 24, SQLite), API REST, comptes et sessions, tests
 ├── flotte/                simulation de 20 vélos de location et page de supervision
 ├── boitier-3d/            boîtier imprimé en 3D (OpenSCAD), STL, rendus, outils d'export et de contrôle
 ├── presentation/          présentation pour la soutenance (page web)
@@ -305,7 +326,7 @@ Ouvrir `simulateur/index.html` dans un navigateur (double-clic). Rien à install
 ### Serveur et flotte
 
 ```
-node serveur/serveur.js                  # puis http://localhost:8080/flotte/ (jeton demandé à l'ouverture)
+node serveur/serveur.js                  # puis http://localhost:8080/flotte/ (compte et mot de passe demandés)
 node serveur/flotte-vers-serveur.js      # 20 vélos, 14 jours simulés et envoyés (≈ 30 s)
 
 node serveur/generer-certificat.js       # en HTTPS : certificat auto-signé de démo, puis
@@ -313,24 +334,24 @@ node serveur/serveur.js                  # https://localhost:8443/flotte/
 node serveur/flotte-vers-serveur.js --https
 ```
 
-Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/flotte/) fonctionne en mode démo, sans compte. Les jetons des comptes de démonstration et toutes les options sont dans `serveur/README.md`.
+Sans serveur, `flotte/index.html` (ou https://titilyonnais.github.io/tpms-velo/flotte/) fonctionne en mode démo, sans compte. Les mots de passe des comptes de démonstration et toutes les options sont dans `serveur/README.md`.
 
 ### Tests
 
-Les tests JavaScript sont répartis en 7 suites, 589 au total, tous réussis :
+Les tests JavaScript sont répartis en 7 suites, 668 au total, tous réussis :
 
 | Suite | Fichier | Nombre |
 |---|---|---|
-| Logique et boîtier | `tests.js` | 158 |
+| Logique et boîtier | `tests.js` | 208 |
 | Pneu, météo et capteur | `pneu.tests.js` | 72 |
 | Vélo et parcours | `velo.tests.js` | 62 |
 | Radio | `radio.tests.js` | 62 |
-| Électronique | `electronique.tests.js` | 80 |
-| Monde complet, de bout en bout | `moteur.tests.js` | 38 |
-| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, comptes et rôles, RGPD, HTTPS) | `serveur/serveur.tests.js` | 117 |
-| **Total** | | **589** |
+| Électronique (dont deux boutons sur D5 et coupure de la recharge) | `electronique.tests.js` | 86 |
+| Monde complet, de bout en bout | `moteur.tests.js` | 45 |
+| Serveur et flotte (sécurité de l'API, débit, simulation de la flotte, bout en bout, connexion, sessions et rôles, RGPD, HTTPS) | `serveur/serveur.tests.js` | 133 |
+| **Total** | | **668** |
 
-La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage).
+La suite « monde complet » fait tourner tout le simulateur : sortie normale, crevaison, reproductibilité et rejeu, deux jours garé, pirate, arrêt sans fausse alerte « capteur perdu », découpage du temps sans effet, fin d'attaque, pistage par des récepteurs espions (capteurs du commerce et v2), semaine type (dont la prévision du regonflage), baromètre avec et sans évent, recharge par grand froid (dehors et à la maison).
 
 En ligne de commande, depuis la racine du dépôt (Node.js requis), pour tout lancer :
 
@@ -338,7 +359,7 @@ En ligne de commande, depuis la racine du dépôt (Node.js requis), pour tout la
 node simulateur/tests/tout.js
 ```
 
-Chaque suite affiche son bilan sur une ligne (par exemple `tests.js  158 réussis, 0 en échec`), puis « Toutes les suites passent. ». Une suite peut aussi être lancée seule, par exemple `node simulateur/tests/tests.js`. En cas d'échec, le code de sortie vaut 1 et la ligne fautive est marquée `ÉCHEC` avec la valeur obtenue. Le détail ci-dessous concerne la première suite.
+Chaque suite affiche son bilan sur une ligne (par exemple `tests.js  208 réussis, 0 en échec`), puis « Toutes les suites passent. ». Une suite peut aussi être lancée seule, par exemple `node simulateur/tests/tests.js`. En cas d'échec, le code de sortie vaut 1 et la ligne fautive est marquée `ÉCHEC` avec la valeur obtenue. Le détail ci-dessous concerne la première suite.
 
 Dans le navigateur : ouvrir `simulateur/tests/tests.html`. Le titre de l'onglet indique si tous les tests passent.
 
@@ -352,7 +373,7 @@ Répartition des tests :
 | Alertes | 9 |
 | Boîtier complet | 12 |
 | Sécurité (dont scénarios pirate) | 21 |
-| Protocole boîtier ↔ application | 13 |
+| Protocole boîtier ↔ application (dont séquence sur 1 octet, recharge coupée, correction d'altitude) | 15 |
 | Liaison (appairage par code) | 11 |
 | Énergie | 5 |
 | Écran | 5 |
@@ -364,11 +385,16 @@ Répartition des tests :
 | SHA-256, HMAC et journal chaîné | 10 |
 | Capteurs v2 (adresse privée, signature, compteur) | 12 |
 | Rythme (rafale d'une vraie crevaison), inondation, homme du milieu | 7 |
-| **Total** | **158** |
+| Confirmation par bouton des changements sensibles | 20 |
+| Baromètre : correction d'altitude (logique et boîtier), baromètre muet | 10 |
+| Recharge coupée par grand froid (logique et boîtier) | 12 |
+| Écran sans fil BUSY (attente plus longue au froid) | 1 |
+| Deux boutons sur une broche | 5 |
+| **Total** | **208** |
 
 ### Tests de la logique C++ sur PC
 
-La logique du boîtier traduite en C++ (`firmware/tpms_boitier/src/logique/`) n'utilise que du C++ standard : on peut donc la compiler et la tester sur un ordinateur, sans la carte. `firmware/tests_pc/main.cpp` appelle les mêmes tests que ceux que la carte rejoue au démarrage (`lancerTestsLogique`, dans `tests_logique.cpp`) : **109 tests**, tous réussis. Depuis la racine du dépôt, avec g++ (sous Linux, comme sur GitHub ; sous Windows il faut installer un compilateur g++, par exemple MinGW, ce qui n'a pas encore été essayé) :
+La logique du boîtier traduite en C++ (`firmware/tpms_boitier/src/logique/`) n'utilise que du C++ standard : on peut donc la compiler et la tester sur un ordinateur, sans la carte. `firmware/tests_pc/main.cpp` appelle les mêmes tests que ceux que la carte rejoue au démarrage (`lancerTestsLogique`, dans `tests_logique.cpp`) : **136 tests**, tous réussis. Depuis la racine du dépôt, avec g++ (sous Linux, comme sur GitHub ; sous Windows il faut installer un compilateur g++, par exemple MinGW, ce qui n'a pas encore été essayé) :
 
 ```
 g++ -std=c++11 -Wall -I firmware/tpms_boitier/src/logique firmware/tests_pc/main.cpp firmware/tpms_boitier/src/logique/*.cpp -o tests_pc -lm
@@ -383,8 +409,8 @@ Avant, la traduction C++ était seulement compilée (vérification de syntaxe) ;
 
 | Tâche | Ce qu'elle fait |
 |---|---|
-| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (589 tests, dont ceux du serveur) |
-| « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (109 tests) |
+| « Simulateur et logique JS » | Installe Node 24 et lance `node simulateur/tests/tout.js` (668 tests, dont ceux du serveur) |
+| « Logique C++ du firmware » | Compile les tests C++ avec g++ (C++11) et les exécute (136 tests) |
 
 Si un seul test échoue, le commit est marqué d'une croix rouge sur GitHub et le badge « Tests » du README passe au rouge. L'historique des exécutions, visible sur GitHub, montre que chaque version du dépôt a passé les tests.
 

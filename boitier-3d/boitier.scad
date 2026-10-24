@@ -189,7 +189,7 @@ reed_y      = -4.0;   // [CHOIX] sortie sur le flanc gauche
 reed_z      = 8.5;    // [CHOIX]
 // Plaquette des MOSFET : X, Y, circuit, composants. Elle porte Q1, Q2, D1,
 // D2, R1 à R8, C2, C3 et, depuis l'ajout de la coupure de la recharge,
-// U4 (TPS22918, SOT-23-6), Q3 (2N7002, SOT-23), R10, R11 (100 kΩ) et R12
+// U4 (TPS22918, SOT-23-6), Q3 (2N7002, SOT-23), R10 (100 kΩ), R11 (1 MΩ) et R12
 // (2,2 kΩ, échelle des boutons). Surface des pastilles ≈ 92 mm² ; pour
 // souder au fer, on prévoit au moins 2 fois cette surface (pistes, fils,
 // place de la panne) : 184 mm² > 12 x 14 = 168. Elle passe donc de 12 à

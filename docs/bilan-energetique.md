@@ -8,6 +8,8 @@ Toutes les valeurs de ce document viennent de `logique/energie.js`. Les chiffres
 
 Unités : courant en mA, charge en mAh (1 mAh = 3,6 C = 3 600 mA·s). Pour les événements brefs (rafraîchir l'écran, biper), on raisonne en **charge par événement**, en mA·s : courant × durée.
 
+**Mise à jour du 24/10/2026** (révision C du schéma électrique) : baromètre BMP280, écran sans fil BUSY et coupure de la recharge par grand froid. Le baromètre n'est **pas encore compté** dans `logique/energie.js` : c'est un poste à ajouter (§ 3.5). Conclusion : **l'autonomie annoncée ne change pas** (63,7 jours pour la journée type).
+
 ---
 
 ## 1. Consommations par état du boîtier
@@ -64,7 +66,9 @@ Calculé avec `TPMS.consoInstantaneeMa` :
 | Écoute radio par **fenêtres** : 3 s toutes les 5 s, à une position qui change d'une période à l'autre ; écoute continue de 15 s seulement quand une trame est douteuse | `ecouteFenetreMs`, `ecoutePeriodeMs` dans `TPMS.creerBoitier` ; `TPMS.boitierEcoute`, `TPMS.ECOUTE_RENFORCEE_MS` | La radio, premier poste de consommation, ne fonctionne que 60 % du temps éveillé |
 | Écran rafraîchi **au plus toutes les 2 s** en roulant, et **seulement si l'image change** | `periodeEcranMs` ; `TPMS.ecransDifferents` dans `TPMS.boitierMiseAJour` | Pas de rafraîchissement inutile ; à l'arrêt, l'écran ne consomme rien |
 | **Hystérésis** de 0,03 bar sur la pression affichée | `TPMS.HYSTERESIS_AFFICHAGE_BAR` | Le bruit du capteur (±0,01 bar) ne provoque pas de rafraîchissement |
-| **Veille** après 5 min sans tour de roue ni appui | `delaiVeilleMs` ; `TPMS.boitierMiseAJour` | Le boîtier passe à 5 µA ; réveil par la roue ou un bouton |
+| **Veille** après 5 min sans tour de roue ni appui | `delaiVeilleMs` ; `TPMS.boitierMiseAJour` | Le boîtier passe à 5 µA ; réveil par la roue, un bouton ou l'arrivée du 5 V du chargeur |
+| **Baromètre** lu toutes les 10 s seulement, boîtier éveillé | `TPMS.PERIODE_BAROMETRE_MS` | ≈ 0,4 µA en moyenne, 0,1 µA en veille (§ 3.5) |
+| **Pas d'écoute radio sur un chargeur bloqué** par le froid | `TPMS.boitierEcoute` (`surChargeur`) | 0,05 mA au lieu de 3 mA tant que la recharge est coupée (§ 4.7) |
 
 ---
 
@@ -115,6 +119,31 @@ Deux postes représentent à eux seuls 85 % de la consommation : **l'écoute rad
 La fenêtre de 2 s donnait 76,3 jours. Mais la fenêtre doit maintenant changer de position d'une période à l'autre (voir § 4.1), et avec 2 s à position variable, le pire délai d'alerte d'une crevaison montait à 34 s. On accepte donc de perdre 12,6 jours d'autonomie (1,167 mAh/jour de plus) parce que la fenêtre de 3 s, avec l'écoute renforcée, ramène ce pire délai à 9 s (mesures détaillées au § 6.5 de `analyse-de-risques.md`). Une fenêtre de 3 s dure au moins une période d'annonce d'un capteur en roulage (3 s) : chaque fenêtre entend donc forcément le capteur.
 
 L'écoute renforcée (15 s de radio continue après une trame douteuse) n'est pas comptée dans ce bilan : elle ne se déclenche que lors d'un événement rare (crevaison, regonflage, attaque). Une écoute renforcée coûte au plus 15 s × 5 mA × 40 % (part du temps où la radio aurait été coupée) = 30 mA·s ≈ 0,008 mAh, soit environ 0,1 % de la journée type.
+
+### 3.5 Baromètre BMP280 : poste à ajouter à `energie.js`
+
+Le baromètre ajouté le 24/10/2026 (U3, `schema-electrique.md` § 4.14) n'apparaît **pas** dans `TPMS.CONSO` ni dans `TPMS.bilanJournee` : il est seulement compté dans le circuit simulé (`TPMS.CIRCUIT.barometre`). Le code n'a pas été modifié ; il faudra y ajouter ce poste.
+
+| Grandeur | Valeur | Source |
+|---|---|---|
+| Sommeil (boîtier en veille, aucune mesure) | **0,1 µA** | fiche Bosch BMP280 |
+| Une mesure toutes les 10 s, boîtier éveillé | **≈ 0,4 µA en moyenne** | fiche Bosch : 2,74 µA pour une mesure par seconde, soit ≈ 0,27 µA pour une toutes les 10 s, plus le sommeil, arrondi par excès |
+
+Pour la journée type (22,833 h de veille, 1,1667 h d'éveil) : 22,833 h × 0,1 µA + 1,1667 h × 0,4 µA = **0,003 mAh par jour** (calcul exécuté avec Node.js), soit 0,04 % des 7,063 mAh/jour. L'autonomie passe de 63,72 à 63,69 jours : **elle reste de 63,7 jours**. Le circuit simulé, avec et sans le baromètre, donne la même autonomie au jour près ; seule la veille seule perd 12 jours sur environ 4 ans (1 478 jours au lieu de 1 490, `schema-electrique.md` § 4.12).
+
+### 3.6 Écran sans fil BUSY : l'attente fixe ne coûte presque rien
+
+Le fil BUSY de l'écran, qui signalait la fin d'un rafraîchissement, est supprimé pour libérer une broche (D0 sélectionne maintenant le baromètre). Le programme attend une durée fixe, plus longue que le vrai rafraîchissement : 2,5 s pour un complet et 0,6 s pour un partiel, × 1,5 sous 10 °C et × 2 sous 0 °C (`TPMS.attenteEcranMs`, **hypothèses** à mesurer à l'oscilloscope avant de couper le fil).
+
+Pendant cette attente (`delay()`), **le processeur dort** : il consomme comme « éveillé, radio coupée » (0,02 mA), et l'écran a fini son rafraîchissement bien avant la fin de l'attente. La charge réelle d'un rafraîchissement reste donc celle du § 1.2. Pour borner l'erreur, cas très pessimiste où l'écran tirerait 3 mA pendant **toute** l'attente (calcul exécuté avec `TPMS.bilanJournee` en remplaçant les charges par événement) :
+
+| Hypothèse | Poste écran (mAh/j) | Total (mAh/j) | Autonomie |
+|---|---|---|---|
+| **Modèle actuel** (0,5 s / 2 s à 3 mA) | **0,900** | **7,063** | **63,7 jours** |
+| 3 mA pendant toute l'attente, à 20 °C (0,6 s / 2,5 s) | 1,087 | 7,250 | 62,1 jours |
+| 3 mA pendant toute l'attente, sous 0 °C (1,2 s / 5 s) | 2,175 | 8,338 | 54,0 jours |
+
+Même dans ce cas pessimiste, l'exigence d'une semaine est largement tenue. Le vrai prix de l'attente fixe n'est pas l'énergie mais le temps : un rafraîchissement complet bloque `loop()` jusqu'à 2,5 s (5 s sous 0 °C) ; la LED et le buzzer gardent leur rythme grâce à leur tâche de fond.
 
 ---
 
@@ -192,6 +221,28 @@ Comparaison avec le modèle : la semaine simulée **ne comporte ni éclairage ni
 
 La semaine simulée confirme donc l'ordre de grandeur du modèle, sans vérifier le poste éclairage. Elle a surtout servi à révéler des défauts invisibles sur une seule sortie (verrouillage de phase de la fenêtre d'écoute, fausse fuite lente due au refroidissement du pneu, vélo garé qui dévalait la pente), tous corrigés.
 
+### 4.7 Boîtier sur son chargeur par grand froid
+
+Depuis le 24/10/2026, le boîtier coupe sa recharge hors de 2 à 43 °C (température lue par le BMP280, hystérésis de 3 °C : reprise à 5 °C). C'est une mesure de **sûreté** pour la LiPo, détaillée dans `schema-electrique.md` § 4.13. Côté énergie, deux conséquences :
+
+1. **Radio coupée.** Réveillé par le 5 V du chargeur, le boîtier n'est pas sur le vélo : tant que la recharge est coupée, il n'écoute plus les capteurs. Sinon, il tirerait sur sa batterie ≈ 3 mA en moyenne (3/5 × 5 mA + 0,02 mA, calcul avec `TPMS.CONSO`), soit 30 mAh pour une nuit de 10 h, alors qu'il ne peut pas se recharger. La roue ou un bouton rallument l'écoute.
+2. **Ce qui reste.** Radio coupée et recharge coupée, le circuit simulé donne **0,024 mA** sur la batterie : 0,020 mA du processeur éveillé, **3,3 µA dans R11** (3,3 V / 1 MΩ tant que D6 est à 1) et 0,4 µA de baromètre. `energie.js` donnerait 0,02 mA : R11 est un poste qu'il ne connaît pas. (Avec la première valeur de R11, 100 kΩ, c'était 0,054 mA : d'où le passage à 1 MΩ.) Les 50 µA de R10 sont pris sur le chargeur, pas sur la batterie.
+
+Avant chaque veille, la coupure est relâchée : le 5 V revient, réveille le boîtier, qui remesure et recoupe. Il en résulte un cycle toutes les 5 min avec une très courte impulsion de charge.
+
+Vérification par le simulateur (`simulateur/moteur.js`, météo « hiver_gel », départ à 6 h, option « recharge dehors », batterie à 50 %, calcul exécuté avec Node.js) :
+
+| Grandeur | Valeur |
+|---|---|
+| Température du boîtier après 90 min | −5,7 °C |
+| Recharge coupée | pendant les 90 min |
+| État de charge | 50,0 % → 50,1 % (+0,4 mAh) : la batterie reste stable |
+| Heure suivante (pas de 1 s) | 12 impulsions de 5 V d'environ 1 s, une toutes les 5 min ; +0,27 mAh |
+
+La batterie ne se vide donc pas sur un chargeur bloqué : les impulsions de charge compensent un peu plus que la consommation de 0,024 mA. Limite : ces impulsions ont lieu **au froid** (≈ 12 s par heure à 100 mA dans la simulation, dont le pas est de 1 s). Leur durée réelle (démarrage du programme et première mesure du baromètre) est à mesurer à la réception du matériel.
+
+Le même essai avec la recharge à la maison (19 °C) : coupée tant que le boîtier est froid, puis reprise après ≈ 11 min, et batterie rechargée (test « à la maison : reprise une fois réchauffé » de `moteur.tests.js`).
+
 ---
 
 ## 5. Piles CR1632 des capteurs
@@ -252,6 +303,7 @@ L'autonomie reste supérieure à une semaine, mais elle est **presque divisée p
 - Ne sont pas modélisés : l'autodécharge de la LiPo, le courant de repos du régulateur et du circuit de charge de la carte XIAO, un éventuel pont diviseur de mesure de la tension batterie, la consommation de l'écran au repos s'il n'est pas mis hors tension.
 - En roulant, le modèle suppose que l'écran change toutes les 2 s (hypothèse pessimiste).
 - Le modèle de journée ne compte pas le cas du reed resté fermé (traité à part au § 6), ni l'écoute renforcée (négligeable, § 3.4).
+- Postes du 24/10/2026 absents de `energie.js`, comptés seulement par le circuit simulé : le baromètre BMP280 (0,003 mAh/jour, § 3.5) et R11 pendant une coupure de recharge (3,3 µA, § 4.7). Ils ne changent pas l'autonomie annoncée.
 
 ---
 
@@ -308,6 +360,7 @@ Deux méthodes :
 | Rafraîchissement partiel / complet | 1,5 / 6 mA·s | Intégration (§ 8.3) |
 | Bip | 9 mA·s | Intégration, shunt 1 Ω |
 | LED d'éclairage | 10 mA | Shunt 1 Ω ou multimètre |
+| Boîtier sur un chargeur bloqué par le froid | 0,024 mA sur la batterie (circuit simulé, § 4.7) | Multimètre en série dans le fil de la batterie, boîtier sorti du réfrigérateur et branché |
 | Annonce d'un capteur TPMS | 0,025 mA·s | Difficile : la pile est dans le bouchon de valve. Possibilité à étudier : alimenter un capteur ouvert par une alimentation de laboratoire à travers un shunt |
 
 ### 8.5 Validation globale
