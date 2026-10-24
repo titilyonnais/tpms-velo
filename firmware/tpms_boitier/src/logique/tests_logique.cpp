@@ -11,6 +11,7 @@
 #include "boitier.h"
 #include "ecran.h"
 #include "outils.h"
+#include "boutons.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -404,7 +405,7 @@ static void testsProtocole() {
   verifier("MESURES : etat", o[8] == 4 && o[9] == 0);   // BASSE = 4, ATTENTE = 0 (CODES_ETAT)
   verifier("MESURES : vitesse et distance", lireUint16LE(o, 10) == 234 && lireInt32LE(o, 12) == 12345);
   verifier("MESURES : drapeaux", o[17] == 6);
-  verifier("MESURES : sequence", lireUint16LE(o, 18) == 65535);
+  verifier("MESURES : sequence sur 1 octet, pas de correction d'altitude", o[18] == 0xFF && o[19] == 0);
 
   creerBoitier(&bt);
   uint8_t octets[TAILLE_REGLAGES];
@@ -529,6 +530,65 @@ static void testsConfirmation() {
 }
 
 // ---------------------------------------------------------------------
+// Baromètre : correction d'altitude, recharge par grand froid, boutons
+// ---------------------------------------------------------------------
+static void testsBarometre() {
+  verifier("altitude : 846 hPa -> +0,167 bar", proche(correctionAltitudeBar(true, 846.0f), 0.16725f, 1e-5f));
+  verifier("altitude : mesure absente ou hors plage -> 0",
+           correctionAltitudeBar(false, 846.0f) == 0.0f && correctionAltitudeBar(true, 200.0f) == 0.0f);
+  verifier("altitude : pneu vide reste a 0", pressionCorrigeeBar(0.0f, 0.167f) == 0.0f);
+  verifier("recharge : 1 C -> FROID, 3 C -> permise",
+           blocageCharge(BLOCAGE_AUCUN, true, 1.0f) == BLOCAGE_FROID && blocageCharge(BLOCAGE_AUCUN, true, 3.0f) == BLOCAGE_AUCUN);
+  verifier("recharge : hysteresis (FROID garde a 4 C, permise a 5,5 C)",
+           blocageCharge(BLOCAGE_FROID, true, 4.0f) == BLOCAGE_FROID && blocageCharge(BLOCAGE_FROID, true, 5.5f) == BLOCAGE_AUCUN);
+  verifier("recharge : 44 C -> CHAUD ; sans mesure -> jamais coupee",
+           blocageCharge(BLOCAGE_AUCUN, true, 44.0f) == BLOCAGE_CHAUD && blocageCharge(BLOCAGE_FROID, false, 0.0f) == BLOCAGE_AUCUN);
+  verifier("ecran sans BUSY : attente plus longue au froid",
+           attenteEcranMs(true, true, 20.0f) == 2500 && attenteEcranMs(true, true, 5.0f) == 3750 &&
+           attenteEcranMs(false, true, -5.0f) == 1200 && attenteEcranMs(false, false, 0.0f) == 1200);
+
+  // Boîtier en altitude : affichage et alertes corrigés, historique du capteur.
+  creerBoitier(&bt);
+  boitierBarometre(&bt, true, 846.0f, 12.0f, 0);
+  uint8_t trame[TAILLE_TRAME];
+  fabriquerTrame(trame, 1, bt.reglages.appairage.adresse[POS_AV], 1.70f, 12.0f, 90);
+  boitierRecevoirTrame(&bt, trame, TAILLE_TRAME, 1000);
+  boitierMiseAJour(&bt, 2000);
+  verifier("altitude : pression affichee corrigee (1,70 -> 1,87 bar)",
+           proche(bt.roues[POS_AV].pressionAffichee, 1.86725f, 1e-3f));
+  verifier("altitude : pas d'alerte basse (1,87 reels > seuil 1,8)", bt.roues[POS_AV].etat == ETAT_OK);
+  liaisonDemandeCode(&bt, "123456", 2000);
+  liaisonSecurisee(&bt, 2000);
+  uint8_t mesures[TAILLE_MESURES];
+  liaisonMesures(&bt, 2000, mesures);
+  verifier("altitude : correction envoyee a l'app (octet 19 = 42 pas de 4 mbar)", mesures[19] == 42);
+  boitierBarometre(&bt, false, 0.0f, 0.0f, 12000);
+  verifier("barometre muet : plus de correction", bt.correctionBar == 0.0f && bt.baroEnPanne);
+
+  // Grand froid : D6 coupe la recharge, sauf en veille.
+  creerBoitier(&bt);
+  boitierBarometre(&bt, true, 1000.0f, -2.0f, 0);
+  verifier("grand froid : recharge coupee", boitierMiseAJour(&bt, 1000).coupureCharge);
+  Vue vue;
+  boitierVue(&bt, 1000, &vue);
+  verifier("grand froid : FROID a l'ecran", strcmp(vue.blocageCharge, "FROID") == 0);
+  boitierMiseAJour(&bt, bt.reglages.delaiVeilleMs + 2000);
+  verifier("grand froid : coupure relachee en veille",
+           bt.veille && !boitierMiseAJour(&bt, bt.reglages.delaiVeilleMs + 3000).coupureCharge);
+  boitierChargeurBranche(&bt, bt.reglages.delaiVeilleMs + 4000);
+  bt.reglages.ecouteFenetreMs = bt.reglages.ecoutePeriodeMs;   // écoute permanente, pour le test
+  verifier("grand froid : reveil par le 5 V, recoupe, radio coupee",
+           !bt.veille && boitierMiseAJour(&bt, bt.reglages.delaiVeilleMs + 5000).coupureCharge &&
+           !boitierEcoute(&bt, bt.reglages.delaiVeilleMs + 5000));
+
+  // Deux boutons sur D5 (tirage 11 à 16 kΩ, R12 = 2,2 kΩ).
+  verifier("boutons : aucun, SW1, SW2 (tirages extremes)",
+           boutonDepuisTension(3.3f, 3.3f) == 0 && boutonDepuisTension(0.02f, 3.3f) == 1 &&
+           boutonDepuisTension(3.3f * 2200.0f / 13200.0f, 3.3f) == 2 &&
+           boutonDepuisTension(3.3f * 2200.0f / 18200.0f, 3.3f) == 2);
+}
+
+// ---------------------------------------------------------------------
 static void testsEcran() {
   static Ecran e;
   creerEcran(&e);
@@ -563,6 +623,7 @@ int lancerTestsLogique(void (*afficher)(const char* ligne)) {
   testsProtocole();
   testsLiaison();
   testsConfirmation();
+  testsBarometre();
   testsEcran();
   char bilan[64];
   snprintf(bilan, sizeof(bilan), "%d reussis, %d en echec", reussis, rates);

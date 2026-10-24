@@ -77,6 +77,12 @@ TPMS.creerBoitier = function () {
     journalSecurise: TPMS.creerJournalSecurise(),   // journal chaîné (journal.js)
     batteriePct: 100,
     enCharge: false,
+    // Baromètre BMP280 (logique/barometre.js) : dernière mesure valable,
+    // correction d'altitude qui en découle, et blocage de la recharge.
+    barometre: { pressionHpa: null, temperatureC: null, enPanne: false },
+    correctionBar: 0,
+    blocageCharge: "",              // "", "FROID" ou "CHAUD"
+    surChargeur: false,             // réveillé par le 5 V du chargeur, pas encore repris en main
     bipDemande: false,
     ecran: TPMS.creerEcran(),         // image en préparation
     ecranAffiche: TPMS.creerEcran(),  // image réellement sur l'écran
@@ -161,6 +167,10 @@ TPMS.boitierJournalRefus = function (b, roue, maintenantMs, texte) {
 // simulation d'une semaine).
 TPMS.boitierEcoute = function (b, maintenantMs) {
   if (b.veille) return false;
+  // Posé sur un chargeur dont la recharge est coupée (grand froid) : le
+  // boîtier n'est pas sur le vélo, écouter les capteurs ne sert à rien
+  // et viderait la batterie (≈ 3 mA en écoute contre 0,02 mA sans).
+  if (b.surChargeur && b.blocageCharge !== "") return false;
   if (maintenantMs < b.ecouteContinueJusquaMs) return true;   // écoute renforcée
   var periode = b.reglages.ecoutePeriodeMs, fenetre = b.reglages.ecouteFenetreMs;
   if (fenetre >= periode) return true;
@@ -281,9 +291,13 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
   }
 
   roue.mesure = mesure;
+  // À l'écran : la pression « manomètre », corrigée de l'altitude.
+  // L'historique (fuite lente) garde celle du capteur, qui suit la
+  // quantité d'air sans dépendre de l'altitude.
+  var affichable = TPMS.pressionCorrigeeBar(mesure.pressionBar, b.correctionBar);
   if (roue.pressionAffichee === null ||
-      Math.abs(mesure.pressionBar - roue.pressionAffichee) >= TPMS.HYSTERESIS_AFFICHAGE_BAR) {
-    roue.pressionAffichee = mesure.pressionBar;
+      Math.abs(affichable - roue.pressionAffichee) >= TPMS.HYSTERESIS_AFFICHAGE_BAR) {
+    roue.pressionAffichee = affichable;
   }
   roue.dernierRecuMs = maintenantMs;
   roue.nbTrames++;
@@ -293,6 +307,45 @@ TPMS.boitierRecevoirTrame = function (b, octets, maintenantMs) {
   roue.penteBarH = TPMS.historiquePenteBarH(roue.historique);
   b.stats.tramesAcceptees++;
   return "acceptee";
+};
+
+// Une mesure du baromètre (toutes les 10 s quand le boîtier est éveillé).
+// mesure = { pressionHpa, temperatureC }, ou null si le BMP280 ne répond pas.
+TPMS.PERIODE_BAROMETRE_MS = 10000;
+
+TPMS.boitierBarometre = function (b, mesure, maintenantMs) {
+  var valable = mesure !== null &&
+    mesure.pressionHpa >= TPMS.BARO_MIN_HPA && mesure.pressionHpa <= TPMS.BARO_MAX_HPA;
+  if (!valable) {
+    // Sans baromètre, on revient au comportement de la carte seule :
+    // pas de correction, recharge jamais bloquée.
+    if (!b.barometre.enPanne) TPMS.boitierJournal(b, maintenantMs, "Baromètre muet ou hors plage : pas de correction d'altitude");
+    b.barometre = { pressionHpa: null, temperatureC: null, enPanne: true };
+    b.correctionBar = 0;
+  } else {
+    if (b.barometre.enPanne) TPMS.boitierJournal(b, maintenantMs, "Baromètre de nouveau disponible");
+    b.barometre = { pressionHpa: mesure.pressionHpa, temperatureC: mesure.temperatureC, enPanne: false };
+    b.correctionBar = TPMS.correctionAltitudeBar(mesure.pressionHpa);
+  }
+  var blocage = TPMS.blocageCharge(b.blocageCharge, b.barometre.temperatureC);
+  if (blocage !== b.blocageCharge) {
+    TPMS.boitierJournal(b, maintenantMs, blocage === ""
+      ? "Recharge de nouveau autorisée"
+      : "Recharge coupée : " + (blocage === "FROID" ? "trop froid" : "trop chaud") +
+        " (" + Math.round(b.barometre.temperatureC) + " °C dans le boîtier)");
+    b.blocageCharge = blocage;
+    b.ecranUrgent = true;
+  }
+};
+
+// Le 5 V du chargeur apparaît sur la carte (câble branché, ou coupure
+// relâchée avant la veille alors que le câble est toujours là) : le
+// nRF52840 se réveille tout seul (détection de VBUS) et refait ses
+// mesures. Voir la veille dans boitierMiseAJour.
+TPMS.boitierChargeurBranche = function (b, maintenantMs) {
+  b.dernierMouvementMs = maintenantMs;
+  b.surChargeur = true;
+  TPMS.boitierReveiller(b, maintenantMs, "chargeur branché");
 };
 
 TPMS.boitierReveiller = function (b, maintenantMs, raison) {
@@ -307,6 +360,7 @@ TPMS.boitierReveiller = function (b, maintenantMs, raison) {
 TPMS.boitierTopRoue = function (b, maintenantMs) {
   var accepte = TPMS.compteurTop(b.compteur, maintenantMs);
   if (accepte) {
+    b.surChargeur = false;   // la roue tourne : le boîtier est sur le vélo
     b.dernierMouvementMs = maintenantMs;
     TPMS.boitierReveiller(b, maintenantMs, "la roue tourne");
   }
@@ -322,6 +376,7 @@ TPMS.boitierTopRoue = function (b, maintenantMs) {
 // autre appui = annuler.
 // Seul un VRAI appui passe par ici ; l'app passe par boitierAction.
 TPMS.boitierBouton = function (b, numero, appuiLong, maintenantMs) {
+  b.surChargeur = false;   // quelqu'un s'en sert : on reprend l'écoute
   if (!b.veille && b.liaison.enAttente !== null) {
     b.dernierMouvementMs = maintenantMs;
     b.ecranUrgent = true;
@@ -370,6 +425,8 @@ TPMS.boitierVue = function (b, maintenantMs) {
     veille: b.veille,
     eclairage: b.eclairage && !b.veille,
     enCharge: b.enCharge,
+    blocageCharge: b.blocageCharge,
+    correctionBar: b.correctionBar,
     batterieBoitierPct: b.batteriePct,
     appConnectee: b.liaison.connecte,
     codeAppairage: b.liaison.code,
@@ -436,7 +493,7 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
       // délai de 60 s, fausses alertes « capteur perdu » (défaut révélé par
       // la semaine type, montée de la Croix-Rousse à 4 km/h).
       var enMouvement = TPMS.compteurVitesseKmh(b.compteur, maintenantMs) > TPMS.VITESSE_ROULAGE_SURE_KMH;
-      var etat = TPMS.evaluerRoue(roue, pos, b.reglages.seuils, maintenantMs, b.ecouteDepuisMs, enMouvement);
+      var etat = TPMS.evaluerRoue(roue, pos, b.reglages.seuils, maintenantMs, b.ecouteDepuisMs, enMouvement, b.correctionBar);
       if (etat !== roue.etat) {
         roue.etat = etat;
         roue.acquittee = false;
@@ -459,6 +516,11 @@ TPMS.boitierMiseAJour = function (b, maintenantMs) {
     ledsEclairage: b.eclairage && !b.veille,
     radio: TPMS.boitierEcoute(b, maintenantMs),
     appConnectee: b.liaison.connecte,
+    // Commande de la coupure de recharge (broche D6). Relâchée en veille :
+    // si le câble est encore branché, le 5 V revient et réveille le
+    // boîtier, qui remesure (sinon, branché au chaud pendant sa veille,
+    // il ne se rechargerait jamais).
+    coupureCharge: b.blocageCharge !== "" && !b.veille,
     rafraichissement: "aucun"
   };
   b.bipDemande = false;

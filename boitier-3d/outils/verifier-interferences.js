@@ -16,12 +16,17 @@
 //      exact, directement à partir du modèle). Résultat vide (« Current top
 //      level object is empty ») = aucune collision. Sinon, chaque fantôme
 //      est testé seul pour trouver le coupable ;
-//   3. même calcul entre les pièces imprimées deux à deux ;
+//   3. même calcul entre les pièces imprimées deux à deux, puis entre les
+//      composants deux à deux (ex. le BMP280 sous les corps des boutons),
+//      sauf les paires qui s'emboîtent exprès (vis dans son insert) ;
 //   4. épaisseur de paroi : la cavité de la coque « grossie » de 2 mm
 //      (minkowski avec une sphère) ne doit jamais sortir de l'enveloppe
 //      extérieure ; sinon une paroi fait moins de 2 mm.
 // Les composants posés sur une pièce sont dessinés à 0,01 mm de leur
 // appui : un contact franc n'est donc pas compté comme une collision.
+// « air_event » n'est pas un composant mais l'air de l'évent (dans le trou
+// et sur 12 mm sous le boîtier) : s'il touche une pièce, l'évent est bouché
+// ou masqué (par le collier, la bride, une cale).
 // Le script se termine avec le code 1 si un contrôle échoue.
 // =====================================================================
 "use strict";
@@ -40,6 +45,8 @@ const PARALLELE = Math.max(2, Math.min(6, os.cpus().length - 1));
 const pieces = ["coque", "couvercle", "collier", "bride", "cale_haut", "cale_bas"];
 const fantomes = ["ecran", "vitre", "xiao", "batterie", "buzzer", "boutons", "led_rouge", "led_blanches",
   "connecteur", "plaquette", "cable_reed", "joint", "vis_couvercle", "inserts", "vis_ecran",
+  "bmp280", "pastille_event",
+  "air_event",                  // volume de contrôle : l'air de l'évent (trou et dessous du boîtier)
   "cintre", "caoutchouc", "vis_collier", "ecrou_collier"];
 
 // ---------- outils ----------
@@ -94,6 +101,11 @@ function verdict(r) {
   return { ok: false, txt: "COLLISION " + b.vol.toFixed(3) + " mm3 de (" + b.min.map(function (x) { return x.toFixed(1); }) +
     ") à (" + b.max.map(function (x) { return x.toFixed(1); }) + ")" };
 }
+// Paires de composants qui s'emboîtent volontairement (non contrôlées)
+const emboites = [["vis_couvercle", "inserts"]];
+function emboite(a, b) {
+  return emboites.some(function (e) { return (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a); });
+}
 const fm = function (n) { return 'fantome_monte("' + n + '");'; };
 const pm = function (n) { return 'piece_montee("' + n + '");'; };
 
@@ -114,10 +126,16 @@ const pm = function (n) { return 'piece_montee("' + n + '");'; };
   const paires = [];
   for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++)
     if (seRecouvrent(bp[pieces[i]], bp[pieces[j]])) paires.push([pieces[i], pieces[j]]);
+  // composants deux à deux (l'air de l'évent compris : rien ne doit le boucher)
+  const pairesF = [];
+  for (let i = 0; i < fantomes.length; i++) for (let j = i + 1; j < fantomes.length; j++)
+    if (seRecouvrent(bf[fantomes[i]], bf[fantomes[j]]) && !emboite(fantomes[i], fantomes[j])) pairesF.push([fantomes[i], fantomes[j]]);
   const taches = groupes.map(function (g, k) {
     return function () { return lancer("intersection() {\n  " + pm(g.p) + "\n  union() { " + g.f.map(fm).join(" ") + " }\n}", "g_" + k + ".stl"); };
   }).concat(paires.map(function (c, k) {
     return function () { return lancer("intersection() {\n  " + pm(c[0]) + "\n  " + pm(c[1]) + "\n}", "pp_" + k + ".stl"); };
+  })).concat(pairesF.map(function (c, k) {
+    return function () { return lancer("intersection() {\n  " + fm(c[0]) + "\n  " + fm(c[1]) + "\n}", "ff_" + k + ".stl"); };
   })).concat([function () {
     return lancer("difference() {\n  intersection() { cavite_grossie(2.0); bloc(100, 100, 1, -5, z_rim - 0.6); }\n  enveloppe(0, z_rim);\n}", "paroi.stl");
   }]);
@@ -148,12 +166,18 @@ const pm = function (n) { return 'piece_montee("' + n + '");'; };
     if (!v.ok) echecs++;
     console.log("  " + (c[0] + " / " + c[1]).padEnd(24) + v.txt + "  [" + r.s.toFixed(0) + " s]");
   });
+  console.log("Composant / composant (" + emboites.map(function (e) { return e.join(" dans "); }).join(", ") + " : emboîtement voulu, non contrôlé)");
+  pairesF.forEach(function (c, k) {
+    const r = r2[groupes.length + paires.length + k], v = verdict(r);
+    if (!v.ok) echecs++;
+    console.log("  " + (c[0] + " / " + c[1]).padEnd(32) + v.txt + "  [" + r.s.toFixed(0) + " s]");
+  });
   const rp = r2[r2.length - 1], vp = verdict(rp);
   if (!vp.ok) echecs++;
   console.log("Épaisseur des parois de la coque ≥ 2 mm : " + (vp.ok ? "OK" : vp.txt.replace("COLLISION", "PAROI FINE")) + "  [" + rp.s.toFixed(0) + " s]");
   const seuls = fantomes.filter(function (f) { return !groupes.some(function (g) { return g.f.indexOf(f) >= 0; }); });
   if (seuls.length) console.log("(sans pièce à proximité : " + seuls.join(", ") + ")");
-  console.log("\n" + (groupes.length + paires.length + detail.length + 1) + " calculs en " + ((Date.now() - t0) / 1000).toFixed(0) + " s : " +
+  console.log("\n" + (groupes.length + paires.length + pairesF.length + detail.length + 1) + " calculs en " + ((Date.now() - t0) / 1000).toFixed(0) + " s : " +
     (echecs === 0 ? "aucune collision, parois ≥ 2 mm." : echecs + " problème(s)."));
   if (echecs > 0) process.exitCode = 1;
   else fs.rmSync(tmp, { recursive: true, force: true });

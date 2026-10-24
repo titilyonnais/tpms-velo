@@ -52,8 +52,11 @@ Envoyée par notification toutes les 5 s quand l'application est connectée. Con
 | 10-11 | Vitesse | uint16 | 0,1 km/h |
 | 12-15 | Distance du trajet | uint32 | mètres |
 | 16 | Batterie du boîtier | uint8 | % |
-| 17 | Drapeaux | bits | bit 0 : veille ; bit 1 : en charge ; bit 2 : éclairage allumé ; bit 3 : changement sensible en attente de confirmation sur le boîtier (§ 1.4) |
-| 18-19 | Numéro de séquence | uint16 | +1 à chaque notification, repart à 0 après 65 535 |
+| 17 | Drapeaux | bits | bit 0 : veille ; bit 1 : en charge ; bit 2 : éclairage allumé ; bit 3 : changement sensible en attente de confirmation sur le boîtier (§ 1.4) ; bit 4 : recharge coupée (trop froid ou trop chaud) |
+| 18 | Numéro de séquence | uint8 | +1 à chaque notification, repart à 0 après 255 |
+| 19 | Correction d'altitude | int8 | pas de 4 mbar (−0,512 à +0,508 bar) : déjà ajoutée aux pressions des octets 0 à 3 |
+
+**Pressions « manomètre » et correction d'altitude (depuis le 24/10/2026).** Les octets 0 à 3 donnent la pression qu'un manomètre lirait sur place : le boîtier y a ajouté la correction de son baromètre (`logique/barometre.js`). L'octet 19 rappelle cette correction. L'application la retire pour calculer la tendance de son historique : elle suit ainsi la quantité d'air du pneu, et un aller-retour en montagne (+0,17 bar à 1 500 m) ne ressemble plus à une fuite. Pour faire de la place, le numéro de séquence est passé de 2 octets à 1 : 255 notifications perdues de suite (21 min) restent détectables, ce qui suffit.
 
 Codes d'état (`TPMS.CODES_ETAT`) :
 
@@ -68,16 +71,16 @@ Codes d'état (`TPMS.CODES_ETAT`) :
 | 6 | FUITE | FUITE LENTE |
 | 7 | OK | OK |
 
-Le numéro de séquence permet à l'application de compter les notifications perdues : `app/app.js` calcule l'écart entre deux numéros successifs (modulo 65 536) et affiche le nombre de notifications perdues.
+Le numéro de séquence permet à l'application de compter les notifications perdues : `app/app.js` calcule l'écart entre deux numéros successifs (modulo 256) et affiche le nombre de notifications perdues.
 
 La taille de 20 octets correspond à la charge utile maximale d'une notification avec la taille de paquet ATT par défaut (MTU de 23 octets, moins 3 octets d'en-tête) : la caractéristique tient dans une seule notification sans négociation.
 
 #### Exemple 1 – en roulant, alerte « pression basse » à l'arrière
 
-Valeurs : AV 2,15 bar, 18 °C, pile 95 %, OK ; AR 1,85 bar, 17,6 °C, pile 94 %, BASSE ; 23,4 km/h ; 12,345 km ; batterie 87 % ; éclairage allumé ; séquence 42.
+Valeurs : AV 2,15 bar, 18 °C, pile 95 %, OK ; AR 1,85 bar, 17,6 °C, pile 94 %, BASSE ; 23,4 km/h ; 12,345 km ; batterie 87 % ; éclairage allumé ; séquence 42 ; correction d'altitude +0,08 bar (vers 700 m, col de la Luère).
 
 ```
-66 08 3A 07 12 12 5F 5E 07 04 EA 00 39 30 00 00 57 04 2A 00
+66 08 3A 07 12 12 5F 5E 07 04 EA 00 39 30 00 00 57 04 2A 14
 ```
 
 | Octets | Hexa | Valeur décodée |
@@ -94,14 +97,15 @@ Valeurs : AV 2,15 bar, 18 °C, pile 95 %, OK ; AR 1,85 bar, 17,6 °C, pile 94 %,
 | 12-15 | `39 30 00 00` | 0x3039 = 12 345 m → 12,345 km |
 | 16 | `57` | 87 % |
 | 17 | `04` | 0b100 : éclairage allumé, pas en veille, pas en charge |
-| 18-19 | `2A 00` | séquence 42 |
+| 18 | `2A` | séquence 42 |
+| 19 | `14` | 20 pas de 4 mbar → +0,08 bar (déjà compris dans les octets 0 à 3) |
 
 #### Exemple 2 – boîtier en veille et en charge, capteur avant jamais reçu, signal suspect à l'arrière
 
-Valeurs : AV inconnue, ATTENTE ; AR 2,3 bar, −4 °C, pile 80 %, INTRUSION ; vitesse et distance nulles ; batterie 100 % ; veille et en charge ; séquence 65 535.
+Valeurs : AV inconnue, ATTENTE ; AR 2,3 bar, −4 °C, pile 80 %, INTRUSION ; vitesse et distance nulles ; batterie 100 % ; veille, recharge coupée par le froid ; séquence 255 ; pas de correction d'altitude.
 
 ```
-FF FF FC 08 00 FC 00 50 00 01 00 00 00 00 00 00 64 03 FF FF
+FF FF FC 08 00 FC 00 50 00 01 00 00 00 00 00 00 64 11 FF 00
 ```
 
 | Octets | Hexa | Valeur décodée |
@@ -116,8 +120,9 @@ FF FF FC 08 00 FC 00 50 00 01 00 00 00 00 00 00 64 03 FF FF
 | 9 | `01` | INTRUSION |
 | 10-15 | `00 …` | 0 km/h, 0 m |
 | 16 | `64` | 100 % |
-| 17 | `03` | 0b011 : veille et en charge |
-| 18-19 | `FF FF` | séquence 65 535 (la suivante sera 0) |
+| 17 | `11` | 0b10001 : veille et recharge coupée |
+| 18 | `FF` | séquence 255 (la suivante sera 0) |
+| 19 | `00` | pas de correction d'altitude |
 
 ### 1.4 Caractéristique REGLAGES (23 octets)
 

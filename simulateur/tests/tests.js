@@ -16,6 +16,7 @@ if (typeof require !== "undefined") {
     "../../logique/protocole.js", "../../logique/energie.js",
     "../../logique/statistiques.js", "../../logique/conseil.js",
     "../../logique/sha256.js", "../../logique/journal.js", "../../logique/trame2.js",
+    "../../logique/barometre.js", "../../logique/boutons.js",
     "../boitier/police5x7.js", "../boitier/epaper.js",
     "../boitier/ecran.js", "../boitier/liaison.js", "../boitier/boitier.js",
     "../sources/pirate.js"
@@ -338,7 +339,8 @@ function proche(a, b, tolerance) {
     AV: { pressionBar: 2.15, temperatureC: -3, batteriePct: 80, etat: "BASSE" },
     AR: { pressionBar: null, etat: "ATTENTE" },
     vitesseKmh: 23.4, distanceKm: 12.345, batterieBoitierPct: 76,
-    veille: false, enCharge: true, eclairage: true, sequence: 65535
+    veille: false, enCharge: true, eclairage: true, sequence: 255,
+    chargeCoupee: true, correctionBar: 0.167
   };
   var o = TPMS.encoderMesures(mesures);
   var m = TPMS.decoderMesures(o);
@@ -350,7 +352,9 @@ function proche(a, b, tolerance) {
   verifier("MESURES : vitesse et distance", m.vitesseKmh === 23.4 && m.distanceKm === 12.345,
     m.vitesseKmh + " " + m.distanceKm);
   verifier("MESURES : drapeaux", !m.veille && m.enCharge && m.eclairage);
-  verifier("MESURES : séquence", m.sequence === 65535);
+  verifier("MESURES : séquence sur 1 octet", m.sequence === 255 && o[18] === 0xFF);
+  verifier("MESURES : recharge coupée (bit 4)", m.chargeCoupee === true && (o[17] & 16) !== 0);
+  verifier("MESURES : correction d'altitude en pas de 4 mbar", o[19] === 42 && proche(m.correctionBar, 0.168, 1e-9), o[19] + " " + m.correctionBar);
 
   var b = TPMS.creerBoitier();
   var r = TPMS.decoderReglages(TPMS.encoderReglages(b.reglages));
@@ -483,6 +487,82 @@ function proche(a, b, tolerance) {
   var textes = b.journal.map(function (l) { return l.texte; }).join(" | ");
   verifier("confirmation : demande et confirmation au journal",
     textes.indexOf("App demande : COUPER LISTE BLANCHE (à confirmer)") >= 0 && textes.indexOf("confirmé sur le boîtier") >= 0);
+})();
+
+// ---------------------------------------------------------------------
+// Baromètre : correction d'altitude, recharge par grand froid, écran
+// ---------------------------------------------------------------------
+(function () {
+  verifier("altitude : 846 hPa (1 500 m) → +0,167 bar", proche(TPMS.correctionAltitudeBar(846), 0.16725, 1e-9),
+    TPMS.correctionAltitudeBar(846));
+  verifier("altitude : 1013,25 hPa → aucune correction", TPMS.correctionAltitudeBar(1013.25) === 0);
+  verifier("altitude : baromètre absent ou hors plage → 0",
+    TPMS.correctionAltitudeBar(null) === 0 && TPMS.correctionAltitudeBar(200) === 0 && TPMS.correctionAltitudeBar(1200) === 0);
+  verifier("altitude : 2,00 bar du capteur → 2,17 bar au manomètre",
+    proche(TPMS.pressionCorrigeeBar(2.0, 0.16725), 2.16725, 1e-9));
+  verifier("altitude : pneu vide (0 bar au capteur) reste à 0", TPMS.pressionCorrigeeBar(0, 0.16725) === 0);
+
+  verifier("recharge : 1 °C → coupée (FROID)", TPMS.blocageCharge("", 1) === "FROID");
+  verifier("recharge : 3 °C → permise", TPMS.blocageCharge("", 3) === "");
+  verifier("recharge : coupée à froid, toujours coupée à 4 °C (hystérésis)", TPMS.blocageCharge("FROID", 4) === "FROID");
+  verifier("recharge : coupée à froid, permise à 5,5 °C", TPMS.blocageCharge("FROID", 5.5) === "");
+  verifier("recharge : 44 °C → coupée (CHAUD), permise sous 40 °C",
+    TPMS.blocageCharge("", 44) === "CHAUD" && TPMS.blocageCharge("CHAUD", 41) === "CHAUD" && TPMS.blocageCharge("CHAUD", 39) === "");
+  verifier("recharge : sans baromètre, jamais coupée", TPMS.blocageCharge("FROID", null) === "");
+
+  verifier("écran sans BUSY : attente plus longue au froid",
+    TPMS.attenteEcranMs("complet", 20) === 2500 && TPMS.attenteEcranMs("complet", 5) === 3750 &&
+    TPMS.attenteEcranMs("partiel", -5) === 1200 && TPMS.attenteEcranMs("partiel", null) === 1200);
+
+  // Boîtier en altitude : affichage et alertes « manomètre », historique « capteur ».
+  var b = TPMS.creerBoitier();
+  TPMS.boitierBarometre(b, { pressionHpa: 846, temperatureC: 12 }, 0);
+  var adresse = TPMS.adresseDepuisTexte(b.reglages.appairage.AV);
+  var trame = TPMS.encoderTrame({ numero: 1, adresse: adresse, pressionBar: 1.70, temperatureC: 12, batteriePct: 90, alarme: 0 });
+  TPMS.boitierRecevoirTrame(b, trame, 1000);
+  TPMS.boitierMiseAJour(b, 2000);
+  verifier("altitude : pression affichée corrigée (1,70 → 1,87 bar)", proche(b.roues.AV.pressionAffichee, 1.86725, 1e-6),
+    b.roues.AV.pressionAffichee);
+  verifier("altitude : 1,70 au capteur mais 1,87 réels → pas d'alerte basse (seuil 1,8)", b.roues.AV.etat === "OK", b.roues.AV.etat);
+  verifier("altitude : l'historique garde la pression du capteur",
+    proche(b.roues.AV.historique.pression[0], TPMS.pressionCompenseeBar(1.70, 12), 1e-9));
+  TPMS.liaisonConnexion(b, 2000);
+  TPMS.liaisonSaisirCode(b, b.liaison.code, 2000);
+  var notif = TPMS.decoderMesures(TPMS.liaisonMesures(b, 2000));
+  verifier("altitude : pression corrigée et correction envoyées à l'app",
+    proche(notif.AV.pressionBar, 1.867, 1e-9) && proche(notif.correctionBar, 0.168, 1e-9),
+    notif.AV.pressionBar + " " + notif.correctionBar);
+
+  TPMS.boitierBarometre(b, null, 12000);
+  verifier("baromètre muet : plus de correction, noté au journal", b.correctionBar === 0 &&
+    b.journal.some(function (l) { return l.texte.indexOf("Baromètre muet") === 0; }));
+
+  // Recharge par grand froid : la sortie D6 coupe, sauf en veille.
+  var c = TPMS.creerBoitier();
+  TPMS.boitierBarometre(c, { pressionHpa: 1000, temperatureC: -2 }, 0);
+  verifier("grand froid : recharge coupée", c.blocageCharge === "FROID" && TPMS.boitierMiseAJour(c, 1000).coupureCharge === true);
+  verifier("grand froid : FROID affiché près de la batterie", TPMS.boitierVue(c, 1000).blocageCharge === "FROID");
+  TPMS.boitierMiseAJour(c, c.reglages.delaiVeilleMs + 2000);
+  verifier("grand froid : coupure relâchée en veille (le 5 V réveillera le boîtier)",
+    c.veille === true && TPMS.boitierMiseAJour(c, c.reglages.delaiVeilleMs + 3000).coupureCharge === false);
+  TPMS.boitierChargeurBranche(c, c.reglages.delaiVeilleMs + 4000);
+  verifier("grand froid : le 5 V réveille le boîtier, qui recoupe", c.veille === false &&
+    TPMS.boitierMiseAJour(c, c.reglages.delaiVeilleMs + 5000).coupureCharge === true);
+  c.reglages.ecouteFenetreMs = c.reglages.ecoutePeriodeMs;   // écoute permanente, pour le test
+  var tC = c.reglages.delaiVeilleMs + 6000;
+  verifier("grand froid sur son chargeur : radio coupée (inutile, et coûteuse)", TPMS.boitierEcoute(c, tC) === false);
+  TPMS.boitierBouton(c, 1, false, tC);
+  verifier("grand froid : un appui sur un bouton rallume l'écoute", TPMS.boitierEcoute(c, tC) === true);
+
+  // Deux boutons sur une broche (D5, tirage interne 11 à 16 kΩ, R12 = 2,2 kΩ).
+  function tensionSW2(tirage) { return 3.3 * 2200 / (2200 + tirage); }
+  verifier("boutons : aucun appui (3,3 V)", TPMS.boutonDepuisTension(3.3, 3.3) === 0);
+  verifier("boutons : SW1 (0 V)", TPMS.boutonDepuisTension(0.02, 3.3) === 1);
+  verifier("boutons : SW2 reconnu quel que soit le tirage (11 et 16 kΩ)",
+    TPMS.boutonDepuisTension(tensionSW2(11000), 3.3) === 2 && TPMS.boutonDepuisTension(tensionSW2(16000), 3.3) === 2);
+  verifier("boutons : SW2 sous le seuil de réveil (30 % de VDD)", tensionSW2(11000) / 3.3 < 0.3, tensionSW2(11000) / 3.3);
+  verifier("boutons : batterie basse (VDD 3,0 V), SW2 toujours reconnu",
+    TPMS.boutonDepuisTension(3.0 * 2200 / (2200 + 13000), 3.0) === 2);
 })();
 
 // ---------------------------------------------------------------------

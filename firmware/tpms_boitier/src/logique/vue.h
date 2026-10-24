@@ -38,6 +38,8 @@ struct Vue {
   bool radioSaturee;      // inondation d'annonces détectée
   char codeAppairage[7];  // "" = pas de code (en JS : null)
   uint8_t confirmation;   // changement sensible à confirmer (SENSIBLE_...), 0 = rien
+  const char* blocageCharge;   // "", "FROID" ou "CHAUD" (recharge coupée)
+  float correctionBar;    // correction d'altitude (barometre.h)
   VueRoue roues[NB_ROUES];
   float vitesseKmh;
   float distanceKm;

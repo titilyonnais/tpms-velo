@@ -9,10 +9,11 @@ var chemin = require("path");
   "../../logique/alertes.js", "../../logique/securite.js", "../../logique/protocole.js",
   "../../logique/energie.js", "../../logique/statistiques.js", "../../logique/conseil.js",
   "../../logique/sha256.js", "../../logique/journal.js", "../../logique/trame2.js",
+  "../../logique/barometre.js", "../../logique/boutons.js",
   "../boitier/police5x7.js", "../boitier/epaper.js", "../boitier/ecran.js",
   "../boitier/liaison.js", "../boitier/boitier.js",
   "../monde/alea.js", "../monde/atmosphere.js", "../monde/pneu.js", "../monde/capteur.js",
-  "../monde/parcours.js", "../monde/velo.js", "../monde/radio.js", "../monde/lipo.js",
+  "../monde/parcours.js", "../monde/velo.js", "../monde/radio.js", "../monde/lipo.js", "../monde/barometre.js",
   "../monde/circuit.js", "../sources/pirate.js", "../sources/mouchards.js", "../moteur.js"
 ].forEach(function (f) { require(chemin.join(__dirname, f)); });
 
@@ -161,6 +162,43 @@ verifier("pirate : la fausse crevaison n'est pas acceptée",
     else verifier("pistage : capteurs v2 → aucune adresse vue sur plus d'un trajet", maxTrajets <= 1 && analyse.length > 8, maxTrajets + " trajets, " + analyse.length + " adresses");
     if (v2) verifier("pistage : capteurs v2 → le boîtier reconnaît toujours ses capteurs", a.boitier.stats.tramesAcceptees > 100 && a.boitier.roues.AV.etat !== "PERDU", a.boitier.stats.tramesAcceptees);
   });
+})();
+
+// 8 bis. Baromètre : avec évent, il voit l'altitude ; sans évent, non.
+(function () {
+  var options = { graine: 3, pressionAirPa: 101325, temperatureC: 15 };
+  var avec = TPMS.creerBarometre(Object.assign({ mode: "evente" }, options));
+  var sans = TPMS.creerBarometre(Object.assign({ mode: "sans-event" }, options));
+  for (var s = 0; s < 60; s++) {   // montée éclair à 1 500 m (84 600 Pa), même température
+    TPMS.barometreAvancer(avec, 1, 84600, 15);
+    TPMS.barometreAvancer(sans, 1, 84600, 15);
+  }
+  var mAvec = TPMS.barometreMesurer(avec, 15), mSans = TPMS.barometreMesurer(sans, 15);
+  verifier("baromètre avec évent : 846 hPa mesurés à 1 hPa près", Math.abs(mAvec.pressionHpa - 846) < 1.1, mAvec.pressionHpa.toFixed(2));
+  verifier("baromètre sans évent : l'air piégé reste à 1013 hPa (altitude invisible)",
+    Math.abs(mSans.pressionHpa - 1013.25) < 1.1, mSans.pressionHpa.toFixed(2));
+  verifier("baromètre absent : aucune mesure", TPMS.barometreMesurer(TPMS.creerBarometre(Object.assign({ mode: "aucun" }, options)), 15) === null);
+})();
+
+// 8 ter. Recharge par grand froid : coupée dehors, reprise à la maison.
+(function () {
+  function rechargeHiver(dehors) {
+    var a = TPMS.creerMonde(options({ meteo: "hiver_gel", heureDepartH: 6, rechargeDehors: dehors }));
+    a.lipo.etatCharge = 0.5;
+    TPMS.mondeAction(a, { type: "recharge", branche: true });
+    var coupeeAuDebut = false;
+    for (var minute = 0; minute < 90; minute++) {
+      TPMS.mondeAvancer(a, 60000);
+      if (minute === 2) coupeeAuDebut = a.boitier.blocageCharge === "FROID";
+    }
+    return { a: a, coupeeAuDebut: coupeeAuDebut };
+  }
+  var dehors = rechargeHiver(true), maison = rechargeHiver(false);
+  verifier("grand froid dehors : recharge coupée (FROID)", dehors.a.boitier.blocageCharge === "FROID", dehors.a.temperatureBoitierC.toFixed(1) + " °C");
+  verifier("grand froid dehors : la batterie ne se recharge pas", dehors.a.lipo.etatCharge < 0.505, dehors.a.lipo.etatCharge.toFixed(3));
+  verifier("à la maison : coupée tant que le boîtier est froid", maison.coupeeAuDebut);
+  verifier("à la maison : reprise une fois réchauffé, batterie rechargée", maison.a.boitier.blocageCharge === "" &&
+    maison.a.lipo.etatCharge > 0.6, maison.a.lipo.etatCharge.toFixed(3));
 })();
 
 // 9. Semaine type : 10 trajets + 2 sorties de week-end + 1 recharge,

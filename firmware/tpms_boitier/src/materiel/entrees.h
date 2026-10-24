@@ -20,9 +20,10 @@ void entreesDemarrer();
 //   - lit les boutons (anti-rebond, appui court / appui long).
 void entreesTraiter(Boitier* b, int32_t maintenantMs);
 
-// Les deux boutons sont-ils enfoncés en ce moment ? (utilisé au
-// démarrage pour « oublier les téléphones appairés »)
-bool entreesDeuxBoutonsAppuyes();
+// Au démarrage : le bouton 1 est-il tenu 5 s (OUBLI_APPUI_MS) ? C'est le
+// geste pour « oublier les téléphones appairés » (avant de prêter ou de
+// vendre le vélo). Attend tant que le bouton reste enfoncé.
+bool entreesOubliDemande();
 
 // Juste avant le System OFF : règle les broches qui réveilleront la
 // carte (reed et boutons). Voir veille.cpp.

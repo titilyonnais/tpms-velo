@@ -4,27 +4,34 @@
 // Carte : Seeed XIAO nRF52840 (cœur Arduino « Seeed nRF52 Boards »,
 // basé sur Adafruit nRF52 / Bluefruit — PAS la version « mbed »).
 //
-// Le XIAO n'a que 11 broches D0 à D10. Il en faut 13 :
-//   e-paper (SCK, MOSI, CS, DC, RST, BUSY) = 6, reed = 1, boutons = 2,
-//   buzzer = 1, LED d'alerte = 1, LED d'éclairage = 1 (les 2 LED sur un
-//   seul transistor), + D9 (MISO) réservée par le bus SPI.
-// Solution retenue : les 2 plots NFC sous la carte (P0.09 et P0.10)
-// deviennent des sorties ordinaires (voir sorties.cpp). On y met le
-// buzzer et l'éclairage : deux sorties « tout ou rien » qui sont à 0 au
-// repos (pas de courant de fuite entre les deux plots, voir README).
+// Le XIAO n'a que 11 broches D0 à D10. Il en faudrait 15 :
+//   e-paper (SCK, MOSI, CS, DC, RST, BUSY) = 6, baromètre (CS, MISO) = 2,
+//   reed = 1, boutons = 2, coupure de recharge = 1, buzzer = 1,
+//   LED d'alerte = 1, LED d'éclairage = 1 (les 2 LED sur un seul transistor).
+// Solutions retenues :
+//   - les 2 plots NFC sous la carte (P0.09 et P0.10) deviennent des
+//     sorties ordinaires (voir sorties.cpp) : buzzer et éclairage, deux
+//     sorties « tout ou rien » à 0 au repos (voir README) ;
+//   - le baromètre BMP280 partage le bus SPI de l'écran ; sa sortie SDO
+//     arrive sur D9 (MISO), qui était réservée mais inutilisée ;
+//   - le fil BUSY de l'écran est supprimé : le programme attend une
+//     durée fixe, plus longue par temps froid (logique/barometre.h).
+//     D0 sélectionne alors le baromètre ;
+//   - les 2 boutons partagent D5, lue en analogique (logique/boutons.h) :
+//     D6 commande la coupure de la recharge par grand froid.
 //
 //   Broche XIAO   GPIO nRF   Rôle
-//   D0            P0.02      e-paper BUSY  (entrée)
+//   D0            P0.02      CSB du baromètre BMP280 (sortie, 1 au repos)
 //   D1            P0.03      e-paper RST
 //   D2            P0.28      e-paper DC
 //   D3            P0.29      e-paper CS
 //   D4            P0.04      reed (interrupteur de roue) → GND
-//   D5            P0.05      bouton 1 → GND
-//   D6            P1.11      bouton 2 → GND
+//   D5            P0.05      boutons : SW1 → GND, SW2 → 2,2 kΩ → GND (AIN3)
+//   D6            P1.11      coupure de recharge : 1 = Q3 passant, U4 coupé
 //   D7            P1.12      LED d'alerte rouge (+ 270 Ω)
-//   D8            P1.13      SPI SCK  → e-paper CLK
-//   D9            P1.14      SPI MISO (non câblée, réservée par le SPI)
-//   D10           P1.15      SPI MOSI → e-paper DIN
+//   D8            P1.13      SPI SCK  → e-paper CLK et BMP280 SCL
+//   D9            P1.14      SPI MISO ← BMP280 SDO
+//   D10           P1.15      SPI MOSI → e-paper DIN et BMP280 SDA
 //   plot NFC1     P0.09      buzzer (via transistor MOSFET)
 //   plot NFC2     P0.10      2 LED d'éclairage (via transistor MOSFET)
 //   (interne)     P0.14      active le pont diviseur de la batterie (à 0)
@@ -40,15 +47,17 @@
 // ---------------------------------------------------------------------
 // Broches « Arduino » (numéros D0 à D10 du XIAO)
 // ---------------------------------------------------------------------
-#define BROCHE_EPD_BUSY    0    // D0
+#define BROCHE_BARO_CS     0    // D0 (était le BUSY de l'écran)
+#define BROCHE_EPD_BUSY    -1   // non câblée : GxEPD2 attend une durée fixe
 #define BROCHE_EPD_RST     1    // D1
 #define BROCHE_EPD_DC      2    // D2
 #define BROCHE_EPD_CS      3    // D3
 #define BROCHE_REED        4    // D4
-#define BROCHE_BOUTON1     5    // D5
-#define BROCHE_BOUTON2     6    // D6
+#define BROCHE_BOUTONS     5    // D5 = A5 (AIN3) : les deux boutons
+#define BROCHE_COUPURE_CHARGE 6 // D6 : commande de Q3 (R11 la tire à 0)
 #define BROCHE_LED_ALERTE  7    // D7
-// D8 (SCK), D9 (MISO) et D10 (MOSI) : bus SPI par défaut du XIAO.
+// D8 (SCK), D9 (MISO) et D10 (MOSI) : bus SPI par défaut du XIAO,
+// partagé par l'écran et le baromètre (chacun a sa broche CS).
 
 // ---------------------------------------------------------------------
 // Broches pilotées directement par leur numéro nRF (port × 32 + n°),
@@ -72,12 +81,17 @@
 const int32_t PERIODE_BOUCLE_MS = 10;       // loop() tourne toutes les 10 ms
 const int32_t PERIODE_MAJ_MS = 1000;        // boitierMiseAJour une fois par seconde
 const int32_t PERIODE_BATTERIE_MS = 30000;  // mesure de la batterie toutes les 30 s
+// Baromètre : PERIODE_BAROMETRE_MS (10 s) dans logique/boitier.h.
 
 // ---------------------------------------------------------------------
 // Boutons
 // ---------------------------------------------------------------------
 const int32_t APPUI_LONG_MS = 700;          // au-delà : appui long
 const int32_t ANTI_REBOND_BOUTON_MS = 30;   // un appui doit durer 30 ms pour compter
+// Oublier les téléphones appairés : bouton 1 maintenu 5 s au démarrage.
+// (Avant le 24/10/2026 : les deux boutons ensemble. Sur une seule broche,
+// « les deux » se lit comme « bouton 1 » : le geste a changé.)
+const int32_t OUBLI_APPUI_MS = 5000;
 
 // ---------------------------------------------------------------------
 // Reed (interrupteur de roue)

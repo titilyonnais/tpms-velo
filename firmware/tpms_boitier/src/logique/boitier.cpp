@@ -6,6 +6,7 @@
 // =====================================================================
 #include "boitier.h"
 #include "ecran.h"
+#include "outils.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -73,6 +74,13 @@ void creerBoitier(Boitier* b) {
   b->secondesCalmes = 0;
   b->radioSaturee = false;
   creerJournalSecurise(&b->journalSecurise);
+  b->baroConnu = false;
+  b->baroEnPanne = false;
+  b->baroPressionHpa = 0.0f;
+  b->baroTemperatureC = 0.0f;
+  b->correctionBar = 0.0f;
+  b->blocageCharge = BLOCAGE_AUCUN;
+  b->surChargeur = false;
 }
 
 void boitierJournal(Boitier* b, int32_t maintenantMs, const char* texte) {
@@ -138,6 +146,9 @@ static uint32_t melangerEntier(uint32_t x) {
 // 60 s (multiple de la période), révélé par la simulation.
 bool boitierEcoute(const Boitier* b, int32_t maintenantMs) {
   if (b->veille) return false;
+  // Posé sur un chargeur dont la recharge est coupée (grand froid) : le
+  // boîtier n'est pas sur le vélo, écouter les capteurs viderait la batterie.
+  if (b->surChargeur && b->blocageCharge != BLOCAGE_AUCUN) return false;
   if (maintenantMs < b->ecouteContinueJusquaMs) return true;   // écoute renforcée
   int32_t periode = b->reglages.ecoutePeriodeMs, fenetre = b->reglages.ecouteFenetreMs;
   if (fenetre >= periode) return true;
@@ -264,9 +275,12 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
 
   roue->mesure = mesure;
   roue->aMesure = true;
+  // À l'écran : la pression « manomètre », corrigée de l'altitude.
+  // L'historique (fuite lente) garde celle du capteur.
+  float affichable = pressionCorrigeeBar(mesure.pressionBar, b->correctionBar);
   if (!roue->pressionAfficheeConnue ||
-      fabsf(mesure.pressionBar - roue->pressionAffichee) >= HYSTERESIS_AFFICHAGE_BAR) {
-    roue->pressionAffichee = mesure.pressionBar;
+      fabsf(affichable - roue->pressionAffichee) >= HYSTERESIS_AFFICHAGE_BAR) {
+    roue->pressionAffichee = affichable;
     roue->pressionAfficheeConnue = true;
   }
   roue->dernierRecuMs = maintenantMs;
@@ -277,6 +291,44 @@ Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, i
   roue->penteBarH = historiquePenteBarH(&roue->historique);
   b->stats.tramesAcceptees++;
   return RESULTAT_ACCEPTEE;
+}
+
+void boitierBarometre(Boitier* b, bool mesureOk, float pressionHpa, float temperatureC, int32_t maintenantMs) {
+  bool valable = mesureOk && pressionHpa >= BARO_MIN_HPA && pressionHpa <= BARO_MAX_HPA;
+  if (!valable) {
+    // Sans baromètre : comportement de la carte seule (pas de correction,
+    // recharge jamais coupée).
+    if (!b->baroEnPanne) boitierJournal(b, maintenantMs, "Baromètre muet ou hors plage : pas de correction d'altitude");
+    b->baroEnPanne = true;
+    b->baroConnu = false;
+    b->correctionBar = 0.0f;
+  } else {
+    if (b->baroEnPanne) boitierJournal(b, maintenantMs, "Baromètre de nouveau disponible");
+    b->baroEnPanne = false;
+    b->baroConnu = true;
+    b->baroPressionHpa = pressionHpa;
+    b->baroTemperatureC = temperatureC;
+    b->correctionBar = correctionAltitudeBar(true, pressionHpa);
+  }
+  BlocageCharge blocage = blocageCharge(b->blocageCharge, b->baroConnu, b->baroTemperatureC);
+  if (blocage != b->blocageCharge) {
+    char texte[80];
+    if (blocage == BLOCAGE_AUCUN) {
+      snprintf(texte, sizeof(texte), "Recharge de nouveau autorisée");
+    } else {
+      snprintf(texte, sizeof(texte), "Recharge coupée : %s (%ld °C dans le boîtier)",
+               blocage == BLOCAGE_FROID ? "trop froid" : "trop chaud", (long)arrondi(b->baroTemperatureC));
+    }
+    boitierJournal(b, maintenantMs, texte);
+    b->blocageCharge = blocage;
+    b->ecranUrgent = true;
+  }
+}
+
+void boitierChargeurBranche(Boitier* b, int32_t maintenantMs) {
+  b->dernierMouvementMs = maintenantMs;
+  b->surChargeur = true;
+  boitierReveiller(b, maintenantMs, "chargeur branché");
 }
 
 void boitierReveiller(Boitier* b, int32_t maintenantMs, const char* raison) {
@@ -292,6 +344,7 @@ void boitierReveiller(Boitier* b, int32_t maintenantMs, const char* raison) {
 bool boitierTopRoue(Boitier* b, int32_t maintenantMs) {
   bool accepte = compteurTop(&b->compteur, maintenantMs);
   if (accepte) {
+    b->surChargeur = false;   // la roue tourne : le boîtier est sur le vélo
     b->dernierMouvementMs = maintenantMs;
     boitierReveiller(b, maintenantMs, "la roue tourne");
   }
@@ -299,6 +352,7 @@ bool boitierTopRoue(Boitier* b, int32_t maintenantMs) {
 }
 
 void boitierBouton(Boitier* b, int numero, bool appuiLong, int32_t maintenantMs) {
+  b->surChargeur = false;   // quelqu'un s'en sert : on reprend l'écoute
   if (!b->veille && b->liaison.enAttente) {
     b->dernierMouvementMs = maintenantMs;
     b->ecranUrgent = true;
@@ -352,6 +406,8 @@ void boitierVue(const Boitier* b, int32_t maintenantMs, Vue* vue) {
   vue->radioSaturee = b->radioSaturee;
   strcpy(vue->codeAppairage, b->liaison.code);
   vue->confirmation = b->liaison.enAttente ? b->liaison.masqueAttente : 0;
+  vue->blocageCharge = texteBlocage(b->blocageCharge);
+  vue->correctionBar = b->correctionBar;
   vueRoue(&b->roues[POS_AV], b->reglages.seuils.roue[POS_AV].basBar, &vue->roues[POS_AV]);
   vueRoue(&b->roues[POS_AR], b->reglages.seuils.roue[POS_AR].basBar, &vue->roues[POS_AR]);
   vue->vitesseKmh = b->veille ? 0.0f : compteurVitesseKmh(c, maintenantMs);
@@ -412,7 +468,7 @@ Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
       // pas sentir la rotation et n'émettre qu'une fois par minute
       // (défaut révélé par la semaine type du simulateur).
       bool enMouvement = compteurVitesseKmh(&b->compteur, maintenantMs) > VITESSE_ROULAGE_SURE_KMH;
-      Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs, enMouvement);
+      Etat etat = evaluerRoue(roue, pos, &b->reglages.seuils, maintenantMs, b->ecouteDepuisMs, enMouvement, b->correctionBar);
       if (etat != roue->etat) {
         roue->etat = etat;
         roue->acquittee = false;
@@ -436,6 +492,7 @@ Sorties boitierMiseAJour(Boitier* b, int32_t maintenantMs) {
   sorties.ledsEclairage = b->eclairage && !b->veille;
   sorties.radio = boitierEcoute(b, maintenantMs);
   sorties.appConnectee = b->liaison.connecte;
+  sorties.coupureCharge = b->blocageCharge != BLOCAGE_AUCUN && !b->veille;
   sorties.rafraichissement = RAFRAICHISSEMENT_AUCUN;
   b->bipDemande = false;
   if (b->veille) sorties.ledAlerte = LED_ETEINTE;

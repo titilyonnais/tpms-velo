@@ -91,8 +91,9 @@ void encoderMesures(const MesuresApp* m, uint8_t* o) {
   ecrireInt32LE(o, 12, arrondi(m->distanceKm * 1000.0f));
   o[16] = (uint8_t)arrondi(m->batterieBoitierPct);
   o[17] = (m->veille ? 1 : 0) | (m->enCharge ? 2 : 0) | (m->eclairage ? 4 : 0) |
-          (m->attenteConfirmation ? 8 : 0);
-  ecrireUint16LE(o, 18, m->sequence);
+          (m->attenteConfirmation ? 8 : 0) | (m->chargeCoupee ? 16 : 0);
+  o[18] = (uint8_t)(m->sequence & 0xFF);
+  o[19] = versInt8(m->correctionBar * 250.0f);   // 1 pas = 4 mbar = 0,004 bar
 }
 
 // ---------------------------------------------------------------------

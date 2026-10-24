@@ -6,8 +6,9 @@
 <text x="40" y="80" class="sch-note" text-anchor="start">Kit TPMS vélo · câblage de firmware/tpms_boitier/config.h · symboles IEC · détails : docs/schema-electrique.md</text>
 <text x="40" y="112" class="sch-note" text-anchor="start">Déjà sur la carte XIAO : chargeur LiPo BQ25101 (USB-C et broche 5V), régulateur 3,3 V,</text>
 <text x="40" y="127" class="sch-note" text-anchor="start">pont de mesure de la batterie 1 MΩ / 510 kΩ (P0.31, activé par P0.14 à 0), LED de charge.</text>
-<text x="40" y="142" class="sch-note" text-anchor="start">D4, D5, D6 : tirage (pull-up) interne ≈ 13 kΩ vers 3V3. D7 en sortie forte (high drive).</text>
+<text x="40" y="142" class="sch-note" text-anchor="start">D4, D5 : tirage (pull-up) interne ≈ 13 kΩ vers 3V3 ; SW1 et SW2 partagent D5 (lue en analogique). D7 en sortie forte.</text>
 <text x="40" y="157" class="sch-note" text-anchor="start">NFC1/NFC2 deviennent des GPIO au premier démarrage (UICR.NFCPINS) ; tous deux à 0 au repos.</text>
+<text x="40" y="172" class="sch-note" text-anchor="start">Fil BUSY de l'écran supprimé (attente fixe) : D0 sélectionne le baromètre U3. D6 coupe la recharge (U4) par grand froid.</text>
 <text id="mesure-resume" x="1450" y="52" class="sch-resume" text-anchor="end"></text>
 <text id="alertes" class="sch-alertes" x="1450" y="72" text-anchor="end"></text>
 <g id="comp-U1" class="sch-composant">
@@ -17,7 +18,7 @@
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="560,240 530,240"/>
 <text x="570" y="244" class="sch-broche" text-anchor="start">D0</text>
 <text x="606" y="244" class="sch-broche sch-discret" text-anchor="start">P0.02</text>
-<polyline class="sch-fil sch-conducteur" data-courant="D2" points="810,240 780,240"/>
+<polyline class="sch-fil sch-conducteur" data-courant="U1.5V" points="810,240 780,240"/>
 <text x="770" y="244" class="sch-broche" text-anchor="end">5V</text>
 <text x="728" y="244" class="sch-broche sch-discret" text-anchor="end">VBUS</text>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="560,290 530,290"/>
@@ -40,16 +41,16 @@
 <polyline class="sch-fil sch-conducteur" data-courant="S1" points="560,440 530,440"/>
 <text x="570" y="444" class="sch-broche" text-anchor="start">D4</text>
 <text x="606" y="444" class="sch-broche sch-discret" text-anchor="start">P0.04</text>
-<polyline class="sch-fil" points="780,440 810,440"/>
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="780,440 810,440"/>
 <text x="770" y="444" class="sch-broche" text-anchor="end">D9</text>
 <text x="728" y="444" class="sch-broche sch-discret" text-anchor="end">P1.14</text>
-<polyline class="sch-fil sch-conducteur" data-courant="SW1" points="560,490 530,490"/>
+<polyline class="sch-fil sch-conducteur" data-courant="D5" points="560,490 530,490"/>
 <text x="570" y="494" class="sch-broche" text-anchor="start">D5</text>
 <text x="606" y="494" class="sch-broche sch-discret" text-anchor="start">P0.05</text>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="780,490 810,490"/>
 <text x="770" y="494" class="sch-broche" text-anchor="end">D8</text>
 <text x="728" y="494" class="sch-broche sch-discret" text-anchor="end">P1.13</text>
-<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="560,540 530,540"/>
+<polyline class="sch-fil sch-conducteur" data-courant="R11" points="560,540 530,540"/>
 <text x="570" y="544" class="sch-broche" text-anchor="start">D6</text>
 <text x="606" y="544" class="sch-broche sch-discret" text-anchor="start">P1.11</text>
 <polyline class="sch-fil sch-conducteur" data-courant="LED1" points="780,540 810,540"/>
@@ -97,14 +98,20 @@
 <text x="200" y="394" class="sch-broche" text-anchor="start">SCL</text>
 <text id="val-U2" x="270" y="318" class="sch-mesure" text-anchor="middle"></text>
 </g>
+<polyline class="sch-fil" points="350,240 366,240"/>
+<polyline class="sch-croix" points="360,234 372,246"/>
+<polyline class="sch-croix" points="360,246 372,234"/>
+<text x="376" y="232" class="sch-note" text-anchor="start">NC</text>
 <g id="fil-spi" data-signal="spi">
-<polyline class="sch-fil sch-conducteur" data-signal="spi" points="350,240 530,240"/>
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="530,240 442,240"/>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="530,290 350,290"/>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="530,340 350,340"/>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="530,390 350,390"/>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="165,340 190,340"/>
 <polyline class="sch-fil sch-conducteur" data-signal="spi" points="165,390 190,390"/>
 </g>
+<polygon class="sch-etiquette" points="442,240 434,231 405.8,231 405.8,249 434,249"/>
+<text x="419.9" y="244" class="sch-net" text-anchor="middle">CSB</text>
 <polygon class="sch-etiquette" points="165,340 157,331 121.4,331 121.4,349 157,349"/>
 <text x="139.2" y="344" class="sch-net" text-anchor="middle">MOSI</text>
 <polygon class="sch-etiquette" points="165,390 157,381 128.8,381 128.8,399 157,399"/>
@@ -160,8 +167,12 @@
 <text id="val-J2" x="318" y="466" class="sch-mesure" text-anchor="start"></text>
 <text id="val-R8" x="450" y="479" class="sch-mesure" text-anchor="middle"></text>
 <text id="tension-J2" x="360" y="434" class="sch-mesure sch-tension" text-anchor="middle"></text>
+<g id="fil-boutons" data-courant="D5">
+<polyline class="sch-fil sch-conducteur" data-courant="D5" points="530,490 470,490"/>
+</g>
+<circle class="sch-noeud" cx="470" cy="490" r="3.2"/>
 <g id="fil-sw1" data-courant="SW1">
-<polyline class="sch-fil sch-conducteur" data-courant="SW1" points="530,490 370,490 370,600"/>
+<polyline class="sch-fil sch-conducteur" data-courant="SW1" points="470,490 370,490 370,600"/>
 <g id="comp-SW1" class="sch-composant">
 <polyline class="sch-fil sch-conducteur" data-courant="SW1" points="370,600 370,616"/>
 <polyline class="sch-fil sch-conducteur" data-courant="SW1" points="370,644 370,660"/>
@@ -182,61 +193,141 @@
 <polyline class="sch-armature" points="367,698 373,698"/>
 </g>
 <g id="fil-sw2" data-courant="SW2">
-<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="530,540 490,540 490,600"/>
+<g id="comp-R12" class="sch-composant">
+<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="470,490 470,520"/>
+<rect x="463" y="520" width="14" height="40" class="sch-corps"/>
+<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="470,560 470,590"/>
+<text x="457" y="537" class="sch-ref" text-anchor="end">R12</text>
+<text x="457" y="552" class="sch-val" text-anchor="end">2,2 kΩ</text>
+</g>
 <g id="comp-SW2" class="sch-composant">
-<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="490,600 490,616"/>
-<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="490,644 490,660"/>
-<circle class="sch-borne" cx="490" cy="616" r="2.6"/>
-<circle class="sch-borne" cx="490" cy="644" r="2.6"/>
+<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="470,590 470,606"/>
+<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="470,634 470,650"/>
+<circle class="sch-borne" cx="470" cy="606" r="2.6"/>
+<circle class="sch-borne" cx="470" cy="634" r="2.6"/>
 <g class="sch-poussoir">
-<polyline class="sch-armature" points="480,614 480,646"/>
-<polyline class="sch-fil-symbole" points="480,630 470,630"/>
-<polyline class="sch-armature" points="470,622 470,638"/>
+<polyline class="sch-armature" points="460,604 460,636"/>
+<polyline class="sch-fil-symbole" points="460,620 450,620"/>
+<polyline class="sch-armature" points="450,612 450,628"/>
 </g>
-<text x="504" y="627" class="sch-ref" text-anchor="start">SW2</text>
-<text x="504" y="642" class="sch-val" text-anchor="start">bouton 2</text>
+<text x="484" y="617" class="sch-ref" text-anchor="start">SW2</text>
+<text x="484" y="632" class="sch-val" text-anchor="start">bouton 2</text>
 </g>
-<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="490,660 490,680"/>
-<polyline class="sch-fil" points="490,680 490,690"/>
-<polyline class="sch-armature" points="479,690 501,690"/>
-<polyline class="sch-armature" points="483,694 497,694"/>
-<polyline class="sch-armature" points="487,698 493,698"/>
+<polyline class="sch-fil sch-conducteur" data-courant="SW2" points="470,650 470,670"/>
+<polyline class="sch-fil" points="470,670 470,680"/>
+<polyline class="sch-armature" points="459,680 481,680"/>
+<polyline class="sch-armature" points="463,684 477,684"/>
+<polyline class="sch-armature" points="467,688 473,688"/>
 </g>
 <text id="val-SW1" x="384" y="657" class="sch-mesure" text-anchor="start"></text>
-<text id="val-SW2" x="504" y="657" class="sch-mesure" text-anchor="start"></text>
+<text id="val-SW2" x="484" y="647" class="sch-mesure" text-anchor="start"></text>
+<text id="val-R12" x="457" y="572" class="sch-mesure" text-anchor="end"></text>
+<polyline class="sch-fil" points="530,540 518,540"/>
+<polygon class="sch-etiquette" points="518,540 510,531 489.2,531 489.2,549 510,549"/>
+<text x="499.6" y="544" class="sch-net" text-anchor="middle">D6</text>
 <g id="fil-recharge" data-courant="D2">
-<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1100,240 1000,240"/>
+<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1300,240 1260,240"/>
 <g id="comp-D2" class="sch-composant">
-<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1000,240 969,240"/>
-<polygon class="sch-corps sch-triangle" points="969,230 969,250 951,240"/>
-<polyline class="sch-armature" points="947,226 951,226 951,254 955,254"/>
-<polyline class="sch-fil sch-conducteur" data-courant="D2" points="951,240 920,240"/>
-<text x="960" y="218" class="sch-ref" text-anchor="middle">D2</text>
-<text x="960" y="270" class="sch-val" text-anchor="middle">SS14 Schottky</text>
+<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1260,240 1229,240"/>
+<polygon class="sch-corps sch-triangle" points="1229,230 1229,250 1211,240"/>
+<polyline class="sch-armature" points="1207,226 1211,226 1211,254 1215,254"/>
+<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1211,240 1180,240"/>
+<text x="1220" y="218" class="sch-ref" text-anchor="middle">D2</text>
+<text x="1220" y="270" class="sch-val" text-anchor="middle">SS14 Schottky</text>
 </g>
-<polyline class="sch-fil sch-conducteur" data-courant="D2" points="920,240 810,240"/>
+<polyline class="sch-fil sch-conducteur" data-courant="D2" points="1180,240 1120,240"/>
 </g>
+<circle class="sch-noeud" cx="1150" cy="240" r="3.2"/>
+<g id="comp-U4" class="sch-composant">
+<rect x="1040" y="214" width="80" height="56" class="sch-corps sch-circuit"/>
+<text x="1040" y="204" class="sch-ref" text-anchor="start">U4</text>
+<text x="1064" y="204" class="sch-val" text-anchor="start">TPS22918</text>
+<text x="1114" y="244" class="sch-broche" text-anchor="end">IN</text>
+<text x="1046" y="244" class="sch-broche" text-anchor="start">OUT</text>
+<text x="1080" y="264" class="sch-broche" text-anchor="middle">EN</text>
+</g>
+<g id="fil-vbus-xiao" data-courant="U1.5V">
+<polyline class="sch-fil sch-conducteur" data-courant="U1.5V" points="1040,240 810,240"/>
+</g>
+<g id="fil-tirage-en" data-courant="R10">
+<g id="comp-R10" class="sch-composant">
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1150,240 1150,272.5"/>
+<rect x="1143" y="272.5" width="14" height="40" class="sch-corps"/>
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1150,312.5 1150,345"/>
+<text x="1163" y="289.5" class="sch-ref" text-anchor="start">R10</text>
+<text x="1163" y="304.5" class="sch-val" text-anchor="start">100 kΩ</text>
+</g>
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1150,345 1080,345"/>
+</g>
+<circle class="sch-noeud" cx="1080" cy="345" r="3.2"/>
+<polyline class="sch-fil" points="1080,270 1080,345"/>
+<g id="fil-coupure" data-courant="R10">
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1080,345 1080,390"/>
+<g id="comp-Q3" class="sch-composant">
+<circle class="sch-contour" cx="1065" cy="430" r="27"/>
+<polyline class="sch-fil" points="1030,430 1052,430"/>
+<polyline class="sch-armature" points="1052,414 1052,446"/>
+<polyline class="sch-armature" points="1059,412 1059,422"/>
+<polyline class="sch-armature" points="1059,425 1059,435"/>
+<polyline class="sch-armature" points="1059,438 1059,448"/>
+<polyline class="sch-canal" points="1059,412 1059,448"/>
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1080,390 1080,417 1059,417"/>
+<polyline class="sch-fil sch-conducteur" data-courant="R10" points="1059,443 1080,443 1080,470"/>
+<polyline class="sch-fil" points="1059,430 1080,430 1080,443"/>
+<polygon class="sch-noeud" points="1060,430 1069,425 1069,435"/>
+<text x="1098" y="427" class="sch-ref" text-anchor="start">Q3</text>
+<text x="1098" y="442" class="sch-val" text-anchor="start">2N7002</text>
+</g>
+<polyline class="sch-fil" points="1080,470 1080,480"/>
+<polyline class="sch-armature" points="1069,480 1091,480"/>
+<polyline class="sch-armature" points="1073,484 1087,484"/>
+<polyline class="sch-armature" points="1077,488 1083,488"/>
+</g>
+<g id="fil-grille-q3" data-courant="R11">
+<polyline class="sch-fil sch-conducteur" data-courant="R11" points="990,430 1030,430"/>
+<g id="comp-R11" class="sch-composant">
+<polyline class="sch-fil sch-conducteur" data-courant="R11" points="1005,430 1005,441"/>
+<rect x="998" y="441" width="14" height="40" class="sch-corps"/>
+<polyline class="sch-fil sch-conducteur" data-courant="R11" points="1005,481 1005,492"/>
+<text x="992" y="458" class="sch-ref" text-anchor="end">R11</text>
+<text x="992" y="473" class="sch-val" text-anchor="end">100 kΩ</text>
+</g>
+<polyline class="sch-fil" points="1005,492 1005,502"/>
+<polyline class="sch-armature" points="994,502 1016,502"/>
+<polyline class="sch-armature" points="998,506 1012,506"/>
+<polyline class="sch-armature" points="1002,510 1008,510"/>
+</g>
+<circle class="sch-noeud" cx="1005" cy="430" r="3.2"/>
+<polygon class="sch-etiquette" points="990,430 982,421 961.2,421 961.2,439 982,439"/>
+<text x="971.6" y="434" class="sch-net" text-anchor="middle">D6</text>
 <g id="comp-J1" class="sch-composant">
-<rect x="1100" y="220" width="40" height="90" class="sch-corps sch-circuit"/>
-<circle class="sch-borne" cx="1100" cy="240" r="4"/>
-<circle class="sch-borne" cx="1100" cy="290" r="4"/>
-<text x="1120" y="244" class="sch-broche" text-anchor="middle">1</text>
-<text x="1120" y="294" class="sch-broche" text-anchor="middle">2</text>
-<text x="1152" y="236" class="sch-ref" text-anchor="start">J1</text>
-<text x="1152" y="252" class="sch-val" text-anchor="start">connecteur</text>
-<text x="1152" y="267" class="sch-val" text-anchor="start">magnétique</text>
-<text x="1152" y="282" class="sch-val" text-anchor="start">recharge 5 V</text>
+<rect x="1300" y="220" width="40" height="90" class="sch-corps sch-circuit"/>
+<circle class="sch-borne" cx="1300" cy="240" r="4"/>
+<circle class="sch-borne" cx="1300" cy="290" r="4"/>
+<text x="1320" y="244" class="sch-broche" text-anchor="middle">1</text>
+<text x="1320" y="294" class="sch-broche" text-anchor="middle">2</text>
+<text x="1352" y="236" class="sch-ref" text-anchor="start">J1</text>
+<text x="1352" y="252" class="sch-val" text-anchor="start">connecteur</text>
+<text x="1352" y="267" class="sch-val" text-anchor="start">magnétique</text>
+<text x="1352" y="282" class="sch-val" text-anchor="start">recharge 5 V</text>
 </g>
 <g id="fil-recharge-retour" data-courant="J1">
-<polyline class="sch-fil" points="1060,300 1060,310"/>
-<polyline class="sch-armature" points="1049,310 1071,310"/>
-<polyline class="sch-armature" points="1053,314 1067,314"/>
-<polyline class="sch-armature" points="1057,318 1063,318"/>
-<polyline class="sch-fil sch-conducteur" data-courant="J1" points="1060,300 1060,290 1100,290"/>
+<polyline class="sch-fil" points="1260,300 1260,310"/>
+<polyline class="sch-armature" points="1249,310 1271,310"/>
+<polyline class="sch-armature" points="1253,314 1267,314"/>
+<polyline class="sch-armature" points="1257,318 1263,318"/>
+<polyline class="sch-fil sch-conducteur" data-courant="J1" points="1260,300 1260,290 1300,290"/>
 </g>
-<text id="tension-V5EXT" x="1050" y="234" class="sch-mesure sch-tension" text-anchor="middle"></text>
-<text id="val-D2" x="960" y="286" class="sch-mesure" text-anchor="middle"></text>
-<text id="val-J1" x="1152" y="300" class="sch-mesure" text-anchor="start"></text>
+<text id="tension-V5EXT" x="1280" y="234" class="sch-mesure sch-tension" text-anchor="middle"></text>
+<text id="tension-V5D" x="1150" y="234" class="sch-mesure sch-tension" text-anchor="middle"></text>
+<text id="tension-EN4" x="1074" y="335" class="sch-mesure sch-tension" text-anchor="end"></text>
+<text id="tension-G3" x="1026" y="420" class="sch-mesure sch-tension" text-anchor="end"></text>
+<text id="val-D2" x="1220" y="286" class="sch-mesure" text-anchor="middle"></text>
+<text id="val-J1" x="1352" y="300" class="sch-mesure" text-anchor="start"></text>
+<text id="val-U4" x="1080" y="290" class="sch-mesure" text-anchor="middle"></text>
+<text id="val-R10" x="1163" y="316" class="sch-mesure" text-anchor="start"></text>
+<text id="val-Q3" x="1098" y="458" class="sch-mesure" text-anchor="start"></text>
+<text id="val-R11" x="992" y="470" class="sch-mesure" text-anchor="end"></text>
 <polyline class="sch-fil" points="810,290 850,290"/>
 <polyline class="sch-fil" points="850,290 850,300"/>
 <polyline class="sch-armature" points="839,300 861,300"/>
@@ -263,9 +354,8 @@
 <text id="val-C3" x="978" y="395" class="sch-mesure" text-anchor="start"></text>
 <polygon class="sch-etiquette" points="810,390 818,381 853.6,381 853.6,399 818,399"/>
 <text x="835.8" y="394" class="sch-net" text-anchor="middle">MOSI</text>
-<polyline class="sch-croix" points="804,434 816,446"/>
-<polyline class="sch-croix" points="804,446 816,434"/>
-<text x="824" y="444" class="sch-note" text-anchor="start">NC · MISO réservée au SPI</text>
+<polygon class="sch-etiquette" points="810,440 818,431 853.6,431 853.6,449 818,449"/>
+<text x="835.8" y="444" class="sch-net" text-anchor="middle">MISO</text>
 <polygon class="sch-etiquette" points="810,490 818,481 846.2,481 846.2,499 818,499"/>
 <text x="832.1" y="494" class="sch-net" text-anchor="middle">SCK</text>
 <g id="fil-led1" data-courant="LED1">
@@ -544,6 +634,43 @@
 <text id="val-LED2" x="1228" y="600" class="sch-mesure" text-anchor="end"></text>
 <text id="val-LED3" x="1386" y="617" class="sch-mesure" text-anchor="start"></text>
 <text id="val-Q2" x="1288" y="707" class="sch-mesure" text-anchor="start"></text>
+<g id="comp-U3" class="sch-composant">
+<rect x="470" y="856" width="140" height="150" class="sch-corps sch-circuit"/>
+<text x="470" y="844" class="sch-ref" text-anchor="start">U3</text>
+<text x="496" y="844" class="sch-val" text-anchor="start">baromètre BMP280 (SPI)</text>
+<text x="480" y="884" class="sch-broche" text-anchor="start">VCC</text>
+<text x="480" y="919" class="sch-broche" text-anchor="start">GND</text>
+<text x="480" y="954" class="sch-broche" text-anchor="start">SCL</text>
+<text x="480" y="989" class="sch-broche" text-anchor="start">SDA</text>
+<text x="600" y="884" class="sch-broche" text-anchor="end">CSB</text>
+<text x="600" y="919" class="sch-broche" text-anchor="end">SDO</text>
+<text x="600" y="989" class="sch-broche sch-discret" text-anchor="end">sous l'évent</text>
+<text id="val-U3" x="600" y="954" class="sch-mesure" text-anchor="end"></text>
+</g>
+<g id="fil-barometre-vcc" data-courant="U3">
+<polyline class="sch-fil sch-conducteur" data-courant="U3" points="440,880 470,880"/>
+<polyline class="sch-fil sch-conducteur" data-courant="U3" points="470,915 445,915"/>
+<polyline class="sch-fil" points="445,915 445,925"/>
+<polyline class="sch-armature" points="434,925 456,925"/>
+<polyline class="sch-armature" points="438,929 452,929"/>
+<polyline class="sch-armature" points="442,933 448,933"/>
+</g>
+<polygon class="sch-etiquette" points="440,880 432,871 396.4,871 396.4,889 432,889"/>
+<text x="414.2" y="884" class="sch-net" text-anchor="middle">+3V3</text>
+<g id="fil-spi-barometre" data-signal="spi">
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="440,950 470,950"/>
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="440,985 470,985"/>
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="650,880 610,880"/>
+<polyline class="sch-fil sch-conducteur" data-signal="spi" points="610,915 650,915"/>
+</g>
+<polygon class="sch-etiquette" points="440,950 432,941 403.8,941 403.8,959 432,959"/>
+<text x="417.9" y="954" class="sch-net" text-anchor="middle">SCK</text>
+<polygon class="sch-etiquette" points="440,985 432,976 396.4,976 396.4,994 432,994"/>
+<text x="414.2" y="989" class="sch-net" text-anchor="middle">MOSI</text>
+<polygon class="sch-etiquette" points="650,880 658,871 686.2,871 686.2,889 658,889"/>
+<text x="672.1" y="884" class="sch-net" text-anchor="middle">CSB</text>
+<polygon class="sch-etiquette" points="650,915 658,906 693.6,906 693.6,924 658,924"/>
+<text x="675.8" y="919" class="sch-net" text-anchor="middle">MISO</text>
 <rect x="40" y="836" width="300" height="180" class="sch-encadre"/>
 <text x="52" y="858" class="sch-ref" text-anchor="start">Option reed (non montée par défaut)</text>
 <g id="fil-option-reed" data-courant="R9">
@@ -585,7 +712,7 @@
 <text x="1022" y="950" class="sch-ref" text-anchor="start">Boîtier de guidon TPMS-01</text>
 <text x="1022" y="986" class="sch-val" text-anchor="start">BTS CIEL IR · épreuve E6</text>
 <text x="1022" y="1008" class="sch-val" text-anchor="start">Thibault MORRETTON</text>
-<text x="1332" y="950" class="sch-ref" text-anchor="start">RÉV. B</text>
-<text x="1332" y="986" class="sch-val" text-anchor="start">22/10/2026</text>
+<text x="1332" y="950" class="sch-ref" text-anchor="start">RÉV. C</text>
+<text x="1332" y="986" class="sch-val" text-anchor="start">24/10/2026</text>
 <text x="1332" y="1008" class="sch-val" text-anchor="start">feuille 1/1</text>
 </svg>

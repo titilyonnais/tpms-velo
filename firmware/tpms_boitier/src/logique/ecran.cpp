@@ -33,7 +33,7 @@ void dessinerEcran(Ecran* e, const Vue* vue) {
     ecranTexte(e, 34, 3, "ECLAIRAGE", 1, NOIR);
   }
   if (vue->appConnectee) ecranTexte(e, 94, 3, "APP", 1, NOIR);
-  dessinerBatterie(e, vue->batterieBoitierPct, vue->enCharge);
+  dessinerBatterie(e, vue->batterieBoitierPct, vue->enCharge, vue->blocageCharge);
   ecranLigneH(e, 0, 14, 200, NOIR);
 
   // ---- Les deux roues ----
@@ -80,9 +80,11 @@ void dessinerCodeAppairage(Ecran* e, const char* code) {
   ecranTexteCentre(e, 100, 126, "A SAISIR SUR LE TELEPHONE", 1, NOIR);
 }
 
-void dessinerBatterie(Ecran* e, float pct, bool enCharge) {
-  char texte[16];
-  snprintf(texte, sizeof(texte), "%s%ld%%", enCharge ? "CHG " : "", (long)arrondi(pct));
+void dessinerBatterie(Ecran* e, float pct, bool enCharge, const char* blocage) {
+  char texte[20];
+  // Recharge coupée : "FROID 87%" ; en charge : "CHG 87%".
+  const char* prefixe = (blocage != 0 && blocage[0] != '\0') ? blocage : (enCharge ? "CHG" : "");
+  snprintf(texte, sizeof(texte), "%s%s%ld%%", prefixe, prefixe[0] != '\0' ? " " : "", (long)arrondi(pct));
   ecranTexteDroite(e, 172, 3, texte, 1, NOIR);
   ecranCadre(e, 176, 3, 18, 9, NOIR);
   ecranRectPlein(e, 194, 5, 2, 5, NOIR);              // le "téton" de la pile

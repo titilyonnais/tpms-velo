@@ -210,6 +210,19 @@
                 </select>
               </label>
               <p class="avertissement" id="cfgAvertissement" hidden></p>
+              <label><span>Baromètre du boîtier</span>
+                <select id="cfgBarometre">
+                  <option value="evente" selected>BMP280 derrière un évent (corrige l'altitude)</option>
+                  <option value="sans-event">BMP280 sans évent (air piégé : ne voit pas l'altitude)</option>
+                  <option value="aucun">Aucun (pas de correction ni de coupure de recharge)</option>
+                </select>
+              </label>
+              <label><span>Recharge du boîtier</span>
+                <select id="cfgRecharge">
+                  <option value="maison" selected>À la maison (19 °C)</option>
+                  <option value="dehors">Dehors, à l'air (voir la coupure par grand froid)</option>
+                </select>
+              </label>
               <label><span>Vélos équipés autour</span><input type="number" id="cfgVoisins" min="0" max="20" step="1" value="2"></label>
               <label><span>Graine du hasard</span><input type="number" id="cfgGraine" min="0" step="1" value="2026"></label>
             </div>
@@ -504,6 +517,8 @@
 <script src="../logique/sha256.js"></script>
 <script src="../logique/journal.js"></script>
 <script src="../logique/trame2.js"></script>
+<script src="../logique/barometre.js"></script>
+<script src="../logique/boutons.js"></script>
 <!-- Boîtier simulé -->
 <script src="boitier/police5x7.js"></script>
 <script src="boitier/epaper.js"></script>
@@ -519,6 +534,7 @@
 <script src="monde/velo.js"></script>
 <script src="monde/radio.js"></script>
 <script src="monde/lipo.js"></script>
+<script src="monde/barometre.js"></script>
 <script src="monde/circuit.js"></script>
 <script src="sources/pirate.js"></script>
 <script src="sources/mouchards.js"></script>

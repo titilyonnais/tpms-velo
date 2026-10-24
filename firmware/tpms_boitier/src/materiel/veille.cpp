@@ -33,7 +33,8 @@
 #include <bluefruit.h>
 #include <stdio.h>
 
-bool veilleRaisonDemarrage(char* texte) {
+bool veilleRaisonDemarrage(char* texte, bool* parChargeur) {
+  *parChargeur = false;
   // Registre RESETREAS : un bit par cause de démarrage. Il se lit AVANT
   // Bluefruit.begin(), car ensuite la pile radio en interdit l'accès direct.
   // À VÉRIFIER : le cœur Arduino ne l'a-t-il pas déjà effacé au démarrage ?
@@ -41,6 +42,13 @@ bool veilleRaisonDemarrage(char* texte) {
   uint32_t raison = NRF_POWER->RESETREAS;
   NRF_POWER->RESETREAS = raison;   // on efface en écrivant des 1
 
+  // Réveil par le 5 V du chargeur (détection de VBUS) : branché, ou
+  // coupure de recharge relâchée avant la veille alors qu'il est toujours là.
+  if (raison & POWER_RESETREAS_VBUS_Msk) {
+    *parChargeur = true;
+    snprintf(texte, 48, "Réveil (chargeur branché)");
+    return true;
+  }
   if ((raison & POWER_RESETREAS_OFF_Msk) == 0) {
     snprintf(texte, 48, "Démarrage (code 0x%08lX)", (unsigned long)raison);
     return false;
@@ -50,12 +58,10 @@ bool veilleRaisonDemarrage(char* texte) {
   // quelles broches ont déclenché le réveil.
   // À VÉRIFIER : LATCH est-il conservé à travers le réveil ?
   uint32_t reed = gpioDepuisArduino(BROCHE_REED);
-  uint32_t b1 = gpioDepuisArduino(BROCHE_BOUTON1);
-  uint32_t b2 = gpioDepuisArduino(BROCHE_BOUTON2);
+  uint32_t bt = gpioDepuisArduino(BROCHE_BOUTONS);
   const char* source = "broche inconnue";
   if (gpioPort(reed)->LATCH & (1UL << gpioNumero(reed))) source = "la roue tourne";
-  else if (gpioPort(b1)->LATCH & (1UL << gpioNumero(b1))) source = "bouton 1";
-  else if (gpioPort(b2)->LATCH & (1UL << gpioNumero(b2))) source = "bouton 2";
+  else if (gpioPort(bt)->LATCH & (1UL << gpioNumero(bt))) source = "bouton";
   NRF_P0->LATCH = 0xFFFFFFFF;   // efface les indicateurs
   NRF_P1->LATCH = 0xFFFFFFFF;
   snprintf(texte, 48, "Réveil (%s)", source);

@@ -6,8 +6,13 @@
 // (elle installe aussi Adafruit GFX).
 //
 // Écran : WeAct 1,54" 200×200, contrôleur SSD1681 → classe GxEPD2_154_D67.
-// Câblage : CS = D3, DC = D2, RST = D1, BUSY = D0, CLK = D8 (SCK),
+// Câblage : CS = D3, DC = D2, RST = D1, CLK = D8 (SCK),
 //           DIN = D10 (MOSI), VCC = 3V3, GND = GND.
+// BUSY n'est PAS câblée (D0 sert au baromètre) : avec la broche -1,
+// GxEPD2 attend une durée fixe tirée de sa table au lieu de lire BUSY,
+// et ecranEnvoyer ajoute une attente de sécurité, plus longue au froid
+// (logique/barometre.h). À VÉRIFIER avant de couper le fil : durée réelle
+// de BUSY à l'oscilloscope à 20 °C, au réfrigérateur et au congélateur.
 //
 // On n'utilise PAS le texte d'Adafruit GFX : l'image complète est déjà
 // dessinée par notre logique (même police que le simulateur). On la
@@ -39,13 +44,16 @@ void ecranDemarrer() {
   afficheur.setFullWindow();
 }
 
-void ecranEnvoyer(const Ecran* e, bool complet) {
+void ecranEnvoyer(const Ecran* e, bool complet, int32_t attenteMs) {
   afficheur.setFullWindow();
   afficheur.fillScreen(GxEPD_WHITE);
   afficheur.drawBitmap(0, 0, e->pixels, ECRAN_LARGEUR, ECRAN_HAUTEUR, GxEPD_BLACK);
   // display(true) = rafraîchissement partiel, display(false) = complet.
-  // Cet appel attend que l'écran ait fini (broche BUSY) : jusqu'à ~2 s.
+  // Sans fil BUSY, cet appel attend la durée fixe de GxEPD2 ; on ajoute
+  // l'attente de sécurité calculée par la logique (2,5 s ou 0,6 s, ×1,5 sous
+  // 10 °C, ×2 sous 0 °C). delay() endort le processeur pendant ce temps.
   afficheur.display(!complet);
+  delay(attenteMs);
   // Coupe le générateur haute tension de l'écran entre deux images.
   // À VÉRIFIER : consommation réelle entre deux images (powerOff contre
   // hibernate) et qualité des partiels suivants.

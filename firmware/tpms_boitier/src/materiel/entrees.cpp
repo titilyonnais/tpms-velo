@@ -31,10 +31,13 @@
 //   Un appui humain dure au moins 50 ms : une lecture toutes les 10 ms
 //   suffit, pas besoin d'interruption. Anti-rebond : l'état doit rester
 //   stable 30 ms. Appui long : 700 ms, signalé SANS attendre le relâché.
+//   Les deux boutons sont sur la même broche D5 (échelle de résistances,
+//   voir logique/boutons.h) ; « les deux à la fois » se lit « bouton 1 ».
 // =====================================================================
 #include "entrees.h"
 #include "gpio_nrf.h"
 #include "../../config.h"
+#include "../logique/boutons.h"
 
 // ---------------------------------------------------------------------
 // Reed
@@ -112,77 +115,88 @@ static void reedSurveiller(Boitier* b, int32_t maintenantMs) {
 }
 
 // ---------------------------------------------------------------------
-// Boutons
+// Boutons : les deux sur D5 (logique/boutons.h)
 // ---------------------------------------------------------------------
-struct Bouton {
-  uint8_t broche;
-  int numero;                 // 1 ou 2, comme dans boitierBouton
-  bool appuye;                // état stable (après anti-rebond)
-  bool brutPrecedent;         // dernière lecture brute
+// Au repos, D5 est à 1 (tirage interne). Un appui la tire vers 0 : SW1
+// directement (0 V), SW2 à travers R12 (≈ 0,5 V). La lecture numérique
+// suffit pour savoir s'il y a un appui ; le convertisseur analogique ne
+// sert qu'à savoir LEQUEL, et seulement pendant un appui (il consomme
+// ≈ 0,7 mA pendant ses quelques dizaines de µs de conversion).
+struct Boutons {
+  int appuye;                 // bouton appuyé après anti-rebond : 0, 1 ou 2
+  int brutPrecedent;          // dernière lecture brute
   int32_t changementMs;       // instant du dernier changement brut
   int32_t debutAppuiMs;
   bool longSignale;           // l'appui long a déjà été transmis
   bool ignorer;               // appui en cours à ne pas compter (celui du réveil)
 };
 
-static Bouton boutons[2];
+static Boutons boutons;
 
-static bool boutonEnfonce(const Bouton* bt) {
-  return digitalRead(bt->broche) == LOW;
+// 0 (aucun), 1 ou 2.
+static int lireBoutons() {
+  if (digitalRead(BROCHE_BOUTONS) == HIGH) return 0;
+  // Référence = VDD / 4 avec un gain de 1/4 : la pleine échelle vaut VDD,
+  // le résultat est donc directement la fraction de VDD (même quand la
+  // batterie faiblit et que 3V3 suit VBAT).
+  // À VÉRIFIER : AR_VDD4 dans le cœur Seeed/Adafruit, et que analogRead()
+  // garde le tirage interne (on le remet par prudence).
+  analogReference(AR_VDD4);
+  analogReadResolution(12);
+  int brut = analogRead(BROCHE_BOUTONS);
+  pinMode(BROCHE_BOUTONS, INPUT_PULLUP);
+  return boutonDepuisTension(brut / 4095.0f, 1.0f);
 }
 
-static void boutonDemarrer(Bouton* bt, uint8_t broche, int numero) {
-  bt->broche = broche;
-  bt->numero = numero;
-  pinMode(broche, INPUT_PULLUP);
+static void boutonsDemarrer() {
+  pinMode(BROCHE_BOUTONS, INPUT_PULLUP);
   delayMicroseconds(50);
-  bool enfonce = boutonEnfonce(bt);
-  bt->appuye = enfonce;
-  bt->brutPrecedent = enfonce;
-  bt->changementMs = 0;
-  bt->debutAppuiMs = 0;
-  bt->longSignale = false;
-  // Le bouton est déjà enfoncé au démarrage : c'est l'appui qui a
+  int enfonce = lireBoutons();
+  boutons.appuye = enfonce;
+  boutons.brutPrecedent = enfonce;
+  boutons.changementMs = 0;
+  boutons.debutAppuiMs = 0;
+  boutons.longSignale = false;
+  // Un bouton est déjà enfoncé au démarrage : c'est l'appui qui a
   // réveillé la carte. Comme dans le simulateur (« en veille, un appui
   // ne fait que réveiller »), on ne le compte pas.
-  bt->ignorer = enfonce;
+  boutons.ignorer = enfonce != 0;
 }
 
-static void boutonLire(Bouton* bt, Boitier* b, int32_t maintenantMs) {
-  bool brut = boutonEnfonce(bt);
-  if (brut != bt->brutPrecedent) {
-    bt->brutPrecedent = brut;
-    bt->changementMs = maintenantMs;
+static void boutonsLire(Boitier* b, int32_t maintenantMs) {
+  int brut = lireBoutons();
+  if (brut != boutons.brutPrecedent) {
+    boutons.brutPrecedent = brut;
+    boutons.changementMs = maintenantMs;
   }
 
   // Anti-rebond : on n'accepte le nouvel état que s'il dure 30 ms.
-  if (brut != bt->appuye && maintenantMs - bt->changementMs >= ANTI_REBOND_BOUTON_MS) {
-    bt->appuye = brut;
-    if (brut) {
-      bt->debutAppuiMs = maintenantMs;          // début d'un appui
-      bt->longSignale = false;
-    } else {
-      // Relâché : c'était un appui court, sauf si le long a déjà été signalé.
-      if (!bt->ignorer && !bt->longSignale) {
-        boitierBouton(b, bt->numero, false, maintenantMs);
-      }
-      bt->ignorer = false;
+  if (brut != boutons.appuye && maintenantMs - boutons.changementMs >= ANTI_REBOND_BOUTON_MS) {
+    // Relâché (ou passage direct d'un bouton à l'autre) : appui court,
+    // sauf si le long a déjà été signalé.
+    if (boutons.appuye != 0 && !boutons.ignorer && !boutons.longSignale) {
+      boitierBouton(b, boutons.appuye, false, maintenantMs);
+    }
+    if (boutons.appuye != 0) boutons.ignorer = false;
+    boutons.appuye = brut;
+    if (brut != 0) {
+      boutons.debutAppuiMs = maintenantMs;      // début d'un appui
+      boutons.longSignale = false;
     }
   }
 
   // Appui long : signalé dès 700 ms, sans attendre qu'on relâche.
-  if (bt->appuye && !bt->ignorer && !bt->longSignale &&
-      maintenantMs - bt->debutAppuiMs >= APPUI_LONG_MS) {
-    bt->longSignale = true;
-    boitierBouton(b, bt->numero, true, maintenantMs);
+  if (boutons.appuye != 0 && !boutons.ignorer && !boutons.longSignale &&
+      maintenantMs - boutons.debutAppuiMs >= APPUI_LONG_MS) {
+    boutons.longSignale = true;
+    boitierBouton(b, boutons.appuye, true, maintenantMs);
   }
 }
 
 // ---------------------------------------------------------------------
 void entreesDemarrer() {
   reedModeNormal();
-  boutonDemarrer(&boutons[0], BROCHE_BOUTON1, 1);
-  boutonDemarrer(&boutons[1], BROCHE_BOUTON2, 2);
+  boutonsDemarrer();
 }
 
 void entreesTraiter(Boitier* b, int32_t maintenantMs) {
@@ -195,18 +209,24 @@ void entreesTraiter(Boitier* b, int32_t maintenantMs) {
   // 2. Le reed collé.
   reedSurveiller(b, maintenantMs);
   // 3. Les boutons.
-  boutonLire(&boutons[0], b, maintenantMs);
-  boutonLire(&boutons[1], b, maintenantMs);
+  boutonsLire(b, maintenantMs);
 }
 
-bool entreesDeuxBoutonsAppuyes() {
-  return boutonEnfonce(&boutons[0]) && boutonEnfonce(&boutons[1]);
+bool entreesOubliDemande() {
+  // Bouton 1 enfoncé dès le démarrage et tenu OUBLI_APPUI_MS.
+  int32_t debut = (int32_t)millis();
+  while (lireBoutons() == 1) {
+    if ((int32_t)millis() - debut >= OUBLI_APPUI_MS) return true;
+    delay(20);
+  }
+  return false;
 }
 
 void entreesPreparerReveil() {
-  // Boutons : réveil quand on appuie (niveau bas), pull-up interne.
-  gpioReveil(gpioDepuisArduino(BROCHE_BOUTON1), TIRAGE_HAUT, true);
-  gpioReveil(gpioDepuisArduino(BROCHE_BOUTON2), TIRAGE_HAUT, true);
+  // Boutons : réveil quand on appuie (niveau bas sur D5), pull-up interne.
+  // SW2 ne descend qu'à 12-17 % de VDD, sous le seuil de 30 % : il réveille
+  // aussi (marge calculée dans logique/boutons.js).
+  gpioReveil(gpioDepuisArduino(BROCHE_BOUTONS), TIRAGE_HAUT, true);
 
   // Reed : on regarde d'abord s'il est ouvert ou fermé.
   // ATTENTION : si une broche est DÉJÀ au niveau qui réveille, la carte

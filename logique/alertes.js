@@ -43,7 +43,10 @@ TPMS.seuilsParDefaut = function () {
 //   On ne reproche pas au capteur de s'être tu pendant que le boîtier
 //   dormait : le délai de perte ne compte qu'à partir du réveil.
 // enMouvement = la roue tourne (le boîtier le sait grâce à l'aimant).
-TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs, enMouvement) {
+// correctionBar = correction d'altitude du baromètre (barometre.js) ;
+//   absente ou 0 = pression du capteur telle quelle. Les seuils se
+//   comparent à la pression « manomètre », celle que le cycliste règle.
+TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisMs, enMouvement, correctionBar) {
   if (roue.intrusionJusquaMs > maintenantMs) return TPMS.ETAT.INTRUSION;
   if (roue.mesure === null) return TPMS.ETAT.ATTENTE;
   // Le silence se compte depuis la dernière trame acceptée, le dernier
@@ -57,6 +60,7 @@ TPMS.evaluerRoue = function (roue, position, seuils, maintenantMs, ecouteDepuisM
   if (silenceMs > delaiPerte) return TPMS.ETAT.PERDU;
 
   var p = roue.mesure.pressionBar;
+  if (correctionBar) p = TPMS.pressionCorrigeeBar(p, correctionBar);
   if (p < seuils.crevaisonBar || roue.mesure.alarme === 0x01) return TPMS.ETAT.CREVAISON;
   // Hystérésis : une alerte basse (ou haute) déjà donnée ne s'éteint que
   // si la pression revient franchement du bon côté (0,05 bar). Sans cela,

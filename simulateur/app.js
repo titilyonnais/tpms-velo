@@ -92,7 +92,9 @@
       plageCapteurBar: parseFloat($("cfgPlage").value) || 3.5,
       planning: $("cfgPlanning").value === "semaine" ? "semaine" : undefined,
       masseCyclisteKg: parseFloat($("cfgPoids").value) || 75,
-      capteursV2: $("cfgCapteurs").value === "v2"
+      capteursV2: $("cfgCapteurs").value === "v2",
+      barometre: $("cfgBarometre").value,
+      rechargeDehors: $("cfgRecharge").value === "dehors"
     };
   }
 
@@ -309,7 +311,11 @@
       var alerte = TPMS.estAlerte(roue.etat);
       tuile.classList.toggle("alerte", alerte);
       tuile.querySelector("[data-pression]").textContent = nombre(p.pressionRelBar, 2);
-      var affiche = roue.mesure && roue.etat !== "INTRUSION" ? nombre(roue.mesure.pressionBar, 2) + " bar" : "–";
+      // Pression montrée par le boîtier (corrigée de l'altitude), et ce
+      // qu'annonce le capteur quand la correction n'est pas négligeable.
+      var affiche = roue.mesure && roue.etat !== "INTRUSION" ? nombre(roue.pressionAffichee, 2) + " bar" +
+        (Math.abs(b.correctionBar) >= 0.005 ? " (capteur " + nombre(roue.mesure.pressionBar, 2) + ", altitude " +
+          (b.correctionBar > 0 ? "+" : "") + nombre(b.correctionBar, 2) + ")" : "") : "–";
       tuile.querySelector("[data-sous-titre]").textContent = roue.etat === "ATTENTE"
         ? "Le boîtier attend la 1re annonce du capteur (jusqu'à 1 min vélo à l'arrêt)."
         : "Boîtier : " + affiche + " · air " + nombre(p.temperatureAirC, 0) + " °C · pile " + nombre(c.pileTensionV, 2) + " V" +
@@ -799,7 +805,11 @@
       ["Tension", nombre(l.tensionV, 3) + " V"],
       ["Courant", (courantMa < 0 ? "charge " : "") + nombre(Math.abs(courantMa), 3) + " mA"],
       ["Protection", l.coupee ? "coupée" : "normale"],
-      ["Chargeur", m.vbusV > 0 ? "branché" : "débranché"]
+      ["Chargeur", m.vbusV > 0 ? (m.vbusCarte ? "branché" : "branché, recharge coupée") : "débranché"],
+      ["Température du boîtier", nombre(m.temperatureBoitierC, 1) + " °C"],
+      ["Recharge", m.boitier.blocageCharge === "" ? "permise (2 à 43 °C)" : "coupée : trop " + m.boitier.blocageCharge.toLowerCase()],
+      ["Baromètre", m.boitier.barometre.pressionHpa === null ? "aucune mesure"
+        : nombre(m.boitier.barometre.pressionHpa, 1) + " hPa → correction " + (m.boitier.correctionBar >= 0 ? "+" : "") + nombre(m.boitier.correctionBar, 3) + " bar"]
     ]);
     var pts = derniersPoints(24 * 3600000);
     TPMS.grapheLignes($("grapheVbat"), {
@@ -810,7 +820,7 @@
     });
     if (e) {
       var lignes = Object.keys(e.courants || {})
-        .filter(function (k) { return k.indexOf("U1.") !== 0 && Math.abs(e.courants[k]) > 1e-7; })
+        .filter(function (k) { return k.indexOf("U1.") !== 0 && k !== "D5" && Math.abs(e.courants[k]) > 1e-7; })
         .sort(function (a, b) { return Math.abs(e.courants[b]) - Math.abs(e.courants[a]); }).slice(0, 8)
         .map(function (k) {
           var ma = Math.abs(e.courants[k]) * 1000;

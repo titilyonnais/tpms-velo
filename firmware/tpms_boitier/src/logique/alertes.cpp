@@ -5,6 +5,7 @@
 // LOGIQUE PURE : aucun appel Arduino.
 // =====================================================================
 #include "alertes.h"
+#include "barometre.h"
 #include "boitier.h"    // pour connaître le contenu de la structure Roue
 
 void seuilsParDefaut(Seuils* s) {
@@ -22,7 +23,8 @@ void seuilsParDefaut(Seuils* s) {
 }
 
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
-                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement) {
+                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement,
+                 float correctionBar) {
   if (roue->intrusionJusquaMs > maintenantMs) return ETAT_INTRUSION;
   if (!roue->aMesure) return ETAT_ATTENTE;
 
@@ -36,6 +38,8 @@ Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
   if (silenceMs > delaiPerte) return ETAT_PERDU;
 
   float p = roue->mesure.pressionBar;
+  // Les seuils se comparent à la pression « manomètre » (corrigée de l'altitude).
+  if (correctionBar != 0.0f) p = pressionCorrigeeBar(p, correctionBar);
   if (p < seuils->crevaisonBar || roue->mesure.alarme == 0x01) return ETAT_CREVAISON;
   // Hystérésis : une alerte basse (ou haute) déjà donnée ne s'éteint que
   // si la pression revient de 0,05 bar du bon côté (sinon alerte en boucle

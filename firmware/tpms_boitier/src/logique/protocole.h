@@ -80,7 +80,9 @@ struct MesuresApp {
   bool enCharge;
   bool eclairage;
   bool attenteConfirmation;   // changement sensible en attente du bouton 2
-  uint16_t sequence;
+  bool chargeCoupee;          // recharge coupée (trop froid ou trop chaud)
+  float correctionBar;        // correction d'altitude ajoutée aux pressions
+  uint16_t sequence;          // seul l'octet de poids faible est envoyé
 };
 
 // ---------------------------------------------------------------------
@@ -112,8 +114,11 @@ bool uuidDepuisTexte(const char* texte, uint8_t* uuid16octets);
 //   12-15 distance du trajet en mètres
 //   16    batterie du boîtier en %
 //   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage,
-//         bit 3 changement sensible en attente de confirmation sur le boîtier
-//   18-19 numéro de séquence (détecte les notifications perdues)
+//         bit 3 changement sensible en attente de confirmation sur le boîtier,
+//         bit 4 recharge coupée (trop froid ou trop chaud)
+//   18    numéro de séquence, de 0 à 255 (détecte les notifications perdues)
+//   19    correction d'altitude en pas de 4 mbar (signée), que l'application
+//         retire pour son historique (détection de fuite)
 // ---------------------------------------------------------------------
 void encoderMesures(const MesuresApp* m, uint8_t* o);
 

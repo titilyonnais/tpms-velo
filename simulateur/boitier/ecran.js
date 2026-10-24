@@ -36,7 +36,7 @@ TPMS.dessinerEcran = function (e, vue) {
     TPMS.ecranTexte(e, 34, 3, "ECLAIRAGE", 1, N);
   }
   if (vue.appConnectee) TPMS.ecranTexte(e, 94, 3, "APP", 1, N);
-  TPMS.dessinerBatterie(e, vue.batterieBoitierPct, vue.enCharge);
+  TPMS.dessinerBatterie(e, vue.batterieBoitierPct, vue.enCharge, vue.blocageCharge);
   TPMS.ecranLigneH(e, 0, 14, 200, N);
 
   // ---- Les deux roues ----
@@ -87,9 +87,11 @@ TPMS.dessinerCodeAppairage = function (e, code) {
 };
 
 // Pourcentage + petite pile dessinée, en haut à droite.
-TPMS.dessinerBatterie = function (e, pct, enCharge) {
+// blocage = "FROID" ou "CHAUD" quand la recharge est coupée (barometre.js).
+TPMS.dessinerBatterie = function (e, pct, enCharge, blocage) {
   var N = TPMS.NOIR;
-  var texte = (enCharge ? "CHG " : "") + Math.round(pct) + "%";
+  var prefixe = blocage ? blocage + " " : (enCharge ? "CHG " : "");
+  var texte = prefixe + Math.round(pct) + "%";
   TPMS.ecranTexteDroite(e, 172, 3, texte, 1, N);
   TPMS.ecranCadre(e, 176, 3, 18, 9, N);
   TPMS.ecranRectPlein(e, 194, 5, 2, 5, N);              // le "téton" de la pile

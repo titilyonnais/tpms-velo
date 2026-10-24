@@ -117,9 +117,11 @@ TPMS.liaisonMesures = function (b, maintenantMs) {
     enCharge: vue.enCharge,
     eclairage: vue.eclairage,
     attenteConfirmation: b.liaison.enAttente !== null,
+    chargeCoupee: vue.blocageCharge !== "",
+    correctionBar: vue.correctionBar,
     sequence: b.liaison.sequence
   };
-  b.liaison.sequence = (b.liaison.sequence + 1) & 0xFFFF;
+  b.liaison.sequence = (b.liaison.sequence + 1) & 0xFF;
   return TPMS.encoderMesures(mesures);
 };
 

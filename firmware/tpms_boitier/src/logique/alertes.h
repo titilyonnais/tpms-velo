@@ -60,7 +60,8 @@ struct Roue;
 const float HYSTERESIS_ALERTE_BAR = 0.05f;
 
 Etat evaluerRoue(const Roue* roue, Position position, const Seuils* seuils,
-                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement = true);
+                 int32_t maintenantMs, int32_t ecouteDepuisMs, bool enMouvement = true,
+                 float correctionBar = 0.0f);   // correction d'altitude (barometre.h)
 
 // Les états qui déclenchent bip + LED.
 bool estAlerte(Etat etat);

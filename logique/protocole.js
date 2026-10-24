@@ -89,8 +89,13 @@ function depuisInt8(octet) {
 //   12-15 distance du trajet en mètres
 //   16    batterie du boîtier en %
 //   17    drapeaux : bit 0 veille, bit 1 en charge, bit 2 éclairage,
-//         bit 3 changement sensible en attente de confirmation sur le boîtier
-//   18-19 numéro de séquence (détecte les notifications perdues)
+//         bit 3 changement sensible en attente de confirmation sur le boîtier,
+//         bit 4 recharge coupée (trop froid ou trop chaud)
+//   18    numéro de séquence, de 0 à 255 (détecte les notifications perdues)
+//   19    correction d'altitude ajoutée aux pressions, en pas de 4 mbar
+//         (signée : −0,512 à +0,508 bar). L'application la retire pour
+//         son historique : la détection de fuite suit alors la quantité
+//         d'air, sans être trompée par une sortie en montagne.
 // ---------------------------------------------------------------------
 TPMS.encoderMesures = function (m) {
   var o = new Uint8Array(TPMS.TAILLE_MESURES);
@@ -107,8 +112,9 @@ TPMS.encoderMesures = function (m) {
   TPMS.ecrireInt32LE(o, 12, Math.round(m.distanceKm * 1000));
   o[16] = Math.round(m.batterieBoitierPct);
   o[17] = (m.veille ? 1 : 0) | (m.enCharge ? 2 : 0) | (m.eclairage ? 4 : 0) |
-          (m.attenteConfirmation ? 8 : 0);
-  TPMS.ecrireUint16LE(o, 18, m.sequence & 0xFFFF);
+          (m.attenteConfirmation ? 8 : 0) | (m.chargeCoupee ? 16 : 0);
+  o[18] = m.sequence & 0xFF;
+  o[19] = versInt8((m.correctionBar || 0) * 250);   // 1 pas = 4 mbar = 0,004 bar
   return o;
 };
 
@@ -133,7 +139,9 @@ TPMS.decoderMesures = function (o) {
     enCharge: (o[17] & 2) !== 0,
     eclairage: (o[17] & 4) !== 0,
     attenteConfirmation: (o[17] & 8) !== 0,
-    sequence: TPMS.lireUint16LE(o, 18)
+    chargeCoupee: (o[17] & 16) !== 0,
+    sequence: o[18],
+    correctionBar: depuisInt8(o[19]) / 250
   };
 };
 

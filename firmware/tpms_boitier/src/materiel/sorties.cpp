@@ -109,6 +109,9 @@ void sortiesDemarrer() {
   gpioSortie(GPIO_BUZZER, false);          // commande une grille de MOSFET : pas de courant
   gpioEcrire(GPIO_ECLAIRAGE, false);
   gpioSortie(GPIO_ECLAIRAGE, false);
+  // Coupure de recharge : relâchée au démarrage (R11 la tient déjà à 0).
+  pinMode(BROCHE_COUPURE_CHARGE, OUTPUT);
+  digitalWrite(BROCHE_COUPURE_CHARGE, LOW);
 
   // Tâche FreeRTOS : fonction, nom, pile (en mots de 4 octets),
   // paramètre, priorité, identifiant (inutile ici).
@@ -121,6 +124,8 @@ void sortiesAppliquer(const Sorties* s, int32_t maintenantMs) {
   modeLed = s->ledAlerte;
   if (s->bip) bipDebutMs = maintenantMs;
   gpioEcrire(GPIO_ECLAIRAGE, s->ledsEclairage);
+  // 1 = Q3 passant : la broche EN de U4 tombe à 0, le 5 V du chargeur est coupé.
+  digitalWrite(BROCHE_COUPURE_CHARGE, s->coupureCharge ? HIGH : LOW);
 }
 
 void sortiesEteindre() {
@@ -130,4 +135,9 @@ void sortiesEteindre() {
   gpioEcrire(gpioLedAlerte, false);
   gpioEcrire(GPIO_BUZZER, false);
   gpioEcrire(GPIO_ECLAIRAGE, false);
+  // Avant la veille, la recharge est TOUJOURS relâchée : si le câble est
+  // branché, le 5 V revient et réveille la carte, qui remesure la
+  // température. Sinon, branché au chaud pendant la veille, le boîtier ne
+  // se rechargerait jamais. En System OFF, la broche garde ce niveau bas.
+  digitalWrite(BROCHE_COUPURE_CHARGE, LOW);
 }

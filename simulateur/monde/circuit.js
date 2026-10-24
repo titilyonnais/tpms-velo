@@ -8,11 +8,11 @@
 //                 ecran: "repos" | "partiel" | "complet",
 //                 ledAlerte, eclairage, buzzer,
 //                 reedFerme, reedPullupActif, optionReedExterne,
-//                 bouton1, bouton2, vbusV, appConnectee }
-//     → { tensions: { VBAT, V3V3, VBUS, V5EXT, GND, D0…D10, NFC1, NFC2,
-//                     G1, G2, DQ1, DQ2, LED1A, LED2A, LED3A, J2 },
-//         courants: { U1, U2, R1…R9, C1…C3, D1, D2, LED1…LED3, Q1, Q2,
-//                     BZ1, BT1, SW1, SW2, S1, J1, J2, "U1.BAT", "U1.3V3",
+//                 bouton1, bouton2, vbusV, appConnectee, coupureCharge }
+//     → { tensions: { VBAT, V5EXT, V5D, VBUS, V3V3, GND, D0…D10, NFC1, NFC2,
+//                     G1, G2, G3, EN4, DQ1, DQ2, LED1A, LED2A, LED3A, J2 },
+//         courants: { U1, U2, U3, U4, R1…R12, C1…C3, D1, D2, LED1…LED3,
+//                     Q1, Q2, Q3, BZ1, BT1, SW1, SW2, S1, J1, J2, "U1.BAT", "U1.3V3",
 //                     "U1.5V", "U1.regulateur", "U1.pont", "U1.chargeur",
 //                     "U1.ledCharge" },
 //         etats: { ... }, courantBatterieA, courantChargeA, chargeurPhase,
@@ -52,6 +52,11 @@
 //     sous 3 V ; on retient ≈ 25 mA sous 3,3 V (energie.js).
 //   SS14 (Schottky 1 A, 40 V) : VF ≤ 0,5 V à 1 A ; ≈ 0,3 V à 100 mA.
 //   1N4148 : diode rapide (trr 4 ns), 300 mA en continu.
+//   BMP280 (Bosch, baromètre, U3) : sommeil 0,1 µA ; une mesure « basse
+//     consommation » toutes les 10 s ≈ 0,3 µA en moyenne (2,74 µA à 1 Hz).
+//   TPS22918 (TI, interrupteur de recharge, U4) : RON ≈ 52 mΩ, courant
+//     de repos ≈ 8 µA passant, 0,5 µA bloqué, pris sur le 5 V du chargeur.
+//   2N7002 (Q3) : VGS(th) 1 à 2,5 V ; commandé en 3,3 V, il est passant.
 //   Pont de mesure de la batterie du XIAO : 1 MΩ + 510 kΩ (config.h).
 // =====================================================================
 var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
@@ -60,7 +65,8 @@ var TPMS = globalThis.TPMS || (globalThis.TPMS = {});
 "use strict";
 
 TPMS.CIRCUIT = {
-  resistances: { R1: 270, R2: 100, R3: 100, R4: 100e3, R5: 100e3, R6: 150, R7: 150, R8: 1000, R9: 1e6 },
+  resistances: { R1: 270, R2: 100, R3: 100, R4: 100e3, R5: 100e3, R6: 150, R7: 150, R8: 1000, R9: 1e6,
+                 R10: 100e3, R11: 100e3, R12: 2200 },
   pullupInterneOhm: 13000,         // nRF52840, 11 à 16 kΩ
   sortieForteOhm: 30,              // résistance équivalente d'une sortie « high drive »
   sortieStandardOhm: 300,          // sortie normale (≈ 0,5 mA pour 0,4 V de chute... ordre de grandeur)
@@ -91,6 +97,8 @@ TPMS.CIRCUIT = {
   },
   epaper: { veilleA: 0.8e-6, rafraichissementA: 3e-3, tensionMiniV: 2.2 },
   ledChargeA: 1e-3,                // HYPOTHÈSE : LED de charge de la carte, alimentée par VBUS
+  barometre: { sommeilA: 0.1e-6, moyenneA: 0.4e-6 },   // U3 BMP280 (sommeil + 1 mesure / 10 s)
+  interrupteur: { ronOhm: 0.052, reposPassantA: 8e-6, reposBloqueA: 0.5e-6 },   // U4 TPS22918
   vtV: 0.02569                     // tension thermique kT/q à 25 °C
 };
 
@@ -206,13 +214,24 @@ function charges(e, v3, vbat) {
   s.spiActif = ecranActif;
   s.ecranRafraichit = ecranActif;
 
-  // Broches de l'écran (sorties du nRF, BUSY sortie de l'écran)
-  t.D0 = ecranActif && v3 > 0.5 ? v3 : 0;      // BUSY à 1 pendant le rafraîchissement
-  t.D1 = eveille ? v3 : 0;                     // RST inactif à 1
+  // Broches de l'écran et du baromètre (bus SPI partagé). Le fil BUSY de
+  // l'écran est supprimé : D0 sélectionne le baromètre (CS du BMP280).
+  t.D0 = eveille ? v3 : 0;                     // CS du baromètre, inactif à 1
+  t.D1 = eveille ? v3 : 0;                     // RST de l'écran, inactif à 1
   t.D2 = ecranActif ? v3 : 0;                  // DC : données
-  t.D3 = eveille ? v3 : 0;                     // CS inactif à 1
+  t.D3 = eveille ? v3 : 0;                     // CS de l'écran, inactif à 1
   t.D8 = 0; t.D10 = 0;                         // SCK et MOSI au repos
-  t.D9 = null;                                 // MISO non câblée : en l'air
+  t.D9 = null;                                 // MISO = SDO du BMP280 : en l'air hors lecture
+  // Baromètre U3 (alimenté par 3V3, en sommeil entre deux mesures)
+  c.U3 = v3 > 1.7 ? (eveille ? P.barometre.moyenneA : P.barometre.sommeilA) : 0;
+
+  // Coupure de la recharge : D6 → grille de Q3 (R11 vers GND). Q3 passant
+  // tire EN de U4 à la masse : l'interrupteur U4 coupe le 5 V du chargeur.
+  var d6 = eveille && !!e.coupureCharge;
+  t.D6 = d6 ? v3 : 0;
+  t.G3 = t.D6;
+  c.R11 = t.G3 / R.R11;
+  s.q3Passant = t.G3 > 2.5;                    // 2N7002 : VGS(th) ≤ 2,5 V
 
   // LED d'alerte : D7 (sortie forte) → R1 → LED1 → GND
   var d7 = nrfOk && e.ledAlerte;
@@ -298,16 +317,18 @@ function charges(e, v3, vbat) {
   c.C1 = 0;
   s.reedFerme = !!e.reedFerme;
 
-  // Boutons : pull-up interne (actif aussi en System OFF pour le réveil)
+  // Boutons : tous deux sur D5 (pull-up interne, actif aussi en System
+  // OFF pour le réveil). SW1 tire D5 à 0 V ; SW2 passe par R12 (2,2 kΩ)
+  // et donne ≈ 0,48 V, que le convertisseur analogique distingue (boutons.js).
   c.SW1 = e.bouton1 && v3 > 0 ? v3 / P.pullupInterneOhm : 0;
-  c.SW2 = e.bouton2 && v3 > 0 ? v3 / P.pullupInterneOhm : 0;
-  t.D5 = e.bouton1 ? 0 : v3;
-  t.D6 = e.bouton2 ? 0 : v3;
+  c.SW2 = c.R12 = e.bouton2 && !e.bouton1 && v3 > 0 ? v3 / (P.pullupInterneOhm + R.R12) : 0;
+  c.D5 = c.SW1 + c.SW2;                           // courant dans le fil de D5 (schéma)
+  t.D5 = e.bouton1 ? 0 : (e.bouton2 ? c.SW2 * R.R12 : v3);
 
   c.C3 = 0;
   // Tout ce que fournit le régulateur 3,3 V
-  c["U1.3V3"] = c.U2 + c.BZ1 + c.R9;               // sortie par la broche 3V3
-  var i3v3 = iNrf + c["U1.3V3"] + iLed1 + iG1 + iG2 + iReed - c.R9 + c.SW1 + c.SW2;
+  c["U1.3V3"] = c.U2 + c.U3 + c.BZ1 + c.R9;      // sortie par la broche 3V3
+  var i3v3 = iNrf + c["U1.3V3"] + iLed1 + iG1 + iG2 + c.R11 + iReed - c.R9 + c.SW1 + c.SW2;
   // (iReed contient déjà la part qui passe par R9 : on ne la compte qu'une fois)
   return { c: c, t: t, s: s, i3v3: i3v3, iVbatDirect: c.Q2 };
 }
@@ -332,10 +353,11 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
 
   var ibat = 0, iD2 = 0, i3v3 = 0, chg = { courantA: 0, courantBatterieA: 0, phase: "absent" };
   var r, vbat = 0, vbus = 0, v3 = 0, vin = 0, sourceVbus = false, iVbatSys = 0, iVbusSys = 0, regEntree = 0;
-  var iPont = 0, iLedCharge = 0;
+  var iPont = 0, iLedCharge = 0, v5d = 0, coupeU4 = false, iU4 = 0, iR10 = 0;
   for (var it = 0; it < 30; it++) {
-    // Diode D2 (SS14) entre le connecteur J1 et la broche 5V.
-    vbus = v5 > 0 ? Math.max(0, v5 - tensionDiode(P.schottky, iD2)) : 0;
+    // J1 → diode D2 (SS14) → interrupteur U4 → broche 5V du XIAO.
+    v5d = v5 > 0 ? Math.max(0, v5 - tensionDiode(P.schottky, iD2)) : 0;
+    vbus = (v5d > 0 && !coupeU4) ? Math.max(0, v5d - P.interrupteur.ronOhm * iVbusSys) : 0;
     // Batterie : la protection relâche dès qu'un chargeur la recharge.
     var reliee = !batterieCoupee || chg.courantA > 0;
     if (!lipo) vbat = e.vbatV || 3.8;
@@ -360,9 +382,17 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
     iLedCharge = enCharge ? P.ledChargeA : 0;
     iVbusSys = (sourceVbus ? regEntree : 0) + chg.courantA + iLedCharge;
     var nouveauIbat = iVbatSys - chg.courantA;
-    var ecart = Math.abs(nouveauIbat - ibat) + Math.abs(iVbusSys - iD2);
+    // U4 : passant tant que R10 tire sa broche EN au 5 V ; bloqué quand Q3
+    // (commandé par D6) la tire à la masse. R10 consomme alors 50 µA, pris
+    // sur le chargeur et non sur la batterie.
+    var coupeAvant = coupeU4;
+    coupeU4 = r.s.q3Passant;
+    iU4 = v5d > 0 ? (coupeU4 ? P.interrupteur.reposBloqueA : P.interrupteur.reposPassantA) : 0;
+    iR10 = (v5d > 0 && coupeU4) ? v5d / P.resistances.R10 : 0;
+    var nouveauID2 = v5 > 0 ? iVbusSys + iU4 + iR10 : 0;
+    var ecart = Math.abs(nouveauIbat - ibat) + Math.abs(nouveauID2 - iD2) + (coupeAvant !== coupeU4 ? 1 : 0);
     ibat = nouveauIbat;
-    iD2 = v5 > 0 ? iVbusSys : 0;
+    iD2 = nouveauID2;
     if (it > 0 && ecart < 1e-10) break;
   }
   if (lipo && !reliee) { ibat = 0; }
@@ -373,14 +403,18 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
   var c = r.c, t = r.t, s = r.s;
   c.BT1 = ibat;
   c.D2 = c.J1 = iD2;
-  c["U1.5V"] = iD2;
+  c.U4 = iU4;
+  c.R10 = c.Q3 = iR10;
+  c["U1.5V"] = iVbusSys;
   c["U1.BAT"] = (sourceVbus ? 0 : regEntree) + iPont - chg.courantA;
   c["U1.regulateur"] = vin > 0 ? P.regulateur.courantReposA : 0;
   c["U1.pont"] = iPont;
   c["U1.chargeur"] = chg.courantA;
   c["U1.ledCharge"] = iLedCharge;
 
-  t.VBAT = vbat; t.V3V3 = v3; t.VBUS = vbus; t.V5EXT = v5; t.GND = 0;
+  t.VBAT = vbat; t.V3V3 = v3; t.VBUS = vbus; t.V5EXT = v5; t.V5D = v5d; t.GND = 0;
+  t.EN4 = v5d > 0 && !coupeU4 ? v5d : 0;        // EN de U4 (0 = recharge coupée)
+  s.rechargeCoupee = v5d > 0 && coupeU4;
 
   s.batterieCoupee = batterieCoupee && !(chg.courantA > 0);
   s.sourceRegulateur = vin <= 0 ? "aucune" : (sourceVbus ? "VBUS" : "batterie");
@@ -401,7 +435,7 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
   if (e.eclairage && nrfOkFinal(v3) && c.Q2 < 2e-3) alertes.push("Éclairage faible : " + (c.Q2 * 1000).toFixed(1).replace(".", ",") + " mA, VBAT trop basse pour les LED blanches");
   if (e.buzzer && s.q1Passant && !s.buzzerSonne) alertes.push("Buzzer sous-alimenté : il ne sonne plus");
   if (v5 > TPMS.CHARGEUR.surtensionEntreeV) alertes.push("Surtension sur l'entrée de recharge : le chargeur se protège");
-  if (s.enCharge && (temperatureC < 0 || temperatureC > 45)) alertes.push("Recharge hors de 0-45 °C : dangereux pour une LiPo (le BQ25101 du XIAO ne surveille pas la température)");
+  if (s.enCharge && (temperatureC < 0 || temperatureC > 45)) alertes.push("Recharge hors de 0-45 °C : dangereux pour une LiPo (le BQ25101 du XIAO ne surveille pas la température ; c'est le boîtier qui doit la couper)");
   // En roulant, le reed se ferme une fois par tour : c'est normal. En veille,
   // un reed fermé veut dire que l'aimant s'est arrêté devant (le piège).
   if (e.veille && e.reedFerme && c.S1 > 50e-6) alertes.push("Aimant arrêté devant le reed : " + (c.S1 * 1000).toFixed(2).replace(".", ",") + " mA permanents dans le tirage");
@@ -417,7 +451,7 @@ TPMS.circuitResoudre = function (entrees, lipo, composants) {
     puissanceW: puissanceW,
     puissances: {
       regulateurW: Math.max(0, vin - v3) * i3v3,        // chaleur dans le LDO
-      diodeD2W: (v5 - vbus) * iD2,
+      diodeD2W: (v5 - v5d) * iD2,
       ledsBlanchesW: (vbat - t.DQ2) * c.Q2
     },
     alertes: alertes

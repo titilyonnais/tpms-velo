@@ -83,10 +83,11 @@ function branche(nom, cleCourant, dessin) {
   ajouter("</g>");
   courant = avant;
 }
-function busSignal(nom, dessin) {
+// suffixe : pour un deuxième morceau du même bus (les id doivent rester uniques).
+function busSignal(nom, dessin, suffixe) {
   var avant = signal;
   signal = nom;
-  ajouter('<g id="fil-' + nom + '" data-signal="' + nom + '">');
+  ajouter('<g id="fil-' + nom + (suffixe ? "-" + suffixe : "") + '" data-signal="' + nom + '">');
   dessin();
   ajouter("</g>");
   signal = avant;
@@ -335,8 +336,9 @@ function dessiner() {
   [
     "Déjà sur la carte XIAO : chargeur LiPo BQ25101 (USB-C et broche 5V), régulateur 3,3 V,",
     "pont de mesure de la batterie 1 MΩ / 510 kΩ (P0.31, activé par P0.14 à 0), LED de charge.",
-    "D4, D5, D6 : tirage (pull-up) interne ≈ 13 kΩ vers 3V3. D7 en sortie forte (high drive).",
-    "NFC1/NFC2 deviennent des GPIO au premier démarrage (UICR.NFCPINS) ; tous deux à 0 au repos."
+    "D4, D5 : tirage (pull-up) interne ≈ 13 kΩ vers 3V3 ; SW1 et SW2 partagent D5 (lue en analogique). D7 en sortie forte.",
+    "NFC1/NFC2 deviennent des GPIO au premier démarrage (UICR.NFCPINS) ; tous deux à 0 au repos.",
+    "Fil BUSY de l'écran supprimé (attente fixe) : D0 sélectionne le baromètre U3. D6 coupe la recharge (U4) par grand froid."
   ].forEach(function (n, k) { texte(40, 112 + k * 15, n, "sch-note"); });
   // Zone d'état (remplie par schemaMettreAJour)
   texte(L - 30, 52, "", "sch-resume", "end", "mesure-resume");
@@ -346,8 +348,8 @@ function dessiner() {
   var gauche = [["D0", "P0.02"], ["D1", "P0.03"], ["D2", "P0.28"], ["D3", "P0.29"], ["D4", "P0.04"], ["D5", "P0.05"], ["D6", "P1.11"]];
   var droite = [["5V", "VBUS"], ["GND", ""], ["3V3", "sortie"], ["D10", "P1.15"], ["D9", "P1.14"], ["D8", "P1.13"], ["D7", "P1.12"]];
   // Courant (ou signal) porté par chaque patte, dans le sens du courant.
-  var patteG = [["spi"], ["spi"], ["spi"], ["spi"], ["S1"], ["SW1"], ["SW2"]];
-  var patteD = [["D2", true], [null], ["U1.3V3"], ["spi"], [null], ["spi"], ["LED1"]];
+  var patteG = [["spi"], ["spi"], ["spi"], ["spi"], ["S1"], ["D5"], ["R11"]];
+  var patteD = [["U1.5V", true], [null], ["U1.3V3"], ["spi"], ["spi"], ["spi"], ["LED1"]];
   composant("U1", function () {
     rect(U.x, U.y, U.l, U.h, "sch-corps sch-circuit");
     texte(U.x, U.y - 16, "U1", "sch-ref");
@@ -399,13 +401,19 @@ function dessiner() {
     ["VCC", "GND", "SDA", "SCL"].forEach(function (n, k) { texte(E.x + 10, Y[k] + 4, n, "sch-broche"); });
     mesure(E.x + E.l / 2, 318, "val-U2", "middle");
   });
-  // Liaisons U2 ↔ U1 : BUSY sort de l'écran, RES/DC/CS sortent du nRF.
+  // Liaisons U2 ↔ U1 : RES/DC/CS sortent du nRF. BUSY n'est plus câblée :
+  // le programme attend une durée fixe (logique/barometre.js) ; D0 va au
+  // CS du baromètre U3.
+  fil([[E.x + E.l, Y[0]], [E.x + E.l + 16, Y[0]]]);
+  nonConnectee(E.x + E.l + 16, Y[0]);
+  texte(E.x + E.l + 26, Y[0] - 8, "NC", "sch-note");
   busSignal("spi", function () {
-    fil([[E.x + E.l, Y[0]], [XG, Y[0]]]);
+    fil([[XG, Y[0]], [442, Y[0]]]);
     for (var k = 1; k < 4; k++) fil([[XG, Y[k]], [E.x + E.l, Y[k]]]);
     fil([[E.x - 25, Y[2]], [E.x, Y[2]]]);
     fil([[E.x - 25, Y[3]], [E.x, Y[3]]]);
   });
+  etiquette(442, Y[0], "CSB", "gauche");
   etiquette(E.x - 25, Y[2], "MOSI", "gauche");
   etiquette(E.x - 25, Y[3], "SCK", "gauche");
   branche("epaper-vcc", "U2", function () {
@@ -444,46 +452,92 @@ function dessiner() {
   mesure(450, 479, "val-R8", "middle");
   tension(360, 434, "J2", "middle");
 
-  // ---- Boutons --------------------------------------------------------
+  // ---- Boutons : tous deux sur D5 (SW2 à travers R12) -----------------
+  branche("boutons", "D5", function () { fil([[XG, Y[5]], [470, Y[5]]]); });
+  noeud(470, Y[5]);
   branche("sw1", "SW1", function () {
-    fil([[XG, Y[5]], [370, Y[5]], [370, 600]]);
+    fil([[470, Y[5]], [370, Y[5]], [370, 600]]);
     boutonV(370, 600, 660, "SW1", "bouton 1");
     fil([[370, 660], [370, 680]]);
     masse(370, 680);
   });
   branche("sw2", "SW2", function () {
-    fil([[XG, Y[6]], [490, Y[6]], [490, 600]]);
-    boutonV(490, 600, 660, "SW2", "bouton 2");
-    fil([[490, 660], [490, 680]]);
-    masse(490, 680);
+    resistanceV(470, Y[5], 590, "R12", "2,2 kΩ", false, true);
+    boutonV(470, 590, 650, "SW2", "bouton 2");
+    fil([[470, 650], [470, 670]]);
+    masse(470, 670);
   });
   mesure(384, 657, "val-SW1");
-  mesure(504, 657, "val-SW2");
+  mesure(484, 647, "val-SW2");
+  mesure(457, 572, "val-R12", "end");
+  // D6 : commande de la coupure de recharge (vers Q3, à droite)
+  fil([[XG, Y[6]], [518, Y[6]]]);
+  etiquette(518, Y[6], "D6", "gauche");
 
-  // ---- Recharge : J1 → D2 (Schottky) → broche 5V ----------------------
+  // ---- Recharge : J1 → D2 (Schottky) → U4 (interrupteur) → broche 5V ---
+  // U4 est passant tant que R10 tire sa broche EN au 5 V. Par grand froid,
+  // D6 rend Q3 passant : EN tombe à 0, U4 coupe le 5 V du chargeur. Carte
+  // éteinte, R11 bloque Q3 : la recharge reste toujours possible.
+  var u4 = { x: 1040, y: 214, l: 80, h: 56 };
   branche("recharge", "D2", function () {
-    fil([[1100, Y[0]], [1000, Y[0]]]);
-    diode(1000, Y[0], 920, Y[0], "D2", "SS14 Schottky", "schottky");
-    fil([[920, Y[0]], [XD, Y[0]]]);
+    fil([[1300, Y[0]], [1260, Y[0]]]);
+    diode(1260, Y[0], 1180, Y[0], "D2", "SS14 Schottky", "schottky");
+    fil([[1180, Y[0]], [u4.x + u4.l, Y[0]]]);
   });
+  noeud(1150, Y[0]);
+  composant("U4", function () {
+    rect(u4.x, u4.y, u4.l, u4.h, "sch-corps sch-circuit");
+    texte(u4.x, u4.y - 10, "U4", "sch-ref");
+    texte(u4.x + 24, u4.y - 10, "TPS22918", "sch-val");
+    texte(u4.x + u4.l - 6, Y[0] + 4, "IN", "sch-broche", "end");
+    texte(u4.x + 6, Y[0] + 4, "OUT", "sch-broche");
+    texte(u4.x + u4.l / 2, u4.y + u4.h - 6, "EN", "sch-broche", "middle");
+  });
+  branche("vbus-xiao", "U1.5V", function () { fil([[u4.x, Y[0]], [XD, Y[0]]]); });
+  branche("tirage-en", "R10", function () {
+    resistanceV(1150, Y[0], 345, "R10", "100 kΩ");
+    fil([[1150, 345], [1080, 345]]);
+  });
+  noeud(1080, 345);
+  fil([[1080, u4.y + u4.h], [1080, 345]]);
+  var q3;
+  branche("coupure", "R10", function () {
+    fil([[1080, 345], [1080, 390]]);
+    q3 = mosfetN(1030, 430, "Q3", "2N7002");
+    masse(q3.source[0], q3.source[1]);
+  });
+  branche("grille-q3", "R11", function () {
+    fil([[990, 430], [1030, 430]]);
+    resistanceV(1005, 430, 492, "R11", "100 kΩ", false, true);
+    masse(1005, 492);
+  });
+  noeud(1005, 430);
+  etiquette(990, 430, "D6", "gauche");
   composant("J1", function () {
-    rect(1100, Y[0] - 20, 40, 90, "sch-corps sch-circuit");
-    ajouter('<circle class="sch-borne" cx="1100" cy="' + Y[0] + '" r="4"/>');
-    ajouter('<circle class="sch-borne" cx="1100" cy="' + Y[1] + '" r="4"/>');
-    texte(1120, Y[0] + 4, "1", "sch-broche", "middle");
-    texte(1120, Y[1] + 4, "2", "sch-broche", "middle");
-    texte(1152, Y[0] - 4, "J1", "sch-ref");
-    texte(1152, Y[0] + 12, "connecteur", "sch-val");
-    texte(1152, Y[0] + 27, "magnétique", "sch-val");
-    texte(1152, Y[0] + 42, "recharge 5 V", "sch-val");
+    rect(1300, Y[0] - 20, 40, 90, "sch-corps sch-circuit");
+    ajouter('<circle class="sch-borne" cx="1300" cy="' + Y[0] + '" r="4"/>');
+    ajouter('<circle class="sch-borne" cx="1300" cy="' + Y[1] + '" r="4"/>');
+    texte(1320, Y[0] + 4, "1", "sch-broche", "middle");
+    texte(1320, Y[1] + 4, "2", "sch-broche", "middle");
+    texte(1352, Y[0] - 4, "J1", "sch-ref");
+    texte(1352, Y[0] + 12, "connecteur", "sch-val");
+    texte(1352, Y[0] + 27, "magnétique", "sch-val");
+    texte(1352, Y[0] + 42, "recharge 5 V", "sch-val");
   });
   branche("recharge-retour", "J1", function () {
-    masse(1060, Y[1] + 10);
-    fil([[1060, Y[1] + 10], [1060, Y[1]], [1100, Y[1]]]);
+    masse(1260, Y[1] + 10);
+    fil([[1260, Y[1] + 10], [1260, Y[1]], [1300, Y[1]]]);
   });
-  tension(1050, Y[0] - 6, "V5EXT", "middle");
-  mesure(960, 286, "val-D2", "middle");
-  mesure(1152, Y[0] + 60, "val-J1");
+  tension(1280, Y[0] - 6, "V5EXT", "middle");
+  tension(1150, Y[0] - 6, "V5D", "middle");
+  tension(1074, 335, "EN4", "end");
+  tension(1026, 420, "G3", "end");
+  mesure(1220, 286, "val-D2", "middle");
+  mesure(1352, Y[0] + 60, "val-J1");
+  mesure(1080, 290, "val-U4", "middle");
+  mesure(1163, 316, "val-R10");
+  mesure(1098, 458, "val-Q3");
+  mesure(992, 470, "val-R11", "end");
 
   // ---- GND, 3V3, bus SPI côté U1 --------------------------------------
   fil([[XD, Y[1]], [850, Y[1]]]);
@@ -495,8 +549,7 @@ function dessiner() {
   etiquette(1000, Y[2], "+3V3", "droite");
   mesure(978, 395, "val-C3");
   etiquette(XD, Y[3], "MOSI", "droite");
-  nonConnectee(XD, Y[4]);
-  texte(XD + 14, Y[4] + 4, "NC · MISO réservée au SPI", "sch-note");
+  etiquette(XD, Y[4], "MISO", "droite");
   etiquette(XD, Y[5], "SCK", "droite");
 
   // ---- LED d'alerte : D7 → R1 → LED1 → GND ----------------------------
@@ -612,6 +665,37 @@ function dessiner() {
   mesure(1386, 617, "val-LED3");
   mesure(1288, 707, "val-Q2");
 
+  // ---- U3 : baromètre BMP280, sur le bus SPI de l'écran ----------------
+  // SDO (sa sortie de données) arrive sur D9, la broche MISO jusqu'ici
+  // inutilisée ; CSB (sélection) sur D0, libérée par le fil BUSY.
+  var B = { x: 470, y: 856, l: 140, h: 150 };
+  var yB = [880, 915, 950, 985];
+  composant("U3", function () {
+    rect(B.x, B.y, B.l, B.h, "sch-corps sch-circuit");
+    texte(B.x, B.y - 12, "U3", "sch-ref");
+    texte(B.x + 26, B.y - 12, "baromètre BMP280 (SPI)", "sch-val");
+    ["VCC", "GND", "SCL", "SDA"].forEach(function (n, k) { texte(B.x + 10, yB[k] + 4, n, "sch-broche"); });
+    ["CSB", "SDO"].forEach(function (n, k) { texte(B.x + B.l - 10, yB[k] + 4, n, "sch-broche", "end"); });
+    texte(B.x + B.l - 10, yB[3] + 4, "sous l'évent", "sch-broche sch-discret", "end");
+    mesure(B.x + B.l - 10, yB[2] + 4, "val-U3", "end");
+  });
+  branche("barometre-vcc", "U3", function () {
+    fil([[440, yB[0]], [B.x, yB[0]]]);
+    fil([[B.x, yB[1]], [445, yB[1]]]);
+    masse(445, yB[1]);
+  });
+  etiquette(440, yB[0], "+3V3", "gauche");
+  busSignal("spi", function () {
+    fil([[440, yB[2]], [B.x, yB[2]]]);
+    fil([[440, yB[3]], [B.x, yB[3]]]);
+    fil([[650, yB[0]], [B.x + B.l, yB[0]]]);
+    fil([[B.x + B.l, yB[1]], [650, yB[1]]]);
+  }, "barometre");
+  etiquette(440, yB[2], "SCK", "gauche");
+  etiquette(440, yB[3], "MOSI", "gauche");
+  etiquette(650, yB[0], "CSB", "droite");
+  etiquette(650, yB[1], "MISO", "droite");
+
   // ---- Option : tirage externe du reed (non monté) ---------------------
   var oX = 40, oY = 836;
   ajouter('<rect x="' + oX + '" y="' + oY + '" width="300" height="180" class="sch-encadre"/>');
@@ -640,8 +724,8 @@ function dessiner() {
   texte(cX + 12, cY + 24, "Boîtier de guidon TPMS-01", "sch-ref");
   texte(cX + 12, cY + 60, "BTS CIEL IR · épreuve E6", "sch-val");
   texte(cX + 12, cY + 82, "Thibault MORRETTON", "sch-val");
-  texte(cX + 322, cY + 24, "RÉV. B", "sch-ref");
-  texte(cX + 322, cY + 60, "22/10/2026", "sch-val");
+  texte(cX + 322, cY + 24, "RÉV. C", "sch-ref");
+  texte(cX + 322, cY + 60, "24/10/2026", "sch-val");
   texte(cX + 322, cY + 82, "feuille 1/1", "sch-val");
 
   return elements.join("\n");
@@ -764,14 +848,15 @@ TPMS.schemaSvg = function (options) {
 };
 
 // Liste des repères du schéma (pour les tests et la documentation).
-TPMS.SCHEMA_COMPOSANTS = ["U1", "U2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9",
-  "C1", "C2", "C3", "D1", "D2", "LED1", "LED2", "LED3", "Q1", "Q2", "BZ1", "BT1",
+TPMS.SCHEMA_COMPOSANTS = ["U1", "U2", "U3", "U4", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9",
+  "R10", "R11", "R12", "C1", "C2", "C3", "D1", "D2", "LED1", "LED2", "LED3", "Q1", "Q2", "Q3", "BZ1", "BT1",
   "SW1", "SW2", "S1", "J1", "J2"];
 TPMS.SCHEMA_NOEUDS = {           // id de tension → nom de l'équipotentielle sur le schéma
-  VBAT: "+VBAT", V3V3: "+3V3", VBUS: "5V (VBUS)", V5EXT: "J1 broche 1", GND: "GND",
-  D0: "BUSY", D1: "RES", D2: "DC", D3: "CS", D4: "reed (côté XIAO)", D5: "bouton 1", D6: "bouton 2",
-  D7: "LED d'alerte", D8: "SCK", D9: "MISO (en l'air)", D10: "MOSI",
+  VBAT: "+VBAT", V3V3: "+3V3", VBUS: "5V (VBUS)", V5EXT: "J1 broche 1", V5D: "entrée de U4", GND: "GND",
+  D0: "CSB (baromètre)", D1: "RES", D2: "DC", D3: "CS", D4: "reed (côté XIAO)", D5: "boutons 1 et 2", D6: "coupure de recharge",
+  D7: "LED d'alerte", D8: "SCK", D9: "MISO (SDO du baromètre)", D10: "MOSI",
   NFC1: "commande buzzer", NFC2: "commande éclairage", G1: "grille Q1", G2: "grille Q2",
+  G3: "grille Q3", EN4: "EN de U4 (0 = recharge coupée)",
   DQ1: "drain Q1 (− du buzzer)", DQ2: "drain Q2 (cathodes LED2/LED3)",
   LED1A: "anode LED1", LED2A: "anode LED2", LED3A: "anode LED3", J2: "J2 broche 1 (reed)"
 };
@@ -877,6 +962,7 @@ TPMS.schemaMettreAJour = function (racine, etat) {
   basculer(trouver("comp-BZ1"), "sch-sonne", !!s.buzzerSonne);
   basculer(trouver("comp-Q1"), "sch-passant", !!s.q1Passant);
   basculer(trouver("comp-Q2"), "sch-passant", !!s.q2Passant);
+  basculer(trouver("comp-Q3"), "sch-passant", !!s.q3Passant);
   basculer(trouver("comp-S1"), "sch-ferme", !!s.reedFerme);
   basculer(trouver("aimant"), "sch-proche", !!s.reedFerme);
   basculer(trouver("comp-SW1"), "sch-appuye", (c.SW1 || 0) > 0 || !!s.bouton1);

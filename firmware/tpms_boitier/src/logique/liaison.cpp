@@ -108,8 +108,10 @@ bool liaisonMesures(Boitier* b, int32_t maintenantMs, uint8_t* o) {
   mesures.enCharge = vue.enCharge;
   mesures.eclairage = vue.eclairage;
   mesures.attenteConfirmation = b->liaison.enAttente;
+  mesures.chargeCoupee = b->blocageCharge != BLOCAGE_AUCUN;
+  mesures.correctionBar = vue.correctionBar;
   mesures.sequence = b->liaison.sequence;
-  b->liaison.sequence = (uint16_t)(b->liaison.sequence + 1);   // repasse à 0 après 65535
+  b->liaison.sequence = (uint16_t)((b->liaison.sequence + 1) & 0xFF);   // 1 octet : repasse à 0 après 255
   encoderMesures(&mesures, o);
   return true;
 }

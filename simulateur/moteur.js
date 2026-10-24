@@ -28,6 +28,12 @@ TPMS.PAS_CALME_S = 1;          // vélo garé et boîtier en veille
 TPMS.ENREG_ROULAGE_MS = 1000;  // un point d'enregistrement par seconde en roulant
 TPMS.ENREG_CALME_MS = 60000;   // ... et par minute vélo garé
 
+// Température du boîtier : il suit l'air qui l'entoure avec retard (masse
+// du boîtier et de la batterie). HYPOTHÈSE τ ≈ 20 min, à mesurer.
+// Sur son chargeur, il est à la maison, sauf option « recharge dehors ».
+TPMS.TAU_BOITIER_S = 1200;
+TPMS.TEMPERATURE_MAISON_C = 19;
+
 // Position des éléments sur le vélo, dans le repère du vélo
 // (avant = +, haut = +), en mètres. Hypothèses d'un vélo de taille M.
 TPMS.GEOMETRIE_VELO = {
@@ -45,7 +51,10 @@ TPMS.GEOMETRIE_VELO = {
 //             pressionAVBar, pressionARBar, volumePneuL, largeurPneuMm,
 //             vehiculesVoisins (nombre de vélos équipés autour), planning,
 //             masseCyclisteKg, capteursV2 (true = capteurs « version 2 »,
-//             adresse changeante et trames signées, voir logique/trame2.js) }
+//             adresse changeante et trames signées, voir logique/trame2.js),
+//             barometre ("evente" par défaut, "sans-event" ou "aucun",
+//             voir monde/barometre.js), rechargeDehors (true = le boîtier
+//             se recharge à l'air extérieur, et non à la maison) }
 TPMS.creerMonde = function (options) {
   var o = options;
   var graine = o.graine >>> 0;
@@ -80,6 +89,14 @@ TPMS.creerMonde = function (options) {
     boitier: TPMS.creerBoitier(),
     lipo: TPMS.creerLipo({ capaciteMAh: 500, etatCharge: 1, graine: graine }),
     vbusV: 0,                       // 5 V quand le câble magnétique est branché
+    vbusCarte: false,               // ... et qu'il arrive sur la carte (recharge non coupée)
+    coupureCharge: false,           // sortie du boîtier : coupure de la recharge (broche D6)
+    temperatureBoitierC: instant.temperatureC,
+    barometre: TPMS.creerBarometre({
+      mode: o.barometre || "evente", graine: graine,
+      pressionAirPa: TPMS.pressionAtmospheriquePa(depart.altitudeM), temperatureC: instant.temperatureC
+    }),
+    prochainBaroMs: 0,
     boutons: { 1: false, 2: false },
     electronique: null,             // dernier résultat de circuitResoudre
     ecranOccupeJusquaMs: 0,
@@ -661,12 +678,33 @@ function appliquerSorties(m, s) {
   }
   m.ledAlerte = s.ledAlerte;
   m.ledsEclairage = s.ledsEclairage;
+  m.coupureCharge = !!s.coupureCharge;
 }
 
 // L'électronique consomme ; la LiPo se vide ou se recharge.
 function electronique(m, t, dtS) {
   var b = m.boitier;
   var phaseBip = t - m.bipDebutMs;
+
+  // Température du boîtier et air autour du baromètre.
+  var airAutour = (m.vbusV > 0 && !m.options.rechargeDehors) ? TPMS.TEMPERATURE_MAISON_C : m.instant.temperatureC;
+  m.temperatureBoitierC += (airAutour - m.temperatureBoitierC) * (1 - Math.exp(-dtS / TPMS.TAU_BOITIER_S));
+  TPMS.barometreAvancer(m.barometre, dtS, TPMS.pressionAtmospheriquePa(m.point.altitudeM), m.temperatureBoitierC);
+  // Une mesure toutes les 10 s, seulement boîtier éveillé (en veille, le
+  // processeur est arrêté).
+  if (!b.veille && !m.boitierMort && t >= m.prochainBaroMs) {
+    TPMS.boitierBarometre(b, TPMS.barometreMesurer(m.barometre, m.temperatureBoitierC), t);
+    m.prochainBaroMs = t + TPMS.PERIODE_BAROMETRE_MS;
+  }
+  // Le 5 V n'arrive sur la carte que si la coupure est relâchée. Carte
+  // éteinte (batterie vide), la coupure est relâchée d'office : la
+  // résistance R11 bloque Q3, l'interrupteur U4 reste passant.
+  var coupe = m.coupureCharge && !b.veille && !m.boitierMort;
+  var vbusCarte = m.vbusV > 0 && !coupe;
+  // Le 5 V qui apparaît réveille le nRF52840 (détection de VBUS).
+  if (vbusCarte && !m.vbusCarte && !m.boitierMort) TPMS.boitierChargeurBranche(b, t);
+  m.vbusCarte = vbusCarte;
+  var vbus = vbusCarte ? m.vbusV : 0;
   var entrees = {
     veille: b.veille || m.boitierMort,
     cpuActif: !b.veille && !m.boitierMort,
@@ -680,7 +718,8 @@ function electronique(m, t, dtS) {
     reedPullupActif: m.reed.pullup,
     bouton1: m.boutons[1],
     bouton2: m.boutons[2],
-    vbusV: m.vbusV,
+    vbusV: m.vbusV,                 // tension du connecteur ; U4 la coupe ou non
+    coupureCharge: coupe,
     appConnectee: b.liaison.connecte
   };
   // Le circuit ne change que si une entrée change (fenêtre radio, écran,
@@ -688,24 +727,24 @@ function electronique(m, t, dtS) {
   // on garde le résultat précédent (gros gain de calcul).
   var cle = entrees.veille + "|" + entrees.radioReception + "|" + entrees.radioEmission + "|" + entrees.ecran + "|" +
     entrees.ledAlerte + "|" + entrees.eclairage + "|" + entrees.buzzer + "|" + entrees.reedFerme + "|" +
-    entrees.reedPullupActif + "|" + entrees.bouton1 + "|" + entrees.bouton2 + "|" + entrees.vbusV + "|" +
+    entrees.reedPullupActif + "|" + entrees.bouton1 + "|" + entrees.bouton2 + "|" + entrees.vbusV + "|" + entrees.coupureCharge + "|" +
     m.lipo.coupee + "|" + Math.round(m.lipo.tensionV * 1000);
   var e = m.cleCircuit === cle ? m.electronique : TPMS.circuitResoudre(entrees, m.lipo);
   m.cleCircuit = cle;
   m.electronique = e;
-  TPMS.lipoAvancer(m.lipo, dtS, e.courantBatterieA, m.instant.temperatureC);
+  TPMS.lipoAvancer(m.lipo, dtS, e.courantBatterieA, m.temperatureBoitierC);
 
   // Le boîtier ne connaît sa batterie que par la tension qu'il mesure
   // (une mesure par seconde, comme le firmware).
   if (!(t < m.prochaineJaugeMs)) {
-    b.batteriePct = pourcentageDepuisTension(m.lipo.tensionV, m.instant.temperatureC);
+    b.batteriePct = pourcentageDepuisTension(m.lipo.tensionV, m.temperatureBoitierC);
     m.prochaineJaugeMs = t + 1000;
   }
-  b.enCharge = m.vbusV > 0 && m.lipo.etatCharge < 0.995;
+  b.enCharge = vbus > 0 && m.lipo.etatCharge < 0.995;
 
   // Batterie coupée par sa protection : le boîtier s'éteint. L'e-paper
   // garde sa dernière image (il n'a pas besoin de courant pour ça).
-  var mort = m.lipo.coupee && m.vbusV === 0;
+  var mort = m.lipo.coupee && vbus === 0;
   if (mort && !m.boitierMort) TPMS.boitierJournal(b, t, "Batterie vide : boîtier éteint");
   if (!mort && m.boitierMort) TPMS.boitierJournal(b, t, "Alimentation revenue : redémarrage");
   m.boitierMort = mort;

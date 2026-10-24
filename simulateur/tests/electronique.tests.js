@@ -10,7 +10,7 @@
 
 if (typeof require !== "undefined") {
   var fichiers = [
-    "../../logique/energie.js",
+    "../../logique/energie.js", "../../logique/boutons.js",
     "../monde/alea.js", "../monde/lipo.js", "../monde/circuit.js",
     "../vues/schema.js"
   ];
@@ -221,11 +221,32 @@ var ETATS = {
   var tout = TPMS.circuitResoudre({ cpuActif: true, radioReception: true, ecran: "partiel", ledAlerte: true, eclairage: true,
     buzzer: true, reedFerme: true, bouton1: true, bouton2: true, appConnectee: true }, lipo);
   var c = tout.courants;
-  var somme = c.U1 + c.U2 + c.LED1 + c.BZ1 + c.R2 + c.R3 + c.S1 + c.SW1 + c.SW2 + c.Q2 + c["U1.pont"] + c["U1.regulateur"];
+  var somme = c.U1 + c.U2 + c.U3 + c.LED1 + c.BZ1 + c.R2 + c.R3 + c.R11 + c.S1 + c.SW1 + c.SW2 + c.Q2 + c["U1.pont"] + c["U1.regulateur"];
   verifier("loi des nœuds : I batterie = somme des courants des composants", proche(tout.courantBatterieA, somme, 1e-9),
     ma(tout.courantBatterieA) + " / " + ma(somme));
   verifier("puissance = VBAT × I", proche(tout.puissanceW, tout.tensions.VBAT * tout.courantBatterieA, 1e-9));
   verifier("tout allumé : ≈ 49 mA", tout.courantBatterieA > 0.044 && tout.courantBatterieA < 0.054, ma(tout.courantBatterieA));
+
+  // Deux boutons sur D5 : la tension lue suffit à les distinguer (boutons.js)
+  var sw2 = TPMS.circuitResoudre({ cpuActif: true, bouton2: true, vbatV: 3.8 }, null);
+  verifier("bouton 2 seul : D5 ≈ 0,48 V à travers R12, reconnu comme SW2",
+    sw2.tensions.D5 > 0.4 && sw2.tensions.D5 < 0.56 && TPMS.boutonDepuisTension(sw2.tensions.D5, sw2.tensions.V3V3) === 2,
+    sw2.tensions.D5.toFixed(3) + " V");
+  var sw1 = TPMS.circuitResoudre({ cpuActif: true, bouton1: true, vbatV: 3.8 }, null);
+  verifier("bouton 1 seul : D5 = 0 V, reconnu comme SW1", sw1.tensions.D5 === 0 && TPMS.boutonDepuisTension(0, sw1.tensions.V3V3) === 1);
+
+  // Coupure de la recharge (grand froid) : D6 → Q3 → EN de U4
+  var froide = TPMS.creerLipo({ etatCharge: 0.5 });
+  var libre = TPMS.circuitResoudre({ cpuActif: true, vbusV: 5 }, froide);
+  var coupee = TPMS.circuitResoudre({ cpuActif: true, vbusV: 5, coupureCharge: true }, froide);
+  verifier("recharge permise : U4 passant, la batterie se charge", libre.courantChargeA > 0.05 && libre.tensions.EN4 > 4, ma(libre.courantChargeA));
+  verifier("recharge coupée : plus de 5 V sur la carte, aucun courant de charge",
+    coupee.tensions.VBUS === 0 && coupee.courantChargeA === 0 && coupee.etats.rechargeCoupee && coupee.courantBatterieA > 0,
+    coupee.tensions.VBUS + " V, " + ma(coupee.courantChargeA));
+  verifier("recharge coupée : R10 ne prend que ≈ 47 µA, sur le chargeur", coupee.courants.R10 > 40e-6 && coupee.courants.R10 < 50e-6 &&
+    proche(coupee.courants.J1, coupee.courants.R10 + coupee.courants.U4, 1e-9), (coupee.courants.R10 * 1e6).toFixed(1) + " µA");
+  var eteinte = TPMS.circuitResoudre({ veille: true, vbusV: 5, coupureCharge: true }, froide);
+  verifier("carte endormie ou éteinte : la coupure se relâche toute seule (R11)", eteinte.courantChargeA > 0.05 && !eteinte.etats.rechargeCoupee);
 
   // Composants tirés au sort (tolérances)
   var k1 = TPMS.circuitTirerComposants(3), k2 = TPMS.circuitTirerComposants(3), k3 = TPMS.circuitTirerComposants(4);

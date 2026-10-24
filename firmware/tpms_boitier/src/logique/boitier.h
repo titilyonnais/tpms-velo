@@ -33,6 +33,7 @@
 #include "liaison.h"
 #include "journal.h"
 #include "trame2.h"
+#include "barometre.h"
 
 // Un rafraîchissement complet (écran qui clignote noir/blanc) toutes les
 // 20 mises à jour partielles, pour effacer les traces ("ghosting").
@@ -109,6 +110,15 @@ struct Boitier {
   int secondesCalmes;
   bool radioSaturee;
   JournalSecurise journalSecurise;   // journal chaîné (journal.h)
+  // Baromètre BMP280 (barometre.h) : dernière mesure valable, correction
+  // d'altitude qui en découle, et blocage de la recharge.
+  bool baroConnu;                   // une mesure valable est disponible
+  bool baroEnPanne;                 // pour ne noter la panne qu'une fois au journal
+  float baroPressionHpa;
+  float baroTemperatureC;
+  float correctionBar;
+  BlocageCharge blocageCharge;
+  bool surChargeur;                 // réveillé par le 5 V du chargeur, pas encore repris en main
 };
 
 const int SEUIL_INONDATION_PAR_S = 50;
@@ -139,6 +149,9 @@ struct Sorties {
   bool ledsEclairage;
   bool radio;
   bool appConnectee;
+  // Coupure de la recharge (broche D6). Relâchée en veille : si le câble
+  // est encore branché, le 5 V revient et réveille le boîtier.
+  bool coupureCharge;
   Rafraichissement rafraichissement;
 };
 
@@ -163,6 +176,14 @@ void boitierEcouteRenforcee(Boitier* b, int32_t maintenantMs);
 Resultat boitierRecevoirTrame(Boitier* b, const uint8_t* octets, int longueur, int32_t maintenantMs);
 
 void boitierReveiller(Boitier* b, int32_t maintenantMs, const char* raison);
+
+// Une mesure du baromètre, toutes les 10 s boîtier éveillé.
+// mesureOk = false si le BMP280 ne répond pas (en JS : mesure null).
+const int32_t PERIODE_BAROMETRE_MS = 10000;
+void boitierBarometre(Boitier* b, bool mesureOk, float pressionHpa, float temperatureC, int32_t maintenantMs);
+
+// Le 5 V du chargeur apparaît sur la carte (VBUS) : réveil et nouvelles mesures.
+void boitierChargeurBranche(Boitier* b, int32_t maintenantMs);
 
 // L'aimant passe devant le reed.
 bool boitierTopRoue(Boitier* b, int32_t maintenantMs);

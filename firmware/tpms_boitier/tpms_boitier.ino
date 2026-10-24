@@ -27,6 +27,7 @@
 #include "src/logique/tests_logique.h"
 #include "src/materiel/batterie.h"
 #include "src/materiel/capteurs_ble.h"
+#include "src/materiel/barometre_bmp280.h"
 #include "src/materiel/ecran_epaper.h"
 #include "src/materiel/entrees.h"
 #include "src/materiel/liaison_ble.h"
@@ -41,6 +42,23 @@ Boitier b;
 int32_t derniereMajMs = 0;
 int32_t dernieresMesuresMs = 0;
 int32_t derniereBatterieMs = 0;
+int32_t dernierBaroMs = 0;
+bool vbusPrecedent = false;   // le 5 V du chargeur était-il là au tour précédent ?
+
+// Mesure du baromètre, transmise à la logique.
+void lireBarometre(int32_t t) {
+  float pressionHpa = 0.0f, temperatureC = 0.0f;
+  bool ok = barometreLire(&pressionHpa, &temperatureC);
+  boitierBarometre(&b, ok, pressionHpa, temperatureC, t);
+}
+
+// Le 5 V du chargeur est-il présent sur la carte (VBUS du nRF52840) ?
+// Avec la pile radio active, le registre se lit par le SoftDevice.
+bool vbusPresent() {
+  uint32_t etat = 0;
+  sd_power_usbregstatus_get(&etat);
+  return (etat & POWER_USBREGSTATUS_VBUSDETECT_Msk) != 0;
+}
 
 // L'heure en ms depuis le démarrage, en entier signé (voir vitesse.h).
 int32_t maintenant() {
@@ -71,7 +89,8 @@ void setup() {
 
   // Cause du démarrage : à lire AVANT Bluefruit.begin().
   char raison[48];
-  veilleRaisonDemarrage(raison);
+  bool parChargeur = false;
+  veilleRaisonDemarrage(raison, &parChargeur);
 
 #if AUTOTEST
   // On laisse 2 s au moniteur série pour s'ouvrir, puis on rejoue les
@@ -97,12 +116,13 @@ void setup() {
   batterieDemarrer();
   batterieLire(&b, true);
   ecranDemarrer();
+  if (!barometreDemarrer()) boitierJournal(&b, maintenant(), "BMP280 absent : pas de correction d'altitude");
   liaisonBleDemarrer(&b);   // Bluefruit.begin() est appelé ici
   capteursDemarrer();
 
-  // Les deux boutons enfoncés au démarrage : on oublie les téléphones
-  // appairés (par exemple avant de prêter ou vendre le vélo).
-  if (entreesDeuxBoutonsAppuyes()) {
+  // Bouton 1 tenu 5 s au démarrage : on oublie les téléphones appairés
+  // (par exemple avant de prêter ou vendre le vélo).
+  if (entreesOubliDemande()) {
     liaisonBleOublierTelephones(&b, maintenant());
   }
 
@@ -114,6 +134,12 @@ void setup() {
   derniereMajMs = t - PERIODE_MAJ_MS;   // première mise à jour tout de suite
   dernieresMesuresMs = t;
   derniereBatterieMs = t;
+  // Première mesure du baromètre tout de suite : la correction d'altitude
+  // et l'autorisation de recharge sont connues avant la 1re trame.
+  lireBarometre(t);
+  dernierBaroMs = t;
+  vbusPrecedent = vbusPresent();
+  if (parChargeur) boitierChargeurBranche(&b, t);
 }
 
 void loop() {
@@ -127,6 +153,17 @@ void loop() {
   // 2. Fenêtre d'écoute radio (2 s toutes les 5 s).
   capteursFenetre(boitierEcoute(&b, t));
 
+  // Baromètre, toutes les 10 s (correction d'altitude, recharge à froid).
+  if (t - dernierBaroMs >= PERIODE_BAROMETRE_MS) {
+    dernierBaroMs = t;
+    lireBarometre(t);
+  }
+
+  // Le 5 V du chargeur vient d'apparaître : comme dans le simulateur.
+  bool vbus = vbusPresent();
+  if (vbus && !vbusPrecedent) boitierChargeurBranche(&b, t);
+  vbusPrecedent = vbus;
+
   // Batterie, toutes les 30 s.
   if (t - derniereBatterieMs >= PERIODE_BATTERIE_MS) {
     derniereBatterieMs = t;
@@ -139,9 +176,11 @@ void loop() {
     Sorties s = boitierMiseAJour(&b, t);
     sortiesAppliquer(&s, t);
     if (s.rafraichissement != RAFRAICHISSEMENT_AUCUN) {
-      // Peut durer jusqu'à 2 s : pendant ce temps, l'interruption du reed,
+      // Peut durer jusqu'à 5 s au froid (pas de fil BUSY, attente fixe) :
+      // pendant ce temps, l'interruption du reed,
       // la radio et la tâche des sorties continuent de fonctionner.
-      ecranEnvoyer(&b.ecranAffiche, s.rafraichissement == RAFRAICHISSEMENT_COMPLET);
+      bool complet = s.rafraichissement == RAFRAICHISSEMENT_COMPLET;
+      ecranEnvoyer(&b.ecranAffiche, complet, attenteEcranMs(complet, b.baroConnu, b.baroTemperatureC));
     }
     // 5. Veille décidée par la logique : l'écran affiche déjà « VEILLE ».
     if (b.veille) {

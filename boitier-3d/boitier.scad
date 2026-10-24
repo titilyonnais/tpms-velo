@@ -187,8 +187,40 @@ reed_cable_d = 2.5;   // [HYPOTHÈSE] diamètre du câble 2 fils
 reed_serrage = 0.3;   // [CHOIX] le trou est plus petit que le câble : passe-fil serré
 reed_y      = -4.0;   // [CHOIX] sortie sur le flanc gauche
 reed_z      = 8.5;    // [CHOIX]
-plaq        = [12, 14, 1.6, 2.4]; // [HYPOTHÈSE] plaquette des MOSFET : X, Y, circuit, composants
-plaq_pos    = [-12.0, 11.0, 6.0]; // [CHOIX] centre en X et Y, dessous en Z
+// Plaquette des MOSFET : X, Y, circuit, composants. Elle porte Q1, Q2, D1,
+// D2, R1 à R8, C2, C3 et, depuis l'ajout de la coupure de la recharge,
+// U4 (TPS22918, SOT-23-6), Q3 (2N7002, SOT-23), R10, R11 (100 kΩ) et R12
+// (2,2 kΩ, échelle des boutons). Surface des pastilles ≈ 92 mm² ; pour
+// souder au fer, on prévoit au moins 2 fois cette surface (pistes, fils,
+// place de la panne) : 184 mm² > 12 x 14 = 168. Elle passe donc de 12 à
+// 15 mm en X (210 mm²), en s'allongeant vers le centre (côté libre).
+plaq        = [15, 14, 1.6, 2.4]; // [HYPOTHÈSE] plaquette des MOSFET : X, Y, circuit, composants
+plaq_pos    = [-10.5, 11.0, 6.0]; // [CHOIX] centre en X et Y, dessous en Z (bord gauche inchangé)
+
+
+/* [Baromètre BMP280 et évent à membrane] */
+
+// Carte « GY-BMP280 » (capteur Bosch BMP280 + résistances de tirage),
+// sans connecteur : 6 fils soudés directement dans ses trous. Elle mesure
+// la pression de l'air (correction de l'altitude des capteurs de pneu) et
+// la température intérieure (refus de la recharge par grand froid).
+bmp_x       = 11.5;   // [HYPOTHÈSE] carte 11,5 x 15 mm (annonces courantes) : À MESURER
+bmp_y       = 15.0;   // [HYPOTHÈSE]
+bmp_pcb     = 1.6;    // [HYPOTHÈSE] épaisseur du circuit
+bmp_haut    = 3.0;    // [HYPOTHÈSE] hauteur totale, circuit compris (le BMP280 seul : 0,95 mm [FICHE Bosch])
+bmp_pos     = [0, -18.3]; // [CHOIX] centre de la carte : entre les 2 boutons, juste au-dessus
+                      // de l'évent (seule zone libre du fond assez grande, hors du socle)
+bmp_garde   = 1.0;    // [CHOIX] lame d'air entre la pastille et la carte
+// Évent : un trou dans le fond, fermé à l'intérieur par une pastille
+// autocollante à membrane ePTFE (l'air passe, l'eau non : IP67/IP68).
+// Sans lui, le baromètre mesurerait l'air enfermé à la fermeture.
+evt_d       = 3.0;    // [CHOIX] trou de l'évent (centré sous la carte du BMP280)
+evt_assise_d = 12.0;  // [CHOIX] assise plane de la pastille (pastille + 1 mm de chaque côté)
+evt_assise_h = 0.4;   // [CHOIX] 2 couches au-dessus du fond : surface neuve, repère de pose
+evt_chanfrein = 0.5;  // [CHOIX] chanfrein extérieur à 45° : la patte d'éléphant ne
+                      // rétrécit pas le trou, une goutte s'y accroche moins
+pastille_d  = 10.0;   // [HYPOTHÈSE] pastille ePTFE Ø 10 (à mesurer à la réception)
+pastille_ep = 0.3;    // [HYPOTHÈSE] membrane + adhésif
 
 
 /* [Joint torique entre coque et couvercle] */
@@ -383,6 +415,17 @@ gl_y_arret = rail_y[0] + decal_boitier - 0.1;              // butée : -8,1
 gl_y_aronde = rail_y[1] + decal_boitier - 0.5;             // fin de la queue d'aronde : 3,5
 xiao_z    = gl_z + xiao_garde;                             // dessous de la XIAO : 7,2
 
+// ---------- Évent et BMP280 (repère du boîtier) ----------
+evt_pos   = bmp_pos;                                       // trou sous le centre de la carte
+evt_z     = plancher + evt_assise_h;                       // dessus de l'assise : 2,4
+bmp_z     = evt_z + pastille_ep + bmp_garde;               // dessous de la carte : 3,7
+// Dessous du corps d'un bouton (cylindre d'axe Y) au-dessus du point
+// d'abscisse x : la carte et ses équerres doivent passer dessous.
+function z_corps_bt(x) =
+    let(dx = abs(bt_entraxe / 2 - abs(x)), r = bt_corps_d / 2)
+    dx >= r ? 99 : z_bt - sqrt(r * r - dx * dx);
+bmp_marge = z_corps_bt(bmp_x / 2) - (bmp_z + bmp_haut);   // garde sous les boutons : 0,41
+
 // ---------- Collier (repère du collier : origine sur l'axe du cintre) ----------
 col_ri    = collier_pour / 2 + caoutchouc + cale_min + jeu_serre; // 18,2
 col_ro    = col_ri + collier_ep;                           // 21,7
@@ -421,6 +464,19 @@ assert(bt_entraxe / 2 + bt_tete_d / 2 <= ext_x / 2 - r_ext + 1.0, "Tête de bout
 assert(cale_ep(collier_pour) >= cale_min - 0.01, "Cale trop fine");
 assert(cintre_d <= collier_pour, "Le cintre est plus gros que le collier (changer collier_pour)");
 assert(Zs - col_ro >= 1.2, "Selle trop fine");
+// Évent et BMP280 : assise sur la partie plate du fond, en arrière du
+// socle de la glissière ; carte libre sous les boutons, devant leurs écrous
+assert(pastille_d <= evt_assise_d - 1, "La pastille déborde de son assise");
+assert(abs(evt_pos[0]) + evt_assise_d / 2 <= al[0] / 2 - chanf_int_x
+       && evt_pos[1] - evt_assise_d / 2 >= -al[1] / 2 + chanf_int_y, "L'assise de l'évent mord sur le chanfrein intérieur");
+assert(evt_pos[1] + evt_assise_d / 2 <= gl_y_arret - 1.5, "L'assise de l'évent mord sur le socle de la glissière");
+assert(evt_pos[1] + evt_d / 2 + evt_chanfrein + 2 <= gl_y_arret, "L'évent débouche dans la glissière");
+assert(bmp_marge >= 0.2, str("Le BMP280 touche le corps d'un bouton (garde ", bmp_marge, ")"));
+assert(bmp_z + bmp_pcb + 0.3 <= z_corps_bt(bmp_x / 2 + 0.3 + 1.2), "Les équerres du BMP280 touchent un bouton");
+assert(bmp_pos[1] - bmp_y / 2 >= -al[1] / 2 + bt_ecrou_ep + 0.3, "Le BMP280 touche l'écrou d'un bouton");
+assert(bmp_pos[1] + bmp_y / 2 + 0.3 <= min(bat_y0 + 1, gl_y_arret - 1.5), "Le BMP280 touche le plot de la batterie ou le socle");
+// les plots d'angle de la carte restent hors de la pastille
+assert(norm([bmp_x / 2 - 2, bmp_y / 2 - 2]) >= pastille_d / 2 + 0.5, "Les plots du BMP280 gênent la pastille");
 
 echo(str("BOÎTIER : ", ext_x, " x ", ext_y, " x ", H, " mm ; alésage ", al[0], " x ", al[1],
          " ; parois ", paroi_x, " / ", paroi_y, " mm"));
@@ -433,6 +489,8 @@ echo(str("INSERTS : centre (", round(ins_c[0] * 100) / 100, ", ", round(ins_c[1]
          ") ; matière ", round(ins_matiere * 100) / 100, " mm de chaque côté"));
 echo(str("CALES : ", [for (d = cintres) if (d <= collier_pour) round(cale_ep(d) * 100) / 100], " mm pour ",
          [for (d = cintres) if (d <= collier_pour) d], " ; collier imprimé pour ", collier_pour, " mm"));
+echo(str("ÉVENT : Ø ", evt_d, " en (", evt_pos[0], ", ", evt_pos[1], ") sous le fond ; BMP280 de z = ", bmp_z,
+         " à ", bmp_z + bmp_haut, " ; garde sous les boutons ", round(bmp_marge * 100) / 100, " mm"));
 
 
 
@@ -605,6 +663,21 @@ module amenagements() {
     // 2 plots sous la plaquette des MOSFET
     for (py = [plaq_pos[1] - plaq[1] / 2 + 2, plaq_pos[1] + plaq[1] / 2 - 2])
         translate([plaq_pos[0] - 4, py - 1.5, plancher - 0.01]) cube([3, 3, plaq_z - plancher + 0.01]);
+
+    // assise plane de la pastille de l'évent (disque de 0,4 mm sur le fond)
+    translate([evt_pos[0], evt_pos[1], plancher - 0.01]) cylinder(d = evt_assise_d, h = evt_assise_h + 0.01);
+
+    // berceau du BMP280 (comme celui de la XIAO) : 4 plots d'angle, hors de
+    // la pastille, et 4 équerres de centrage ; un point de silicone neutre
+    // sur deux plots tient la carte
+    for (sx = [-1, 1], sy = [-1, 1]) {
+        px = bmp_pos[0] + sx * bmp_x / 2;
+        py = bmp_pos[1] + sy * bmp_y / 2;
+        translate([sx > 0 ? px - 2 : px, sy > 0 ? py - 2 : py, plancher - 0.01])
+            cube([2, 2, bmp_z - plancher + 0.01]);
+        translate([sx > 0 ? px + 0.3 : px - 1.5, sy > 0 ? py - 3 : py, plancher - 0.01])
+            cube([1.2, 3, bmp_z + bmp_pcb - plancher + 0.01]);
+    }
 }
 
 // Trous et creux de la coque
@@ -643,6 +716,11 @@ module percages_coque() {
     trou_x([-ext_x / 2 - 2, reed_y, reed_z], reed_cable_d - reed_serrage, paroi_x + 8);
     translate([-ext_x / 2 - profil_x(reed_z) - 0.01, reed_y, reed_z]) rotate([0, 90, 0])
         cylinder(d1 = reed_cable_d + 2.5, d2 = reed_cable_d - reed_serrage, h = 1.5);
+    // évent : trou vertical (fond + assise) et chanfrein extérieur à 45°
+    translate([evt_pos[0], evt_pos[1], -0.01]) {
+        cylinder(d = evt_d + jeu_trou, h = evt_z + 0.03);
+        cylinder(d1 = evt_d + jeu_trou + 2 * evt_chanfrein, d2 = evt_d + jeu_trou, h = evt_chanfrein);
+    }
     // glissière femelle
     glissiere_femelle();
     // trou du détrompeur (au-dessus de la zone d'appui du joint)
@@ -959,8 +1037,12 @@ module joint_torique() {
 // Liste des fantômes du boîtier (nom, couleur)
 fantomes_boitier = ["ecran", "vitre", "xiao", "batterie", "buzzer", "boutons", "led_rouge",
                     "led_blanches", "connecteur", "plaquette", "cable_reed", "joint",
-                    "vis_couvercle", "inserts", "vis_ecran"];
+                    "vis_couvercle", "inserts", "vis_ecran", "bmp280", "pastille_event"];
 fantomes_collier = ["cintre", "caoutchouc", "vis_collier", "ecrou_collier"];
+// Volume de contrôle (jamais affiché) : l'air de l'évent, dans le trou et
+// sous le boîtier. Aucune pièce ne doit le toucher (trou bien débouché,
+// évent ni bouché par la coque, ni masqué par le collier ou la bride).
+volumes_controle = ["air_event"];
 
 module fantome(nom) {
     if (nom == "ecran") {
@@ -1032,6 +1114,19 @@ module fantome(nom) {
             cylinder(d = 3.8, h = 1.3);
             cylinder(d = ecr_vis_avant_trou - 0.05, h = 5);
         }
+    if (nom == "bmp280")   // posée sur ses plots, composants au-dessus (retrait de 1 mm)
+        translate([bmp_pos[0] - bmp_x / 2, bmp_pos[1] - bmp_y / 2, bmp_z + 0.01]) {
+            cube([bmp_x, bmp_y, bmp_pcb]);
+            translate([1, 1, bmp_pcb]) cube([bmp_x - 2, bmp_y - 2, bmp_haut - bmp_pcb]);
+        }
+    if (nom == "pastille_event")   // collée sur son assise
+        translate([evt_pos[0], evt_pos[1], evt_z + 0.01]) cylinder(d = pastille_d, h = pastille_ep - 0.01);
+    if (nom == "air_event") translate([evt_pos[0], evt_pos[1], 0]) {
+        // colonne d'air dans le trou, jusqu'à la pastille
+        translate([0, 0, -1]) cylinder(d = evt_d - 0.05, h = evt_z + 1 - 0.01);
+        // dégagement sous le boîtier : Ø 8 mm sur 12 mm de haut
+        translate([0, 0, -12]) cylinder(d = 8, h = 12 - 0.01);
+    }
     // --- fantômes dans le repère du COLLIER ---
     if (nom == "cintre") rotate([0, 90, 0]) cylinder(d = cintre_d, h = 70, center = true);
     if (nom == "caoutchouc") rotate([0, 90, 0]) difference() {
@@ -1055,7 +1150,8 @@ couleurs = [["ecran", [0.86, 0.86, 0.82]], ["vitre", [0.75, 0.9, 1, 0.25]], ["xi
             ["plaquette", "seagreen"], ["cable_reed", "black"], ["joint", "orangered"],
             ["vis_couvercle", "lightgray"], ["inserts", "goldenrod"], ["vis_ecran", "lightgray"],
             ["cintre", [0.25, 0.25, 0.27]], ["caoutchouc", [0.08, 0.08, 0.08]],
-            ["vis_collier", "lightgray"], ["ecrou_collier", "lightgray"]];
+            ["vis_collier", "lightgray"], ["ecrou_collier", "lightgray"],
+            ["bmp280", [0.45, 0.22, 0.62]], ["pastille_event", "white"]];
 function couleur(n) = couleurs[search([n], couleurs)[0]][1];
 
 // Image affichée sur l'e-paper (vues seulement) : pressions et batterie

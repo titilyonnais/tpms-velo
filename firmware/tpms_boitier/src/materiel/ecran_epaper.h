@@ -14,7 +14,9 @@ void ecranDemarrer();
 // Envoie l'image et rafraîchit l'écran : partiel (rapide, ~0,5 s, sans
 // clignotement) ou complet (~2 s, l'écran clignote mais les traces
 // des images précédentes disparaissent).
-void ecranEnvoyer(const Ecran* e, bool complet);
+// attenteMs : attente de fin de rafraîchissement (pas de fil BUSY), voir
+// attenteEcranMs dans logique/barometre.h.
+void ecranEnvoyer(const Ecran* e, bool complet, int32_t attenteMs);
 
 // Met le contrôleur de l'écran en sommeil profond (avant la veille).
 // L'image reste affichée : un e-paper n'a pas besoin de courant pour ça.

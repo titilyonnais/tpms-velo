@@ -48,6 +48,9 @@ float batterieTension() {
   // À VÉRIFIER : le temps d'acquisition du convertisseur réglé par le
   // cœur Arduino est peut-être trop court pour une source de 340 kΩ ;
   // si la tension lue est trop basse, régler BATTERIE_CORRECTION.
+  // La lecture des boutons change la référence (AR_VDD4) : on la remet.
+  analogReference(AR_INTERNAL_2_4);
+  analogReadResolution(12);
   analogRead(PIN_VBAT);
   uint32_t somme = 0;
   for (int i = 0; i < 8; i++) somme += analogRead(PIN_VBAT);

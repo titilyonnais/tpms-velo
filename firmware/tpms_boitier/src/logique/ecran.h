@@ -37,7 +37,8 @@ void dessinerCodeAppairage(Ecran* e, const char* code);
 void dessinerConfirmation(Ecran* e, uint8_t masque);
 
 // Pourcentage + petite pile dessinée, en haut à droite.
-void dessinerBatterie(Ecran* e, float pct, bool enCharge);
+// blocage = "FROID" ou "CHAUD" quand la recharge est coupée, "" sinon.
+void dessinerBatterie(Ecran* e, float pct, bool enCharge, const char* blocage);
 
 // Une colonne : nom, pression en gros, température, pile du capteur, état.
 void dessinerRoue(Ecran* e, int x0, int largeur, const char* nom, const VueRoue* roue);

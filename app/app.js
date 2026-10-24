@@ -155,7 +155,7 @@
     if (m === null) return;
     // Le numéro de séquence révèle les notifications perdues.
     if (etat.derniereSequence >= 0) {
-      var ecart = (m.sequence - etat.derniereSequence + 65536) % 65536;
+      var ecart = (m.sequence - etat.derniereSequence + 256) % 256;   // séquence sur 1 octet
       if (ecart > 1) etat.perdues += ecart - 1;
     }
     etat.derniereSequence = m.sequence;
@@ -182,8 +182,10 @@
     afficherRoue("roueAR", m.AR);
     $("valVitesse").textContent = nombre(m.vitesseKmh, 1) + " km/h";
     $("valDistance").textContent = nombre(m.distanceKm, 2) + " km";
-    $("valBatterie").textContent = m.batterieBoitierPct + " %" + (m.enCharge ? " · charge" : "");
+    $("valBatterie").textContent = m.batterieBoitierPct + " %" + (m.enCharge ? " · charge" : "") +
+      (m.chargeCoupee ? " · recharge coupée (température)" : "");
     $("metaSequence").textContent = (m.veille ? "boîtier en veille · " : "") +
+      (m.correctionBar !== 0 ? "altitude : " + (m.correctionBar > 0 ? "+" : "") + nombre(m.correctionBar, 3) + " bar · " : "") +
       "séq. " + m.sequence + " · " + etat.perdues + " perdue" + (etat.perdues > 1 ? "s" : "");
   }
 
@@ -216,7 +218,9 @@
     var dernier = h[h.length - 1];
     if (dernier && t - dernier.t < HISTO_ECART_MS) return;
     if (m.AV.pressionBar === null && m.AR.pressionBar === null) return;
-    h.push({ t: t, av: m.AV.pressionBar, ar: m.AR.pressionBar });
+    // av, ar : pressions « manomètre » (celles de l'écran) ; corr : la
+    // correction d'altitude du boîtier, retirée pour calculer la tendance.
+    h.push({ t: t, av: m.AV.pressionBar, ar: m.AR.pressionBar, corr: m.correctionBar });
     if (h.length > HISTO_MAX) h.splice(0, h.length - HISTO_MAX);
     sauvegarderHistorique();
   }
@@ -296,22 +300,27 @@
   }
 
   // Pente depuis le dernier regonflage, en bar par jour.
+  // La pente se calcule SANS la correction d'altitude : elle suit la
+  // quantité d'air du pneu. Sinon, monter à 1 500 m ferait gagner 0,17 bar
+  // et le retour en plaine ressemblerait à une fuite.
   function tendance(cle) {
     var h = etat.historique;
-    var t = [], p = [];
+    var t = [], p = [], derniere = null;
     for (var i = h.length - 1; i >= 0; i--) {
       if (h[i][cle] === null) continue;
+      var air = h[i][cle] - (h[i].corr || 0);   // anciens points : pas de correction
+      if (derniere === null) derniere = h[i][cle];
       // En remontant le temps, une forte BAISSE vers le passé = un regonflage.
-      if (p.length > 0 && p[0] - h[i][cle] > SAUT_REGONFLAGE_BAR) break;
+      if (p.length > 0 && p[0] - air > SAUT_REGONFLAGE_BAR) break;
       t.unshift(h[i].t);
-      p.unshift(h[i][cle]);
+      p.unshift(air);
     }
     if (t.length < 10) return null;
     var dureeH = (t[t.length - 1] - t[0]) / 3600000;
     return {
       dureeH: dureeH,
       penteJour: TPMS.penteMoindresCarresParHeure(t, p) * 24,
-      derniere: p[p.length - 1]
+      derniere: derniere   // pression « manomètre » : elle se compare aux seuils
     };
   }
 
@@ -345,11 +354,12 @@
 
   // Export CSV : les données sortent du téléphone, pour un tableur.
   function exporter() {
-    var csv = "date;avant_bar;arriere_bar\n";
+    var csv = "date;avant_bar;arriere_bar;correction_altitude_bar\n";
     etat.historique.forEach(function (p) {
       csv += new Date(p.t).toISOString() + ";" +
         (p.av === null ? "" : p.av.toFixed(3)) + ";" +
-        (p.ar === null ? "" : p.ar.toFixed(3)) + "\n";
+        (p.ar === null ? "" : p.ar.toFixed(3)) + ";" +
+        (p.corr || 0).toFixed(3) + "\n";
     });
     var lien = document.createElement("a");
     lien.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
