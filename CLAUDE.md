@@ -23,6 +23,9 @@ Un professeur a jugé le projet « pas assez industriel » et pauvre en réseau.
 - Défauts de logique trouvés en simulant et corrigés : client MQTT sans contrôle des PINGRESP (fermeture après 1,5 × la garde), supervision en session propre (session persistante + `surMessage`), dédoublonnage, zone (puissance lissée, hystérésis 3 dB, trames acceptées seulement), alerte PERDU jamais notée, seuils sur la pression brute (maintenant ramenée à 20 °C), fuite lente des chariots (tendance bar/jour, état FUITE_LENTE). Détail : `entrepot/README.md` § 6.
 - Documentation à jour : analyse de risques S24 à S31 (§ 5.7, § 6.15), cahier des charges EF-25 à 30 et ENF-33 à 41, rapport chapitre 10 (bilan en 11), présentation 33 diapositives, fiche de l'oral Q29 à Q40.
 
+- **12/11/2026** (sur le PC portable) : état de l'art et réglementation dans `docs/etat-de-l-art.md` (télématique des chariots sans pression des pneus, TPMS industriels Kalmar / Continental / Goodyear, INRS, comparaison, RED / EN 18031, Cyber Resilience Act, ANSSI PG-109 et PA-087, CNIL et salariés). Fiche de présentation E6 du lycée (.docx) réécrite dans ce sens : elle contient des données personnelles (entreprise, tuteur, professeurs), **jamais dans le dépôt public** ; elle reste dans les Téléchargements de Thibault.
+- Toujours faire `git pull` avant de travailler : le projet avance sur deux PC.
+
 ## Le produit (comme si c'était une entreprise)
 Kit vendu environ 89 € : 2 capteurs de pression sur les valves + boîtier de guidon à écran e-paper + application.
 Concurrents : SKS Airspy (~100 € la paire, sans afficheur), Quarq TyreWiz (~250 £ la paire).

@@ -5,7 +5,7 @@
 Projet de BTS CIEL option IR, épreuve E6 « Valorisation de la donnée et cybersécurité ».
 Auteur : Thibault MORRETTON.
 
-**Version industrielle (24/10/2026).** Les pneus gonflables d'une **flotte de chariots élévateurs** portent des capteurs TPMS Bluetooth ; des **passerelles** au plafond de l'entrepôt les écoutent et publient leurs trames en **MQTT sur TLS** jusqu'à une **supervision**, à travers un **réseau d'usine découpé en zones** (atelier, serveurs, bureautique, DMZ) par un pare-feu, avec NTP et syslog. Tout le réseau tourne dans une **maquette Docker** lancée en une commande, avec une démonstration de 14 essais de sécurité : voir [`entrepot/README.md`](entrepot/README.md) et [`docs/orientation-industrielle.md`](docs/orientation-industrielle.md). Le kit vélo ci-dessous sert de **démonstrateur** : mêmes capteurs, même logique.
+**Version industrielle (24/10/2026).** Les pneus gonflables d'une **flotte de chariots élévateurs** portent des capteurs TPMS Bluetooth ; des **passerelles** au plafond de l'entrepôt les écoutent et publient leurs trames en **MQTT sur TLS** jusqu'à une **supervision**, à travers un **réseau d'usine découpé en zones** (atelier, serveurs, bureautique, DMZ) par un pare-feu, avec NTP et syslog. Tout le réseau tourne dans une **maquette Docker** lancée en une commande, avec une démonstration de 14 essais de sécurité : voir [`entrepot/README.md`](entrepot/README.md) et [`docs/orientation-industrielle.md`](docs/orientation-industrielle.md). Pourquoi ce débouché : la télématique des constructeurs de chariots suit l'accès, les chocs et la batterie, mais pas la pression des pneus, alors qu'un décès sur deux lié aux chariots vient d'un renversement (INRS) ; concurrence, comparaison et réglementation (RED / EN 18031, Cyber Resilience Act, ANSSI, CNIL) : [`docs/etat-de-l-art.md`](docs/etat-de-l-art.md). Le kit vélo ci-dessous sert de **démonstrateur** : mêmes capteurs, même logique.
 
 Le projet est aussi un **logiciel de simulation complète** du kit : tout est calculé comme dans la réalité (physique des pneus, vélo et parcours, radio Bluetooth, électronique, batterie), sans matériel.
 
@@ -26,7 +26,7 @@ Depuis le 24/10/2026, un baromètre BMP280 placé sous un évent corrige l'erreu
 
 - Rapport : [`docs/rapport-e6.md`](docs/rapport-e6.md)
 - Présentation pour la soutenance : [`presentation/index.html`](presentation/index.html) (à ouvrir dans un navigateur, ou en ligne, lien ci-dessus)
-- Documentation technique : [`docs/`](docs/README.md) (orientation industrielle, cahier des charges, architecture, protocole BLE, analyse de risques, schéma électrique, bilan énergétique)
+- Documentation technique : [`docs/`](docs/README.md) (orientation industrielle, état de l'art et réglementation, cahier des charges, architecture, protocole BLE, analyse de risques, schéma électrique, bilan énergétique)
 
 ## Organisation du dépôt
 
